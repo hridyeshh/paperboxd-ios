@@ -11,7 +11,7 @@ import SwiftUI
 struct PaperBoxdApp: App {
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            AppCoordinator()
         }
     }
 }
