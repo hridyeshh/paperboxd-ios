@@ -194,14 +194,14 @@ struct MasonryBackground: View {
     var body: some View {
         HStack(spacing: 15) {
             // Column 1: Moves medium speed
-            MarqueeColumn(images: images.reversed().shuffled(), speed: 50)
+            MarqueeColumn(images: images.reversed(), speed: 50)
             
             // Column 2: Moves slow (creates depth/parallax)
             MarqueeColumn(images: images, speed: 70)
                 .padding(.top, -100) // Offset so images aren't aligned horizontally
             
             // Column 3: Moves fast
-            MarqueeColumn(images: images.reversed(), speed: 40)
+            MarqueeColumn(images: images.reversed().shuffled(), speed: 40)
         }
         .rotationEffect(.degrees(-6)) // The "Pinterest Tilt"
         .scaleEffect(1.15) // Zoom in slightly to cover edges caused by rotation

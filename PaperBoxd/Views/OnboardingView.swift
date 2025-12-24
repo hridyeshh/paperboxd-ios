@@ -3,16 +3,17 @@ import SwiftUI
 struct OnboardingView: View {
     var body: some View {
         ZStack {
-            Color.black.ignoresSafeArea()
+            Color(uiColor: .systemBackground)
+                .ignoresSafeArea()
             
             VStack {
                 Text("Onboarding")
                     .font(.largeTitle)
-                    .foregroundColor(.white)
+                    .foregroundColor(.primary)
                     .padding()
                 
                 Text("This is a placeholder for the onboarding flow.")
-                    .foregroundColor(.gray)
+                    .foregroundColor(.secondary)
                     .padding()
             }
         }

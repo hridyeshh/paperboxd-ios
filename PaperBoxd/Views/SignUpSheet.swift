@@ -34,8 +34,8 @@ struct SignUpSheet: View {
     
     var body: some View {
         ZStack {
-            // Black background
-            Color.black
+            // System background
+            Color(uiColor: .systemBackground)
                 .ignoresSafeArea()
             
             ScrollView {
@@ -44,7 +44,7 @@ struct SignUpSheet: View {
                     HStack(spacing: 4) {
                         ForEach(1...totalSteps, id: \.self) { index in
                             Capsule()
-                                .fill(index <= step ? Color.white : Color.gray.opacity(0.3))
+                                .fill(index <= step ? Color.primary : Color.secondary.opacity(0.3))
                                 .frame(height: 4)
                                 .frame(maxWidth: .infinity)
                         }
@@ -101,10 +101,10 @@ struct SignUpSheet: View {
                         }) {
                             Text(step == totalSteps ? "Finish" : "Next")
                                 .fontWeight(.bold)
-                                .foregroundColor(.black)
+                                .foregroundColor(Color(uiColor: .systemBackground))
                                 .padding(.vertical, 12)
                                 .padding(.horizontal, 32)
-                                .background(Color.white)
+                                .background(Color.primary)
                                 .cornerRadius(30)
                         }
                     }
@@ -127,29 +127,29 @@ struct SignUpSheet: View {
         VStack(alignment: .leading, spacing: 15) {
             Text("What's your email?")
                 .font(.title2.bold())
-                .foregroundColor(.white)
+                .foregroundColor(.primary)
             
             ZStack(alignment: .leading) {
                 // Placeholder text (shown when field is empty)
                 if email.isEmpty {
                     Text("example@email.com")
-                        .foregroundColor(.gray)
+                        .foregroundColor(.secondary)
                         .padding(.horizontal, 16)
                 }
                 
                 TextField("", text: $email)
                     .focused($focusedField, equals: .email)
-                    .foregroundColor(.gray)
+                    .foregroundColor(.primary)
                     .keyboardType(.emailAddress)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
-                    .tint(.white)
+                    .tint(.primary)
             }
             .padding()
-            .background(Color.black)
+            .background(Color(uiColor: .secondarySystemBackground))
             .overlay(
                 RoundedRectangle(cornerRadius: 12)
-                    .stroke(Color.gray.opacity(0.4), lineWidth: 1)
+                    .stroke(Color.secondary.opacity(0.4), lineWidth: 1)
             )
             .cornerRadius(12)
         }
@@ -160,19 +160,19 @@ struct SignUpSheet: View {
         VStack(alignment: .leading, spacing: 15) {
             Text("Create a password")
                 .font(.title2.bold())
-                .foregroundColor(.white)
+                .foregroundColor(.primary)
             
-            SecureField("", text: $password, prompt: Text("Password").foregroundColor(.gray))
+            SecureField("", text: $password, prompt: Text("Password").foregroundColor(.secondary))
                 .focused($focusedField, equals: .password)
                 .padding()
-                .foregroundColor(.gray)
-                .background(Color.black)
+                .foregroundColor(.primary)
+                .background(Color(uiColor: .secondarySystemBackground))
                 .overlay(
                     RoundedRectangle(cornerRadius: 12)
-                        .stroke(Color.gray.opacity(0.4), lineWidth: 1)
+                        .stroke(Color.secondary.opacity(0.4), lineWidth: 1)
                 )
                 .cornerRadius(12)
-                .tint(.white)
+                .tint(.primary)
             
             // The Gradient Strength Meter
             VStack(alignment: .leading, spacing: 8) {
@@ -203,7 +203,7 @@ struct SignUpSheet: View {
                 
                 Text(passwordStrengthText)
                     .font(.caption)
-                    .foregroundColor(.gray)
+                    .foregroundColor(.secondary)
             }
         }
     }
@@ -213,21 +213,21 @@ struct SignUpSheet: View {
         VStack(alignment: .leading, spacing: 15) {
             Text("Pick a username")
                 .font(.title2.bold())
-                .foregroundColor(.white)
+                .foregroundColor(.primary)
             
-            TextField("", text: $username, prompt: Text("@username").foregroundColor(.gray))
+            TextField("", text: $username, prompt: Text("@username").foregroundColor(.secondary))
                 .focused($focusedField, equals: .username)
                 .padding()
-                .foregroundColor(.gray)
-                .background(Color.black)
+                .foregroundColor(.primary)
+                .background(Color(uiColor: .secondarySystemBackground))
                 .overlay(
                     RoundedRectangle(cornerRadius: 12)
-                        .stroke(Color.gray.opacity(0.4), lineWidth: 1)
+                        .stroke(Color.secondary.opacity(0.4), lineWidth: 1)
                 )
                 .cornerRadius(12)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
-                .tint(.white)
+                .tint(.primary)
         }
     }
     
@@ -236,12 +236,11 @@ struct SignUpSheet: View {
         VStack(alignment: .leading, spacing: 15) {
             Text("When is your birthday?")
                 .font(.title2.bold())
-                .foregroundColor(.white)
+                .foregroundColor(.primary)
             
             DatePicker("", selection: $birthDate, displayedComponents: .date)
                 .datePickerStyle(.wheel)
                 .labelsHidden()
-                .colorScheme(.dark)
                 .frame(height: 120)
                 .scaleEffect(0.85)
                 .offset(y: -10)
@@ -253,7 +252,7 @@ struct SignUpSheet: View {
         VStack(alignment: .leading, spacing: 20) {
             Text("Select your gender")
                 .font(.title2.bold())
-                .foregroundColor(.white)
+                .foregroundColor(.primary)
             
             // Custom Selection Grid
             HStack(spacing: 12) {
@@ -265,12 +264,12 @@ struct SignUpSheet: View {
                             .fontWeight(.medium)
                             .padding(.vertical, 12)
                             .frame(maxWidth: .infinity)
-                            .background(genderSelection == gender ? Color.white : Color.black)
-                            .foregroundColor(genderSelection == gender ? .black : .white)
+                            .background(genderSelection == gender ? Color.primary : Color(uiColor: .secondarySystemBackground))
+                            .foregroundColor(genderSelection == gender ? Color(uiColor: .systemBackground) : .primary)
                             .cornerRadius(12)
                             .overlay(
                                 RoundedRectangle(cornerRadius: 12)
-                                    .stroke(Color.gray.opacity(0.4), lineWidth: 1)
+                                    .stroke(Color.secondary.opacity(0.4), lineWidth: 1)
                             )
                     }
                 }
@@ -278,17 +277,17 @@ struct SignUpSheet: View {
             
             // Custom Input Field (Shows only if "Custom" is picked)
             if genderSelection == "Custom" {
-                TextField("", text: $customGender, prompt: Text("Type your gender").foregroundColor(.gray))
+                TextField("", text: $customGender, prompt: Text("Type your gender").foregroundColor(.secondary))
                     .focused($focusedField, equals: .customGender)
                     .padding()
-                    .foregroundColor(.gray)
-                    .background(Color.black)
+                    .foregroundColor(.primary)
+                    .background(Color(uiColor: .secondarySystemBackground))
                     .overlay(
                         RoundedRectangle(cornerRadius: 12)
-                            .stroke(Color.gray.opacity(0.4), lineWidth: 1)
+                            .stroke(Color.secondary.opacity(0.4), lineWidth: 1)
                     )
                     .cornerRadius(12)
-                    .tint(.white)
+                    .tint(.primary)
                     .transition(.move(edge: .top).combined(with: .opacity))
             }
         }

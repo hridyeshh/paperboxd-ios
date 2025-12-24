@@ -3,20 +3,21 @@ import UIKit
 
 struct LoginSheet: View {
     @Environment(\.dismiss) var dismiss
+    @AppStorage("isLoggedIn") private var isLoggedIn: Bool = false
     @State private var email = ""
     @State private var password = ""
     
     var body: some View {
         ZStack {
-            // Black background
-            Color.black
+            // System background
+            Color(uiColor: .systemBackground)
                 .ignoresSafeArea()
             
             VStack(spacing: 20) {
                 Text("Welcome back")
                     .font(.title2.bold())
                     .padding(.top, 50)
-                    .foregroundColor(.white)
+                    .foregroundColor(.primary)
                     .padding(.top, 20)
                 
                 // 1. Google Button (White background, black text)
@@ -54,11 +55,11 @@ struct LoginSheet: View {
                         
                         Text("Continue with Google")
                             .font(.headline)
-                            .foregroundColor(.black)
+                            .foregroundColor(.white)
                     }
                     .frame(maxWidth: .infinity)
                     .frame(height: 55)
-                    .background(Color.white)
+                    .background(Color.black)
                     .cornerRadius(30)
                 }
                 
@@ -69,7 +70,7 @@ struct LoginSheet: View {
                         .foregroundColor(.gray.opacity(0.5))
                     Text("or")
                         .font(.footnote)
-                        .foregroundColor(.white)
+                        .foregroundColor(.secondary)
                         .padding(.horizontal, 10)
                     Rectangle()
                         .frame(height: 1)
@@ -79,38 +80,39 @@ struct LoginSheet: View {
 
                 // 2. Email & Password Fields (Black boxes with dark gray borders, gray text)
                 VStack(spacing: 15) {
-                    TextField("", text: $email, prompt: Text("Email address").foregroundColor(.gray))
+                    TextField("", text: $email, prompt: Text("Email address").foregroundColor(.secondary))
                         .padding()
-                        .foregroundColor(.gray)
-                        .background(Color.black)
+                        .foregroundColor(.primary)
+                        .background(Color(uiColor: .secondarySystemBackground))
                         .overlay(
                             RoundedRectangle(cornerRadius: 15)
-                                .stroke(Color.gray.opacity(0.4), lineWidth: 1)
+                                .stroke(Color.secondary.opacity(0.4), lineWidth: 1)
                         )
                         .cornerRadius(15)
                         .textInputAutocapitalization(.never)
                         .keyboardType(.emailAddress)
                         .autocorrectionDisabled()
-                        .tint(.white) // Cursor color
+                        .tint(.primary) // Cursor color
                     
-                    SecureField("", text: $password, prompt: Text("Password").foregroundColor(.gray))
+                    SecureField("", text: $password, prompt: Text("Password").foregroundColor(.secondary))
                         .padding()
-                        .foregroundColor(.gray)
-                        .background(Color.black)
+                        .foregroundColor(.primary)
+                        .background(Color(uiColor: .secondarySystemBackground))
                         .overlay(
                             RoundedRectangle(cornerRadius: 15)
-                                .stroke(Color.gray.opacity(0.4), lineWidth: 1)
+                                .stroke(Color.secondary.opacity(0.4), lineWidth: 1)
                         )
                         .cornerRadius(15)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
-                        .tint(.white) // Cursor color
+                        .tint(.primary) // Cursor color
                 }
                 
                 // 3. Main Action Button (Black background, white text)
                 Button(action: {
-                    // Handle Email Login
-                    print("Email login tapped")
+                    // TEMP: Bypass auth and mark user as logged in for testing
+                    isLoggedIn = true
+                    dismiss()
                 }) {
                     Text("Log in")
                         .font(.headline)
@@ -120,12 +122,12 @@ struct LoginSheet: View {
                         .background(Color.white)
                         .overlay(
                             RoundedRectangle(cornerRadius: 30)
-                                .stroke(Color.gray.opacity(0.4), lineWidth: 1)
+                                .stroke(Color.secondary.opacity(0.4), lineWidth: 1)
                         )
                         .cornerRadius(30)
                 }
                 
-                // 4. Forgot Password (Underlined, white text)
+                // 4. Forgot Password (Underlined)
                 Button(action: {
                     // Handle Forgot Password
                     print("Forgot password tapped")
@@ -133,7 +135,7 @@ struct LoginSheet: View {
                     Text("Forgot your password?")
                         .font(.subheadline)
                         .underline()
-                        .foregroundColor(.white)
+                        .foregroundColor(.primary)
                 }
                 .padding(.top, 5)
                 

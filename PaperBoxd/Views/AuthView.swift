@@ -3,16 +3,17 @@ import SwiftUI
 struct AuthView: View {
     var body: some View {
         ZStack {
-            Color.black.ignoresSafeArea()
+            Color(uiColor: .systemBackground)
+                .ignoresSafeArea()
             
             VStack {
                 Text("Sign In")
                     .font(.largeTitle)
-                    .foregroundColor(.white)
+                    .foregroundColor(.primary)
                     .padding()
                 
                 Text("This is a placeholder for the authentication flow.")
-                    .foregroundColor(.gray)
+                    .foregroundColor(.secondary)
                     .padding()
             }
         }

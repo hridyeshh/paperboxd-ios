@@ -1,8 +1,23 @@
 import SwiftUI
 import Kingfisher
+import UIKit
 
 struct BookDetailView: View {
     let book: Book
+    var namespace: Namespace.ID
+    @Binding var isShowing: Bool
+    
+    // GESTURE STATE
+    @State private var dragOffset: CGSize = .zero
+    @State private var animateContent = false
+    
+    // USER STATES (Synced with PaperBoxd DB)
+    @State private var isLiked: Bool = false
+    @State private var shelfStatus: String = "Want to Read" // Reading, Read, Want to Read, DNF
+    @State private var isDNF: Bool = false
+    @State private var showStatusPicker = false
+    @State private var showShareSheet = false
+    @State private var showDescriptionDialog = false
     
     // Helper to ensure HTTPS for the cover image
     private var secureCoverURL: URL? {
@@ -14,64 +29,392 @@ struct BookDetailView: View {
         return URL(string: src)
     }
     
+    // Helper to strip HTML tags from description (matching web version)
+    private func stripHtmlTags(_ html: String?) -> String {
+        guard let html = html else { return "" }
+        
+        // Remove HTML tags
+        var text = html.replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression)
+        
+        // Decode common HTML entities
+        text = text.replacingOccurrences(of: "&nbsp;", with: " ")
+        text = text.replacingOccurrences(of: "&amp;", with: "&")
+        text = text.replacingOccurrences(of: "&lt;", with: "<")
+        text = text.replacingOccurrences(of: "&gt;", with: ">")
+        text = text.replacingOccurrences(of: "&quot;", with: "\"")
+        text = text.replacingOccurrences(of: "&#39;", with: "'")
+        text = text.replacingOccurrences(of: "&apos;", with: "'")
+        
+        // Clean up multiple spaces and newlines
+        text = text.replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+        text = text.replacingOccurrences(of: "\n\\s*\n", with: "\n\n", options: .regularExpression)
+        
+        return text.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+    
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                // Large book cover image
-                if let secureCoverURL = secureCoverURL {
-                    KFImage(secureCoverURL)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 400)
-                        .cornerRadius(12)
-                        .shadow(color: Color.black.opacity(0.2), radius: 12, x: 0, y: 6)
-                } else {
-                    // Fallback placeholder
-                    Rectangle()
-                        .fill(Color.gray)
-                        .frame(height: 400)
-                        .cornerRadius(12)
-                        .shadow(color: Color.black.opacity(0.2), radius: 12, x: 0, y: 6)
-                }
-                
-                // Book title
-                Text(book.title)
-                    .font(.largeTitle)
-                    .fontWeight(.bold)
-                    .padding(.horizontal)
-                
-                // Author
-                Text(book.author)
-                    .font(.title2)
-                    .foregroundColor(.secondary)
-                    .padding(.horizontal)
-                
-                // Description
-                if let description = book.description {
-                    Text(description)
-                        .font(.body)
-                        .lineSpacing(4)
-                        .padding(.horizontal)
+        GeometryReader { geometry in
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    // 1. HERO COVER (Matched Geometry - Premium transition)
+                    ZStack(alignment: .topLeading) {
+                        if let secureCoverURL = secureCoverURL {
+                            KFImage(secureCoverURL)
+                                .setProcessor(DownsamplingImageProcessor(size: CGSize(width: 600, height: 900)))
+                                .forceRefresh(false)
+                                .cacheMemoryOnly(false)
+                                .fade(duration: 0.3)
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                                .matchedGeometryEffect(id: book.id, in: namespace)
+                                .frame(width: geometry.size.width, height: 500)
+                                .clipped()
+                        } else {
+                            // Fallback placeholder
+                            Rectangle()
+                                .fill(Color(uiColor: .secondarySystemBackground))
+                                .matchedGeometryEffect(id: book.id, in: namespace)
+                                .frame(width: geometry.size.width, height: 500)
+                        }
+                    
+                    // Back Arrow (Pinterest-style)
+                    Button(action: {
+                        dismissAction()
+                    }) {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 20, weight: .bold))
+                            .foregroundColor(.white)
+                            .padding(12)
+                            .background(.ultraThinMaterial)
+                            .clipShape(Circle())
+                    }
+                    .padding(.top, 60)
+                    .padding(.horizontal, 20)
+                    }
+                    
+                    // 2. HEADER INFO
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(book.title)
+                            .font(.system(size: 32, weight: .bold, design: .serif))
+                            .foregroundColor(.primary)
+                        
+                        Text(book.author)
+                            .font(.title3)
+                            .foregroundColor(.secondary)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 24)
+                    .padding(.top, 20)
+                    
+                    // 3. THE "PAPERBOXD" ACTION DOCK
+                    HStack(spacing: 12) {
+                        // LIKE BUTTON (Haptic Pulse Heart)
+                        ActionButton(
+                            icon: isLiked ? "heart.fill" : "heart",
+                            color: isLiked ? .red : .primary,
+                            active: isLiked
+                        ) {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
+                                isLiked.toggle()
+                            }
+                            // Haptic feedback
+                            let generator = UIImpactFeedbackGenerator(style: .medium)
+                            generator.impactOccurred()
+                        }
+                        
+                        // ADAPTIVE BOOKSHELF STATUS BUTTON
+                        Button(action: {
+                            showStatusPicker = true
+                        }) {
+                            HStack(spacing: 8) {
+                                Image(systemName: "books.vertical.fill")
+                                Text(shelfStatus)
+                                    .fontWeight(.semibold)
+                                    .lineLimit(1)
+                            }
+                            .padding(.vertical, 14)
+                            .padding(.horizontal, 20) // Horizontal padding creates the "pill" shape
+                            .background(Color.primary)
+                            .foregroundColor(Color(uiColor: .systemBackground))
+                            .cornerRadius(14)
+                        }
+                        // Removing .frame(maxWidth: .infinity) makes it adaptive
+                        
+                        // SHARE BUTTON
+                        ActionButton(
+                            icon: "square.and.arrow.up",
+                            color: .primary,
+                            active: false
+                        ) {
+                            showShareSheet = true
+                            // Haptic feedback
+                            let generator = UIImpactFeedbackGenerator(style: .light)
+                            generator.impactOccurred()
+                        }
+                        
+                        Spacer() // Pushes items to the left, allowing the status button to size itself
+                    }
+                    .padding(.horizontal, 24)
+                    .padding(.top, 25)
+                    
+                    // 4. SYNOPSIS & STATS
+                    VStack(alignment: .leading, spacing: 15) {
+                        Text("About this book")
+                            .font(.headline)
+                            .foregroundColor(.primary)
+                        
+                        descriptionView
+                    }
+                    .padding(24)
+                    .padding(.bottom, 100)
+                    .opacity(animateContent ? 1 : 0)
+                    .offset(y: animateContent ? 0 : 20)
                 }
             }
-            .padding(.vertical)
+            .ignoresSafeArea()
+            .background(Color(uiColor: .systemBackground))
+            // DRAG GESTURE FOR MINIMIZING
+            .offset(y: dragOffset.height > 0 ? dragOffset.height : 0)
+            .scaleEffect(calculateScale())
+            .gesture(
+                DragGesture()
+                    .onChanged { value in
+                        if value.translation.height > 0 {
+                            dragOffset = value.translation
+                        }
+                    }
+                    .onEnded { value in
+                        if value.translation.height > 150 {
+                            dismissAction()
+                        } else {
+                            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                                dragOffset = .zero
+                            }
+                        }
+                    }
+            )
+            .onAppear {
+                withAnimation(.easeOut(duration: 0.2).delay(0.2)) {
+                    animateContent = true
+                }
+            }
         }
-        .navigationBarTitleDisplayMode(.inline)
+        .sheet(isPresented: $showStatusPicker) {
+            StatusPickerSheet(
+                selectedStatus: $shelfStatus,
+                isDNF: $isDNF
+            )
+            .presentationDetents([.height(300)]) // Fixed height for a true bottom-sheet feel
+            .presentationDragIndicator(.visible)
+        }
+        .sheet(isPresented: $showShareSheet) {
+            ShareSheet(activityItems: shareItems)
+        }
+        .sheet(isPresented: $showDescriptionDialog) {
+            DescriptionDialogView(
+                description: stripHtmlTags(book.description),
+                bookTitle: book.title
+            )
+            .presentationDetents([.medium, .large]) // The "Read More" drawer
+            .presentationDragIndicator(.visible)
+        }
+        .onAppear {
+            // Debug: Check if description is being loaded
+            if let desc = book.description {
+                print("📖 BookDetailView: Description loaded - \(desc.prefix(100))...")
+            } else {
+                print("⚠️ BookDetailView: Description is nil or empty")
+            }
+        }
+    }
+    
+    private func dismissAction() {
+        withAnimation(.spring(response: 0.5, dampingFraction: 0.85)) {
+            animateContent = false
+            isShowing = false
+            dragOffset = .zero
+        }
+    }
+    
+    private func calculateScale() -> CGFloat {
+        let progress = dragOffset.height / 1000
+        return max(0.5, 1.0 - (progress * 0.5)) // Shrinks as you drag down, min 0.5
+    }
+    
+    // Share items for share sheet
+    private var shareItems: [Any] {
+        var items: [Any] = []
+        let shareText = "Check out \(book.title) by \(book.author) on PaperBoxd!"
+        items.append(shareText)
+        if let secureCoverURL = secureCoverURL {
+            items.append(secureCoverURL)
+        }
+        return items
+    }
+    
+    // Check if description needs "Read more" (approximate check for 5+ lines)
+    private func needsReadMore(_ text: String) -> Bool {
+        // More lenient check: if text has more than ~100 characters, it's likely to exceed 5 lines
+        // Average line on mobile is ~40-50 characters, so 100+ chars = ~2-3 lines minimum
+        // With line spacing and wrapping, this will easily exceed 5 lines
+        return text.count > 100
+    }
+    
+    // Description view with "Read more" functionality
+    @ViewBuilder
+    private var descriptionView: some View {
+        let cleanDescription = stripHtmlTags(book.description)
+        if !cleanDescription.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                // Truncated description preview (5 lines max)
+                Text(cleanDescription)
+                    .font(.body)
+                    .foregroundColor(.secondary)
+                    .lineSpacing(6)
+                    .lineLimit(5)
+                
+                // "Read more" button - opens bottom drawer with full description
+                Button(action: {
+                    showDescriptionDialog = true
+                }) {
+                    Text("Read more")
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                        .foregroundColor(.primary)
+                        .underline()
+                }
+                .padding(.top, 4)
+            }
+        } else {
+            Text("This is where your book description from the PaperBoxd API will go. It captures the essence of the narrative and invites the reader into the world of \(book.title).")
+                .font(.body)
+                .foregroundColor(.secondary)
+                .lineSpacing(6)
+        }
+    }
+}
+
+// MARK: - Share Sheet
+struct ShareSheet: UIViewControllerRepresentable {
+    let activityItems: [Any]
+    
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        let controller = UIActivityViewController(
+            activityItems: activityItems,
+            applicationActivities: nil
+        )
+        return controller
+    }
+    
+    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
+}
+
+// MARK: - Description Dialog View
+struct DescriptionDialogView: View {
+    @Environment(\.dismiss) var dismiss
+    let description: String
+    let bookTitle: String
+    
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    // Full description
+                    Text(description)
+                        .font(.body)
+                        .foregroundColor(.secondary)
+                        .lineSpacing(6)
+                        .padding(24)
+                }
+            }
+            .background(Color(uiColor: .systemBackground))
+            .navigationTitle("Description")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Done") {
+                        dismiss()
+                    }
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Action Button Component
+struct ActionButton: View {
+    let icon: String
+    let color: Color
+    let active: Bool
+    let action: () -> Void
+    
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.system(size: 20, weight: .semibold))
+                .foregroundColor(active ? color : .primary)
+                .frame(width: 55, height: 55)
+                .background(active ? color.opacity(0.1) : Color.secondary.opacity(0.1))
+                .cornerRadius(14)
+        }
+    }
+}
+
+// MARK: - Status Picker Sheet (CORRECTED LOGIC)
+struct StatusPickerSheet: View {
+    @Environment(\.dismiss) var dismiss
+    @Binding var selectedStatus: String
+    @Binding var isDNF: Bool
+    
+    let statuses = ["Add to Bookshelf", "DNF", "Want to read"]
+    
+    var body: some View {
+        NavigationStack {
+            List(statuses, id: \.self) { status in
+                Button(action: {
+                    withAnimation {
+                        selectedStatus = status // Now correctly updates the main view
+                        isDNF = (status == "DNF")
+                    }
+                    dismiss()
+                }) {
+                    HStack {
+                        Text(status)
+                            .foregroundColor(.primary)
+                        Spacer()
+                        if selectedStatus == status {
+                            Image(systemName: "checkmark")
+                                .foregroundColor(.primary)
+                        }
+                    }
+                }
+            }
+            .navigationTitle("Update Status")
+            .navigationBarTitleDisplayMode(.inline)
+        }
     }
 }
 
 #Preview {
-    NavigationView {
-        BookDetailView(book: Book(
-            id: "1",
-            bookId: "1",
-            title: "Sample Book Title",
-            author: "Author Name",
-            src: "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=600&q=80",
-            alt: "Sample Book Cover",
-            description: "This is a sample book description for preview purposes. It demonstrates how the description text will appear in the detail view."
-        ))
+    struct PreviewWrapper: View {
+        @Namespace var namespace
+        
+        var body: some View {
+            BookDetailView(
+                book: Book(
+                    id: "1",
+                    bookId: "1",
+                    title: "Sample Book Title",
+                    author: "Author Name",
+                    src: "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=600&q=80",
+                    alt: "Sample Book Cover",
+                    description: "This is a sample book description for preview purposes. It demonstrates how the description text will appear in the detail view."
+                ),
+                namespace: namespace,
+                isShowing: .constant(true)
+            )
+        }
     }
+    
+    return PreviewWrapper()
 }
-
