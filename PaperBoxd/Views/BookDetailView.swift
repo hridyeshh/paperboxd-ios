@@ -21,12 +21,12 @@ struct BookDetailView: View {
     
     // Helper to ensure HTTPS for the cover image
     private var secureCoverURL: URL? {
-        guard let src = book.src else { return nil }
-        if src.hasPrefix("http://") {
-            let secureSrc = src.replacingOccurrences(of: "http://", with: "https://")
+        guard let imageURL = book.imageURL else { return nil }
+        if imageURL.hasPrefix("http://") {
+            let secureSrc = imageURL.replacingOccurrences(of: "http://", with: "https://")
             return URL(string: secureSrc)
         }
-        return URL(string: src)
+        return URL(string: imageURL)
     }
     
     // Helper to strip HTML tags from description (matching web version)
@@ -98,7 +98,7 @@ struct BookDetailView: View {
                             .font(.system(size: 32, weight: .bold, design: .serif))
                             .foregroundColor(.primary)
                         
-                        Text(book.author)
+                        Text(book.authorString)
                             .font(.title3)
                             .foregroundColor(.secondary)
                     }
@@ -244,7 +244,7 @@ struct BookDetailView: View {
     // Share items for share sheet
     private var shareItems: [Any] {
         var items: [Any] = []
-        let shareText = "Check out \(book.title) by \(book.author) on PaperBoxd!"
+        let shareText = "Check out \(book.title) by \(book.authorString) on PaperBoxd!"
         items.append(shareText)
         if let secureCoverURL = secureCoverURL {
             items.append(secureCoverURL)
@@ -400,19 +400,27 @@ struct StatusPickerSheet: View {
         @Namespace var namespace
         
         var body: some View {
-            BookDetailView(
-                book: Book(
-                    id: "1",
-                    bookId: "1",
-                    title: "Sample Book Title",
-                    author: "Author Name",
-                    src: "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=600&q=80",
-                    alt: "Sample Book Cover",
-                    description: "This is a sample book description for preview purposes. It demonstrates how the description text will appear in the detail view."
-                ),
-                namespace: namespace,
-                isShowing: .constant(true)
-            )
+            // Create a sample book using JSON decoder for preview
+            let sampleJSON = """
+            {
+                "id": "1",
+                "title": "Sample Book Title",
+                "author": "Author Name",
+                "cover": "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=600&q=80",
+                "description": "This is a sample book description for preview purposes. It demonstrates how the description text will appear in the detail view."
+            }
+            """.data(using: .utf8)!
+            
+            let decoder = JSONDecoder()
+            if let book = try? decoder.decode(Book.self, from: sampleJSON) {
+                BookDetailView(
+                    book: book,
+                    namespace: namespace,
+                    isShowing: .constant(true)
+                )
+            } else {
+                Text("Preview Error")
+            }
         }
     }
     

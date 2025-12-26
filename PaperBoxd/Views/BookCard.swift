@@ -7,12 +7,12 @@ struct BookCard: View {
     // A simple helper to ensure we try HTTPS first
     // Converts HTTP URLs to HTTPS for secure loading
     private var secureCoverURL: URL? {
-        guard let src = book.src else { return nil }
-        if src.hasPrefix("http://") {
-            let secureSrc = src.replacingOccurrences(of: "http://", with: "https://")
+        guard let imageURL = book.imageURL else { return nil }
+        if imageURL.hasPrefix("http://") {
+            let secureSrc = imageURL.replacingOccurrences(of: "http://", with: "https://")
             return URL(string: secureSrc)
         }
-        return URL(string: src)
+        return URL(string: imageURL)
     }
     
     var body: some View {
@@ -48,16 +48,24 @@ struct BookCard: View {
 }
 
 #Preview {
-    BookCard(book: Book(
-        id: "1",
-        bookId: "1",
-        title: "Sample Book Title",
-        author: "Author Name",
-        src: "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=600&q=80",
-        alt: "Sample Book Cover",
-        description: "This is a sample book description for preview purposes."
-    ))
-    .frame(width: 150)
-    .padding()
+    // Create a sample book using JSON decoder for preview
+    let sampleJSON = """
+    {
+        "id": "1",
+        "title": "Sample Book Title",
+        "author": "Author Name",
+        "cover": "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=600&q=80",
+        "description": "This is a sample book description for preview purposes."
+    }
+    """.data(using: .utf8)!
+    
+    let decoder = JSONDecoder()
+    if let book = try? decoder.decode(Book.self, from: sampleJSON) {
+        BookCard(book: book)
+            .frame(width: 150)
+            .padding()
+    } else {
+        Text("Preview Error")
+    }
 }
 
