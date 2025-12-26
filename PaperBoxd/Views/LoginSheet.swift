@@ -6,6 +6,9 @@ struct LoginSheet: View {
     @AppStorage("isLoggedIn") private var isLoggedIn: Bool = false
     @State private var email = ""
     @State private var password = ""
+    @State private var isLoading = false
+    @State private var isGoogleSigningIn = false
+    @State private var errorMessage: String?
     
     var body: some View {
         ZStack {
@@ -20,40 +23,13 @@ struct LoginSheet: View {
                     .foregroundColor(.primary)
                     .padding(.top, 20)
                 
-                // 1. Google Button (White background, black text)
-                Button(action: {
-                    // Handle Google Login
-                    print("Google login tapped")
-                }) {
-                    HStack(spacing: 12) {
-                        // Try to load Google logo from assets
-                        // Note: iOS Assets.xcassets doesn't support .webp directly - convert to PNG first
-                        Group {
-                            if let googleImage = UIImage(named: "google-log-in") {
-                                Image(uiImage: googleImage)
-                                    .resizable()
-                                    .aspectRatio(contentMode: .fit)
-                            } else if let googleImage = UIImage(named: "google_logo") {
-                                Image(uiImage: googleImage)
-                                    .resizable()
-                                    .aspectRatio(contentMode: .fit)
-                            } else {
-                                // Fallback: Use a G letter if image not found
-                                // This means the asset isn't loading - check:
-                                // 1. Asset name matches exactly "google-log-in" (no extension)
-                                // 2. Image is PNG/JPEG format (not .webp)
-                                // 3. Image is properly added to the image set in Assets.xcassets
-                                Text("G")
-                                    .font(.system(size: 18, weight: .bold))
-                                    .foregroundColor(.blue)
-                                    .frame(width: 20, height: 20)
-                                    .background(Color.white)
-                                    .clipShape(Circle())
-                            }
-                        }
-                        .frame(width: 20, height: 20)
-                        
-                        Text("Continue with Google")
+                // 1. Official Google Sign-In Button
+                if isGoogleSigningIn {
+                    // Show loading state
+                    HStack {
+                        ProgressView()
+                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                        Text("Signing in...")
                             .font(.headline)
                             .foregroundColor(.white)
                     }
@@ -61,6 +37,11 @@ struct LoginSheet: View {
                     .frame(height: 55)
                     .background(Color.black)
                     .cornerRadius(30)
+                } else {
+                    // Official Google Sign-In Button
+                    GoogleSignInButton(action: handleGoogleSignIn)
+                        .frame(height: 55)
+                        .disabled(isLoading)
                 }
                 
                 // Divider with "or"
@@ -110,21 +91,35 @@ struct LoginSheet: View {
                 
                 // 3. Main Action Button (Black background, white text)
                 Button(action: {
-                    // TEMP: Bypass auth and mark user as logged in for testing
-                    isLoggedIn = true
-                    dismiss()
+                    handleLogin()
                 }) {
-                    Text("Log in")
-                        .font(.headline)
-                        .foregroundColor(.black)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 55)
-                        .background(Color.white)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 30)
-                                .stroke(Color.secondary.opacity(0.4), lineWidth: 1)
-                        )
-                        .cornerRadius(30)
+                    HStack {
+                        if isLoading {
+                            ProgressView()
+                                .progressViewStyle(CircularProgressViewStyle(tint: .black))
+                        } else {
+                            Text("Log in")
+                                .font(.headline)
+                        }
+                    }
+                    .foregroundColor(.black)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 55)
+                    .background(Color.white)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 30)
+                            .stroke(Color.secondary.opacity(0.4), lineWidth: 1)
+                    )
+                    .cornerRadius(30)
+                }
+                .disabled(isLoading || email.isEmpty || password.isEmpty)
+                
+                // Error message display
+                if let errorMessage = errorMessage {
+                    Text(errorMessage)
+                        .font(.caption)
+                        .foregroundColor(.red)
+                        .padding(.top, 8)
                 }
                 
                 // 4. Forgot Password (Underlined)
@@ -143,6 +138,145 @@ struct LoginSheet: View {
             }
             .padding(.horizontal, 30)
             .padding(.top, 20)
+        }
+    }
+    
+    /// Handle login with email and password
+    private func handleLogin() {
+        // Validate input
+        guard !email.isEmpty, !password.isEmpty else {
+            errorMessage = "Please enter both email and password"
+            return
+        }
+        
+        // Clear previous error
+        errorMessage = nil
+        isLoading = true
+        
+        Task {
+            do {
+                // Call the API
+                let response: AuthResponse = try await APIClient.shared.login(email: email, password: password)
+                
+                // Save token securely to Keychain
+                KeychainHelper.shared.saveToken(response.token)
+                
+                print("✅ LoginSheet: Successfully logged in user: \(response.user.email)")
+                
+                // Update UI on main thread
+                await MainActor.run {
+                    isLoggedIn = true
+                    isLoading = false
+                    dismiss()
+                }
+            } catch let error as APIError {
+                await MainActor.run {
+                    isLoading = false
+                    switch error {
+                    case .httpError(let statusCode):
+                        if statusCode == 401 {
+                            errorMessage = "Invalid email or password"
+                        } else {
+                            errorMessage = "Login failed. Please try again."
+                        }
+                    case .networkError:
+                        errorMessage = "Network error. Please check your connection."
+                    default:
+                        errorMessage = "Login failed. Please try again."
+                    }
+                    print("❌ LoginSheet: Login failed - \(error.localizedDescription)")
+                }
+            } catch {
+                await MainActor.run {
+                    isLoading = false
+                    errorMessage = "An unexpected error occurred"
+                    print("❌ LoginSheet: Unexpected error - \(error.localizedDescription)")
+                }
+            }
+        }
+    }
+    
+    /// Handle Google Sign-In
+    /// This method gets the root view controller and initiates the Google Sign-In flow
+    /// The official GoogleSignInButton calls this action when tapped
+    private func handleGoogleSignIn() {
+        isGoogleSigningIn = true
+        errorMessage = nil
+        
+        Task { @MainActor in
+            do {
+                // Get the root view controller for presenting Google Sign-In
+                // This is required for the Google Sign-In SDK to present the authentication UI
+                guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+                      let rootViewController = windowScene.windows.first?.rootViewController else {
+                    isGoogleSigningIn = false
+                    errorMessage = "Unable to present sign-in. Please try again."
+                    return
+                }
+                
+                // Get Google ID token using our service
+                let idToken = try await GoogleSignInService.shared.signIn(presentingViewController: rootViewController)
+                
+                // Call backend to verify and get JWT
+                let response: AuthResponse = try await APIClient.shared.signInWithGoogle(idToken: idToken)
+                
+                // Validate token before saving
+                let token = response.token.trimmingCharacters(in: .whitespaces)
+                guard !token.isEmpty else {
+                    print("❌ LoginSheet: Received empty token from backend")
+                    isGoogleSigningIn = false
+                    errorMessage = "Authentication failed: Invalid token received"
+                    return
+                }
+                
+                print("✅ LoginSheet: Received token from backend (length: \(token.count), prefix: \(token.prefix(20))...)")
+                
+                // Save token securely to Keychain
+                KeychainHelper.shared.saveToken(token)
+                
+                // Verify token was saved correctly
+                if let savedToken = KeychainHelper.shared.readToken(), savedToken == token {
+                    print("✅ LoginSheet: Token successfully saved to Keychain")
+                } else {
+                    print("⚠️ LoginSheet: Token may not have been saved correctly")
+                }
+                
+                print("✅ LoginSheet: Successfully signed in with Google: \(response.user.email)")
+                
+                // Update UI - we're already on MainActor
+                isLoggedIn = true
+                isGoogleSigningIn = false
+                dismiss()
+            } catch let error as GoogleSignInError {
+                isGoogleSigningIn = false
+                switch error {
+                case .signInCancelled:
+                    // User cancelled - don't show error
+                    print("ℹ️ LoginSheet: Google Sign-In cancelled by user")
+                default:
+                    errorMessage = "Google Sign-In failed. Please try again."
+                    print("❌ LoginSheet: Google Sign-In failed - \(error.localizedDescription)")
+                }
+            } catch let error as APIError {
+                isGoogleSigningIn = false
+                switch error {
+                case .httpError(let statusCode):
+                    if statusCode == 401 {
+                        errorMessage = "Google Sign-In failed. Please try again."
+                    } else {
+                        errorMessage = "Authentication failed. Please try again."
+                    }
+                case .networkError:
+                    errorMessage = "Network error. Please check your connection."
+                default:
+                    errorMessage = "Google Sign-In failed. Please try again."
+                }
+                print("❌ LoginSheet: Google Sign-In API error - \(error.localizedDescription)")
+            } catch {
+                isGoogleSigningIn = false
+                errorMessage = "An unexpected error occurred"
+                print("❌ LoginSheet: Unexpected error - \(error.localizedDescription)")
+            }
         }
     }
 }

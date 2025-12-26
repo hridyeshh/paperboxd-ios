@@ -6,6 +6,7 @@ struct AppCoordinator: View {
     @State private var splashAnimationFinished = false
     
     // App state management (from PaperBoxdApp)
+    // This will automatically sync with LoginSheet and SignUpSheet
     @AppStorage("isLoggedIn") private var isLoggedIn = false
     
     var body: some View {
@@ -13,9 +14,11 @@ struct AppCoordinator: View {
             // 1. The Main App (Pre-loaded in background)
             if splashAnimationFinished {
                 if isLoggedIn {
+                    // User is authenticated - show HomeView
                     HomeView()
                         .transition(.opacity.animation(.easeIn(duration: 0.5)))
                 } else {
+                    // New user or not logged in - show LandingView with Sign Up / Log In options
                     LandingView()
                         .transition(.opacity.animation(.easeIn(duration: 0.5)))
                 }
@@ -27,6 +30,34 @@ struct AppCoordinator: View {
                     // Ensure it stays on top
                     .zIndex(1)
             }
+        }
+        .onAppear {
+            // Check for existing authentication token on app launch
+            checkAuthenticationStatus()
+        }
+        .onChange(of: isLoggedIn) { oldValue, newValue in
+            // React to authentication state changes
+            // This ensures smooth transition when user signs up or logs in
+            if newValue {
+                print("✅ AppCoordinator: User logged in, transitioning to HomeView")
+            } else {
+                print("ℹ️ AppCoordinator: User logged out, showing LandingView")
+            }
+        }
+    }
+    
+    /// Check if user has a valid authentication token stored in Keychain
+    /// This runs on app launch to determine initial state
+    private func checkAuthenticationStatus() {
+        if let token = KeychainHelper.shared.readToken() {
+            // Token exists - user is authenticated
+            print("✅ AppCoordinator: Found existing auth token, user is logged in")
+            isLoggedIn = true
+        } else {
+            // No token found - new user or logged out
+            // Show LandingView with Sign Up / Log In options
+            print("ℹ️ AppCoordinator: No auth token found, showing landing page for new user")
+            isLoggedIn = false
         }
     }
 }

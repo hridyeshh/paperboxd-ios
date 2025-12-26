@@ -2,6 +2,7 @@ import SwiftUI
 
 struct SignUpSheet: View {
     @Environment(\.dismiss) var dismiss
+    @AppStorage("isLoggedIn") private var isLoggedIn = false
     
     // Binding to communicate expansion state to parent
     @Binding var isExpanded: Bool
@@ -17,6 +18,10 @@ struct SignUpSheet: View {
     @State private var birthDate = Date()
     @State private var genderSelection = "Male"
     @State private var customGender = ""
+    
+    // Loading and error states
+    @State private var isLoading = false
+    @State private var errorMessage: String?
     
     // Focus tracking for auto-expanding sheet
     @FocusState private var focusedField: Field?
@@ -94,18 +99,33 @@ struct SignUpSheet: View {
                                     step += 1
                                 }
                             } else {
-                                // Handle Final Sign Up Logic Here
-                                print("Sign Up Complete")
-                                dismiss()
+                                // Handle Final Sign Up Logic
+                                handleSignUp()
                             }
                         }) {
-                            Text(step == totalSteps ? "Finish" : "Next")
-                                .fontWeight(.bold)
-                                .foregroundColor(Color(uiColor: .systemBackground))
-                                .padding(.vertical, 12)
-                                .padding(.horizontal, 32)
-                                .background(Color.primary)
-                                .cornerRadius(30)
+                            HStack {
+                                if isLoading {
+                                    ProgressView()
+                                        .progressViewStyle(CircularProgressViewStyle(tint: Color(uiColor: .systemBackground)))
+                                } else {
+                                    Text(step == totalSteps ? "Finish" : "Next")
+                                        .fontWeight(.bold)
+                                }
+                            }
+                            .foregroundColor(Color(uiColor: .systemBackground))
+                            .padding(.vertical, 12)
+                            .padding(.horizontal, 32)
+                            .background(Color.primary)
+                            .cornerRadius(30)
+                        }
+                        .disabled(isLoading)
+                        
+                        // Error message display
+                        if let errorMessage = errorMessage {
+                            Text(errorMessage)
+                                .font(.caption)
+                                .foregroundColor(.red)
+                                .padding(.top, 8)
                         }
                     }
                     .padding(.top, 40)
@@ -306,6 +326,82 @@ struct SignUpSheet: View {
         case 1...5: return "Weak"
         case 6...9: return "Good"
         default: return "Strong"
+        }
+    }
+    
+    /// Handle user registration
+    private func handleSignUp() {
+        // Validate required fields
+        guard !email.isEmpty, !password.isEmpty else {
+            errorMessage = "Please fill in all required fields"
+            return
+        }
+        
+        // Validate email format (basic check)
+        guard email.contains("@") && email.contains(".") else {
+            errorMessage = "Please enter a valid email address"
+            return
+        }
+        
+        // Validate password strength
+        guard password.count >= 6 else {
+            errorMessage = "Password must be at least 6 characters"
+            return
+        }
+        
+        // Clear previous error
+        errorMessage = nil
+        isLoading = true
+        
+        Task {
+            do {
+                // Determine the name to use (username or email prefix)
+                let name = username.isEmpty ? email.components(separatedBy: "@").first ?? "User" : username
+                
+                // Call the registration API
+                let response: AuthResponse = try await APIClient.shared.register(
+                    name: name,
+                    email: email,
+                    password: password
+                )
+                
+                // Save token securely to Keychain
+                KeychainHelper.shared.saveToken(response.token)
+                
+                print("✅ SignUpSheet: Successfully registered user: \(response.user.email)")
+                
+                // Update UI on main thread
+                await MainActor.run {
+                    isLoggedIn = true
+                    isLoading = false
+                    dismiss()
+                }
+            } catch let error as APIError {
+                await MainActor.run {
+                    isLoading = false
+                    switch error {
+                    case .httpError(let statusCode):
+                        if statusCode == 400 {
+                            errorMessage = "Email already registered or invalid data"
+                        } else if statusCode == 409 {
+                            errorMessage = "This email is already registered"
+                        } else {
+                            errorMessage = "Registration failed. Please try again."
+                        }
+                    case .networkError:
+                        errorMessage = "Network error. Please check your connection."
+                    default:
+                        errorMessage = "Registration failed. Please try again."
+                    }
+                    print("❌ SignUpSheet: Registration failed - \(error.localizedDescription)")
+                }
+            } catch {
+                await MainActor.run {
+                    isLoading = false
+                    errorMessage = "An unexpected error occurred"
+                    print("❌ SignUpSheet: Unexpected error - \(error.localizedDescription)")
+                }
+            }
         }
     }
 }
