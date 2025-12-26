@@ -68,7 +68,7 @@ struct HomeView: View {
             // 3. FULL SCREEN DETAIL OVERLAY (Premium transition)
             if let book = selectedBook, showDetail {
                 BookDetailView(
-                    book: book,
+                    initialBook: book,
                     namespace: animationNamespace,
                     isShowing: $showDetail
                 )
@@ -332,6 +332,7 @@ struct FeedPinCard: View {
     let book: Book
     let height: CGFloat
     
+<<<<<<< Updated upstream
     // Secure URL helper
     private var secureCoverURL: URL? {
         guard let src = book.src else { return nil }
@@ -342,9 +343,11 @@ struct FeedPinCard: View {
         return URL(string: src)
     }
     
+=======
+>>>>>>> Stashed changes
     var body: some View {
         ZStack {
-            if let secureCoverURL = secureCoverURL {
+            if let secureCoverURL = book.secureCoverURL {
                 KFImage(secureCoverURL)
                     .setProcessor(DownsamplingImageProcessor(size: CGSize(width: 300, height: Int(height))))
                     .placeholder {
@@ -382,6 +385,7 @@ struct ReadingProgressCard: View {
     let book: Book
     let progress: CGFloat
     
+<<<<<<< Updated upstream
     // Secure URL helper
     private var secureCoverURL: URL? {
         guard let src = book.src else { return nil }
@@ -392,10 +396,12 @@ struct ReadingProgressCard: View {
         return URL(string: src)
     }
     
+=======
+>>>>>>> Stashed changes
     var body: some View {
         HStack(spacing: 15) {
             // Book cover
-            if let secureCoverURL = secureCoverURL {
+            if let secureCoverURL = book.secureCoverURL {
                 KFImage(secureCoverURL)
                     .setProcessor(DownsamplingImageProcessor(size: CGSize(width: 60, height: 90)))
                     .forceRefresh(false)

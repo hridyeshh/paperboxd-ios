@@ -64,6 +64,47 @@ struct Book: Codable, Identifiable {
     let src: String? // Image URL
     let alt: String? // Alt text for image
     let description: String? // Truncated description
+<<<<<<< Updated upstream
+=======
+    let publishedDate: String?
+    let isbn: String?
+    let isbn13: String?
+    let averageRating: Double?
+    let ratingsCount: Int?
+    let pageCount: Int?
+    let categories: [String]?
+    let publisher: String?
+    
+    // Computed property to get the best available image URL
+    var imageURL: String? {
+        return cover ?? src
+    }
+    
+    // Computed property to get a secure HTTPS URL for the cover image
+    // This ensures iOS App Transport Security compliance by converting HTTP to HTTPS
+    var secureCoverURL: URL? {
+        guard let imageURL = imageURL else { return nil }
+        
+        // Check if the URL starts with http:// and replace it with https://
+        if imageURL.hasPrefix("http://") {
+            let secureSrc = imageURL.replacingOccurrences(of: "http://", with: "https://")
+            return URL(string: secureSrc)
+        }
+        
+        return URL(string: imageURL)
+    }
+    
+    // Computed property to get the author string
+    var authorString: String {
+        if let author = author {
+            return author
+        }
+        if let authors = authors, !authors.isEmpty {
+            return authors.joined(separator: ", ")
+        }
+        return "Unknown Author"
+    }
+>>>>>>> Stashed changes
     
     enum CodingKeys: String, CodingKey {
         case id

@@ -28,6 +28,37 @@ struct AppCoordinator: View {
                     .zIndex(1)
             }
         }
+<<<<<<< Updated upstream
+=======
+        .onAppear {
+            // Check for existing authentication token on app launch
+            checkAuthenticationStatus()
+        }
+        .onChange(of: isLoggedIn) { oldValue, newValue in
+            // React to authentication state changes
+            // This ensures smooth transition when user signs up or logs in
+            if newValue {
+                print("✅ AppCoordinator: User logged in, transitioning to HomeView")
+            } else {
+                print("ℹ️ AppCoordinator: User logged out, showing LandingView")
+            }
+        }
+    }
+    
+    /// Check if user has a valid authentication token stored in Keychain
+    /// This runs on app launch to determine initial state
+    private func checkAuthenticationStatus() {
+        if KeychainHelper.shared.readToken() != nil {
+            // Token exists - user is authenticated
+            print("✅ AppCoordinator: Found existing auth token, user is logged in")
+            isLoggedIn = true
+        } else {
+            // No token found - new user or logged out
+            // Show LandingView with Sign Up / Log In options
+            print("ℹ️ AppCoordinator: No auth token found, showing landing page for new user")
+            isLoggedIn = false
+        }
+>>>>>>> Stashed changes
     }
 }
 

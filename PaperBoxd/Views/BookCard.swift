@@ -4,6 +4,7 @@ import Kingfisher
 struct BookCard: View {
     let book: Book
     
+<<<<<<< Updated upstream
     // A simple helper to ensure we try HTTPS first
     // Converts HTTP URLs to HTTPS for secure loading
     private var secureCoverURL: URL? {
@@ -15,10 +16,12 @@ struct BookCard: View {
         return URL(string: src)
     }
     
+=======
+>>>>>>> Stashed changes
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             // Book cover image
-            if let secureCoverURL = secureCoverURL {
+            if let secureCoverURL = book.secureCoverURL {
                 KFImage(secureCoverURL)
                     .setProcessor(DownsamplingImageProcessor(size: CGSize(width: 300, height: 450)))
                     .forceRefresh(false)

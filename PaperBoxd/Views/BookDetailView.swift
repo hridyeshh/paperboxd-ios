@@ -3,13 +3,17 @@ import Kingfisher
 import UIKit
 
 struct BookDetailView: View {
-    let book: Book
+    let initialBook: Book // The simple version from the grid
     var namespace: Namespace.ID
     @Binding var isShowing: Bool
     
     // GESTURE STATE
     @State private var dragOffset: CGSize = .zero
     @State private var animateContent = false
+    
+    // FULL BOOK DATA (from API)
+    @State private var fullBook: Book? // The full version from the API
+    @State private var isLoadingFullDetails = true
     
     // USER STATES (Synced with PaperBoxd DB)
     @State private var isLiked: Bool = false
@@ -18,7 +22,9 @@ struct BookDetailView: View {
     @State private var showStatusPicker = false
     @State private var showShareSheet = false
     @State private var showDescriptionDialog = false
+    @State private var isSavingStatus = false
     
+<<<<<<< Updated upstream
     // Helper to ensure HTTPS for the cover image
     private var secureCoverURL: URL? {
         guard let src = book.src else { return nil }
@@ -27,6 +33,11 @@ struct BookDetailView: View {
             return URL(string: secureSrc)
         }
         return URL(string: src)
+=======
+    // Use fullBook if available, otherwise fall back to initialBook
+    private var displayBook: Book {
+        return fullBook ?? initialBook
+>>>>>>> Stashed changes
     }
     
     // Helper to strip HTML tags from description (matching web version)
@@ -58,7 +69,7 @@ struct BookDetailView: View {
                 VStack(alignment: .leading, spacing: 0) {
                     // 1. HERO COVER (Matched Geometry - Premium transition)
                     ZStack(alignment: .topLeading) {
-                        if let secureCoverURL = secureCoverURL {
+                        if let secureCoverURL = displayBook.secureCoverURL {
                             KFImage(secureCoverURL)
                                 .setProcessor(DownsamplingImageProcessor(size: CGSize(width: 600, height: 900)))
                                 .forceRefresh(false)
@@ -66,14 +77,14 @@ struct BookDetailView: View {
                                 .fade(duration: 0.3)
                                 .resizable()
                                 .aspectRatio(contentMode: .fill)
-                                .matchedGeometryEffect(id: book.id, in: namespace)
+                                .matchedGeometryEffect(id: initialBook.id, in: namespace)
                                 .frame(width: geometry.size.width, height: 500)
                                 .clipped()
                         } else {
                             // Fallback placeholder
                             Rectangle()
                                 .fill(Color(uiColor: .secondarySystemBackground))
-                                .matchedGeometryEffect(id: book.id, in: namespace)
+                                .matchedGeometryEffect(id: initialBook.id, in: namespace)
                                 .frame(width: geometry.size.width, height: 500)
                         }
                     
@@ -93,6 +104,7 @@ struct BookDetailView: View {
                     }
                     
                     // 2. HEADER INFO
+<<<<<<< Updated upstream
                     VStack(alignment: .leading, spacing: 8) {
                         Text(book.title)
                             .font(.system(size: 32, weight: .bold, design: .serif))
@@ -101,10 +113,37 @@ struct BookDetailView: View {
                         Text(book.author)
                             .font(.title3)
                             .foregroundColor(.secondary)
+=======
+                    if isLoadingFullDetails {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(displayBook.title)
+                                .font(.system(size: 32, weight: .bold, design: .serif))
+                                .foregroundColor(.primary)
+                            
+                            Text(displayBook.authorString)
+                                .font(.title3)
+                                .foregroundColor(.secondary)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 24)
+                        .padding(.top, 20)
+                    } else {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(displayBook.title)
+                                .font(.system(size: 32, weight: .bold, design: .serif))
+                                .foregroundColor(.primary)
+                            
+                            Text(displayBook.authorString)
+                                .font(.title3)
+                                .foregroundColor(.secondary)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 24)
+                        .padding(.top, 20)
+                        .opacity(animateContent ? 1 : 0)
+                        .offset(y: animateContent ? 0 : 20)
+>>>>>>> Stashed changes
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 24)
-                    .padding(.top, 20)
                     
                     // 3. THE "PAPERBOXD" ACTION DOCK
                     HStack(spacing: 12) {
@@ -127,7 +166,13 @@ struct BookDetailView: View {
                             showStatusPicker = true
                         }) {
                             HStack(spacing: 8) {
-                                Image(systemName: "books.vertical.fill")
+                                if isSavingStatus {
+                                    ProgressView()
+                                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                        .scaleEffect(0.8)
+                                } else {
+                                    Image(systemName: "books.vertical.fill")
+                                }
                                 Text(shelfStatus)
                                     .fontWeight(.semibold)
                                     .lineLimit(1)
@@ -137,6 +182,7 @@ struct BookDetailView: View {
                             .background(Color.primary)
                             .foregroundColor(Color(uiColor: .systemBackground))
                             .cornerRadius(14)
+                            .disabled(isSavingStatus)
                         }
                         // Removing .frame(maxWidth: .infinity) makes it adaptive
                         
@@ -202,7 +248,12 @@ struct BookDetailView: View {
         .sheet(isPresented: $showStatusPicker) {
             StatusPickerSheet(
                 selectedStatus: $shelfStatus,
-                isDNF: $isDNF
+                isDNF: $isDNF,
+                onStatusSelected: { newStatus in
+                    Task {
+                        await saveBookStatus(newStatus)
+                    }
+                }
             )
             .presentationDetents([.height(300)]) // Fixed height for a true bottom-sheet feel
             .presentationDragIndicator(.visible)
@@ -212,19 +263,14 @@ struct BookDetailView: View {
         }
         .sheet(isPresented: $showDescriptionDialog) {
             DescriptionDialogView(
-                description: stripHtmlTags(book.description),
-                bookTitle: book.title
+                description: stripHtmlTags(displayBook.description),
+                bookTitle: displayBook.title
             )
             .presentationDetents([.medium, .large]) // The "Read More" drawer
             .presentationDragIndicator(.visible)
         }
         .onAppear {
-            // Debug: Check if description is being loaded
-            if let desc = book.description {
-                print("📖 BookDetailView: Description loaded - \(desc.prefix(100))...")
-            } else {
-                print("⚠️ BookDetailView: Description is nil or empty")
-            }
+            loadFullDetails()
         }
     }
     
@@ -244,12 +290,77 @@ struct BookDetailView: View {
     // Share items for share sheet
     private var shareItems: [Any] {
         var items: [Any] = []
+<<<<<<< Updated upstream
         let shareText = "Check out \(book.title) by \(book.author) on PaperBoxd!"
+=======
+        let shareText = "Check out \(displayBook.title) by \(displayBook.authorString) on PaperBoxd!"
+>>>>>>> Stashed changes
         items.append(shareText)
-        if let secureCoverURL = secureCoverURL {
+        if let secureCoverURL = displayBook.secureCoverURL {
             items.append(secureCoverURL)
         }
         return items
+    }
+    
+    // Load full book details from API
+    private func loadFullDetails() {
+        Task {
+            do {
+                print("📖 BookDetailView: Fetching full details for book ID: \(initialBook.id)")
+                let detailed: Book = try await APIClient.shared.fetchBookDetails(bookId: initialBook.id)
+                await MainActor.run {
+                    self.fullBook = detailed
+                    self.isLoadingFullDetails = false
+                    
+                    // Update user interaction state from API response
+                    // Note: The API returns userInteraction, but we'll need to decode it separately
+                    // For now, we'll keep the local state and update it when status changes
+                    
+                    withAnimation(.easeOut(duration: 0.2).delay(0.2)) {
+                        self.animateContent = true
+                    }
+                }
+                print("✅ BookDetailView: Full details loaded successfully")
+            } catch {
+                print("❌ BookDetailView: Failed to load full details: \(error.localizedDescription)")
+                await MainActor.run {
+                    self.isLoadingFullDetails = false
+                    // Still show the initial book data
+                    withAnimation(.easeOut(duration: 0.2).delay(0.2)) {
+                        self.animateContent = true
+                    }
+                }
+            }
+        }
+    }
+    
+    // Save book status to backend
+    private func saveBookStatus(_ status: String) async {
+        await MainActor.run {
+            isSavingStatus = true
+        }
+        
+        do {
+            let response = try await APIClient.shared.logBook(
+                bookId: initialBook.id,
+                status: status,
+                rating: nil,
+                thoughts: isDNF ? "DNF" : nil,
+                format: nil
+            )
+            
+            await MainActor.run {
+                self.shelfStatus = status
+                self.isSavingStatus = false
+            }
+            
+            print("✅ BookDetailView: Book status saved: \(response.message)")
+        } catch {
+            print("❌ BookDetailView: Failed to save book status: \(error.localizedDescription)")
+            await MainActor.run {
+                self.isSavingStatus = false
+            }
+        }
     }
     
     // Check if description needs "Read more" (approximate check for 5+ lines)
@@ -263,7 +374,7 @@ struct BookDetailView: View {
     // Description view with "Read more" functionality
     @ViewBuilder
     private var descriptionView: some View {
-        let cleanDescription = stripHtmlTags(book.description)
+        let cleanDescription = stripHtmlTags(displayBook.description)
         if !cleanDescription.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
                 // Truncated description preview (5 lines max)
@@ -286,7 +397,7 @@ struct BookDetailView: View {
                 .padding(.top, 4)
             }
         } else {
-            Text("This is where your book description from the PaperBoxd API will go. It captures the essence of the narrative and invites the reader into the world of \(book.title).")
+            Text("This is where your book description from the PaperBoxd API will go. It captures the essence of the narrative and invites the reader into the world of \(displayBook.title).")
                 .font(.body)
                 .foregroundColor(.secondary)
                 .lineSpacing(6)
@@ -365,17 +476,19 @@ struct StatusPickerSheet: View {
     @Environment(\.dismiss) var dismiss
     @Binding var selectedStatus: String
     @Binding var isDNF: Bool
+    let onStatusSelected: (String) -> Void
     
-    let statuses = ["Add to Bookshelf", "DNF", "Want to read"]
+    let statuses = ["Want to Read", "Reading", "Read", "DNF"]
     
     var body: some View {
         NavigationStack {
             List(statuses, id: \.self) { status in
                 Button(action: {
                     withAnimation {
-                        selectedStatus = status // Now correctly updates the main view
+                        selectedStatus = status
                         isDNF = (status == "DNF")
                     }
+                    onStatusSelected(status)
                     dismiss()
                 }) {
                     HStack {
@@ -400,6 +513,7 @@ struct StatusPickerSheet: View {
         @Namespace var namespace
         
         var body: some View {
+<<<<<<< Updated upstream
             BookDetailView(
                 book: Book(
                     id: "1",
@@ -413,6 +527,29 @@ struct StatusPickerSheet: View {
                 namespace: namespace,
                 isShowing: .constant(true)
             )
+=======
+            // Create a sample book using JSON decoder for preview
+            let sampleJSON = """
+            {
+                "id": "1",
+                "title": "Sample Book Title",
+                "author": "Author Name",
+                "cover": "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=600&q=80",
+                "description": "This is a sample book description for preview purposes. It demonstrates how the description text will appear in the detail view."
+            }
+            """.data(using: .utf8)!
+            
+            let decoder = JSONDecoder()
+            if let book = try? decoder.decode(Book.self, from: sampleJSON) {
+                BookDetailView(
+                    initialBook: book,
+                    namespace: namespace,
+                    isShowing: .constant(true)
+                )
+            } else {
+                Text("Preview Error")
+            }
+>>>>>>> Stashed changes
         }
     }
     
