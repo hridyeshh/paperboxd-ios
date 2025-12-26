@@ -12,18 +12,6 @@
 				<string>com.googleusercontent.apps.893085484645-7788sam2d7posge2bcild48duripv8h4</string>
 			</array>
 		</dict>
-		<dict/>
 	</array>
-	<key>NSAppTransportSecurity</key>
-	<dict>
-		<key>NSExceptionAllowsInsecureHTTPLoads</key>
-		<true/>
-		<key>NSExceptionDomains</key>
-		<dict/>
-		<key>NSIncludesSubdomains</key>
-		<true/>
-		<key>books.google.com</key>
-		<dict/>
-	</dict>
 </dict>
 </plist>

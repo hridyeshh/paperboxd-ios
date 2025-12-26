@@ -6,11 +6,10 @@
 //
 
 import SwiftUI
+import GoogleSignIn
 
 @main
 struct PaperBoxdApp: App {
-<<<<<<< Updated upstream
-=======
     init() {
         // Configure Google Sign-In
         // IMPORTANT: You MUST use an iOS OAuth Client ID, not a Web Client ID
@@ -20,7 +19,7 @@ struct PaperBoxdApp: App {
         // 3. Bundle ID: com.paperboxd.PaperBoxd
         // 4. Copy the Client ID and add it here or in GoogleService-Info.plist
         
-        if let clientID = ProcessInfo.processInfo.environment["893085484645-7788sam2d7posge2bcild48duripv8h4.apps.googleusercontent.com"], !clientID.isEmpty {
+        if let clientID = ProcessInfo.processInfo.environment["GOOGLE_CLIENT_ID"], !clientID.isEmpty {
             GoogleSignInService.shared.configure(clientID: clientID)
         } else {
             // Will be configured from GoogleService-Info.plist if available
@@ -30,7 +29,6 @@ struct PaperBoxdApp: App {
         }
     }
     
->>>>>>> Stashed changes
     var body: some Scene {
         WindowGroup {
             AppCoordinator()

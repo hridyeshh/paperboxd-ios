@@ -41,10 +41,8 @@ struct HomeView: View {
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
                             .background(Color(uiColor: .systemBackground))
                     case 3:
-                        Text("Profile Page") // Placeholder
-                            .foregroundColor(.primary)
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
-                            .background(Color(uiColor: .systemBackground))
+                        ProfileView()
+                            .opacity(showDetail ? 0 : 1) // Hide profile when detail is showing
                     default:
                         HomeFeedContent(
                             namespace: animationNamespace,
@@ -335,12 +333,12 @@ struct FeedPinCard: View {
 <<<<<<< Updated upstream
     // Secure URL helper
     private var secureCoverURL: URL? {
-        guard let src = book.src else { return nil }
-        if src.hasPrefix("http://") {
-            let secureSrc = src.replacingOccurrences(of: "http://", with: "https://")
+        guard let imageURL = book.imageURL else { return nil }
+        if imageURL.hasPrefix("http://") {
+            let secureSrc = imageURL.replacingOccurrences(of: "http://", with: "https://")
             return URL(string: secureSrc)
         }
-        return URL(string: src)
+        return URL(string: imageURL)
     }
     
 =======
@@ -388,12 +386,12 @@ struct ReadingProgressCard: View {
 <<<<<<< Updated upstream
     // Secure URL helper
     private var secureCoverURL: URL? {
-        guard let src = book.src else { return nil }
-        if src.hasPrefix("http://") {
-            let secureSrc = src.replacingOccurrences(of: "http://", with: "https://")
+        guard let imageURL = book.imageURL else { return nil }
+        if imageURL.hasPrefix("http://") {
+            let secureSrc = imageURL.replacingOccurrences(of: "http://", with: "https://")
             return URL(string: secureSrc)
         }
-        return URL(string: src)
+        return URL(string: imageURL)
     }
     
 =======
