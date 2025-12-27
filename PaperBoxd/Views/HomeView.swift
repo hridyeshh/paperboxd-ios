@@ -330,19 +330,6 @@ struct FeedPinCard: View {
     let book: Book
     let height: CGFloat
     
-<<<<<<< Updated upstream
-    // Secure URL helper
-    private var secureCoverURL: URL? {
-        guard let imageURL = book.imageURL else { return nil }
-        if imageURL.hasPrefix("http://") {
-            let secureSrc = imageURL.replacingOccurrences(of: "http://", with: "https://")
-            return URL(string: secureSrc)
-        }
-        return URL(string: imageURL)
-    }
-    
-=======
->>>>>>> Stashed changes
     var body: some View {
         ZStack {
             if let secureCoverURL = book.secureCoverURL {
@@ -383,19 +370,6 @@ struct ReadingProgressCard: View {
     let book: Book
     let progress: CGFloat
     
-<<<<<<< Updated upstream
-    // Secure URL helper
-    private var secureCoverURL: URL? {
-        guard let imageURL = book.imageURL else { return nil }
-        if imageURL.hasPrefix("http://") {
-            let secureSrc = imageURL.replacingOccurrences(of: "http://", with: "https://")
-            return URL(string: secureSrc)
-        }
-        return URL(string: imageURL)
-    }
-    
-=======
->>>>>>> Stashed changes
     var body: some View {
         HStack(spacing: 15) {
             // Book cover

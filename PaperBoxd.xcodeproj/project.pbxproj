@@ -7,9 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		B1D187F52EFC709400233211 /* GoogleSignIn in Frameworks */ = {isa = PBXBuildFile; productRef = B1D187F42EFC709400233211 /* GoogleSignIn */; };
-		B1D187F72EFC709400233211 /* GoogleSignInSwift in Frameworks */ = {isa = PBXBuildFile; productRef = B1D187F62EFC709400233211 /* GoogleSignInSwift */; };
 		B1F0E4102EFAF11600FD4039 /* Kingfisher in Frameworks */ = {isa = PBXBuildFile; productRef = B1F0E40F2EFAF11600FD4039 /* Kingfisher */; };
+		B1FBE1542EFFCAAC007F36D6 /* GoogleSignIn in Frameworks */ = {isa = PBXBuildFile; productRef = B1FBE1532EFFCAAC007F36D6 /* GoogleSignIn */; };
+		B1FBE1562EFFCAAC007F36D6 /* GoogleSignInSwift in Frameworks */ = {isa = PBXBuildFile; productRef = B1FBE1552EFFCAAC007F36D6 /* GoogleSignInSwift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -17,7 +17,7 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		B1D187F92EFC71B900233211 /* Exceptions for "PaperBoxd" folder in "PaperBoxd" target */ = {
+		B1FBE1512EFFC976007F36D6 /* Exceptions for "PaperBoxd" folder in "PaperBoxd" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
@@ -30,7 +30,7 @@
 		B1F0E3FC2EFAEFE200FD4039 /* PaperBoxd */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
-				B1D187F92EFC71B900233211 /* Exceptions for "PaperBoxd" folder in "PaperBoxd" target */,
+				B1FBE1512EFFC976007F36D6 /* Exceptions for "PaperBoxd" folder in "PaperBoxd" target */,
 			);
 			path = PaperBoxd;
 			sourceTree = "<group>";
@@ -47,9 +47,9 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				B1D187F72EFC709400233211 /* GoogleSignInSwift in Frameworks */,
+				B1FBE1562EFFCAAC007F36D6 /* GoogleSignInSwift in Frameworks */,
 				B1F0E4102EFAF11600FD4039 /* Kingfisher in Frameworks */,
-				B1D187F52EFC709400233211 /* GoogleSignIn in Frameworks */,
+				B1FBE1542EFFCAAC007F36D6 /* GoogleSignIn in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -95,8 +95,8 @@
 			name = PaperBoxd;
 			packageProductDependencies = (
 				B1F0E40F2EFAF11600FD4039 /* Kingfisher */,
-				B1D187F42EFC709400233211 /* GoogleSignIn */,
-				B1D187F62EFC709400233211 /* GoogleSignInSwift */,
+				B1FBE1532EFFCAAC007F36D6 /* GoogleSignIn */,
+				B1FBE1552EFFCAAC007F36D6 /* GoogleSignInSwift */,
 			);
 			productName = PaperBoxd;
 			productReference = B1F0E3FA2EFAEFE200FD4039 /* PaperBoxd.app */;
@@ -128,7 +128,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				B1F0E40E2EFAF11600FD4039 /* XCRemoteSwiftPackageReference "Kingfisher" */,
-				B1D187F32EFC709400233211 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */,
+				B1FBE1522EFFCAAC007F36D6 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = B1F0E3FB2EFAEFE200FD4039 /* Products */;
@@ -289,7 +289,8 @@
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
-				GENERATE_INFOPLIST_FILE = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_EXCLUDE_FROM_RESOURCES = YES;
 				INFOPLIST_FILE = PaperBoxd/Info.plist;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
@@ -334,7 +335,8 @@
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
-				GENERATE_INFOPLIST_FILE = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_EXCLUDE_FROM_RESOURCES = YES;
 				INFOPLIST_FILE = PaperBoxd/Info.plist;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
@@ -391,14 +393,6 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
-		B1D187F32EFC709400233211 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/google/GoogleSignIn-iOS";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 9.0.0;
-			};
-		};
 		B1F0E40E2EFAF11600FD4039 /* XCRemoteSwiftPackageReference "Kingfisher" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/onevcat/Kingfisher.git";
@@ -407,23 +401,31 @@
 				minimumVersion = 8.6.2;
 			};
 		};
+		B1FBE1522EFFCAAC007F36D6 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/google/GoogleSignIn-iOS";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 9.0.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		B1D187F42EFC709400233211 /* GoogleSignIn */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = B1D187F32EFC709400233211 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */;
-			productName = GoogleSignIn;
-		};
-		B1D187F62EFC709400233211 /* GoogleSignInSwift */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = B1D187F32EFC709400233211 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */;
-			productName = GoogleSignInSwift;
-		};
 		B1F0E40F2EFAF11600FD4039 /* Kingfisher */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = B1F0E40E2EFAF11600FD4039 /* XCRemoteSwiftPackageReference "Kingfisher" */;
 			productName = Kingfisher;
+		};
+		B1FBE1532EFFCAAC007F36D6 /* GoogleSignIn */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = B1FBE1522EFFCAAC007F36D6 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */;
+			productName = GoogleSignIn;
+		};
+		B1FBE1552EFFCAAC007F36D6 /* GoogleSignInSwift */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = B1FBE1522EFFCAAC007F36D6 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */;
+			productName = GoogleSignInSwift;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

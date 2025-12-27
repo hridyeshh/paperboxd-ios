@@ -4,20 +4,6 @@ import Kingfisher
 struct BookCard: View {
     let book: Book
     
-<<<<<<< Updated upstream
-    // A simple helper to ensure we try HTTPS first
-    // Converts HTTP URLs to HTTPS for secure loading
-    private var secureCoverURL: URL? {
-        guard let imageURL = book.imageURL else { return nil }
-        if imageURL.hasPrefix("http://") {
-            let secureSrc = imageURL.replacingOccurrences(of: "http://", with: "https://")
-            return URL(string: secureSrc)
-        }
-        return URL(string: imageURL)
-    }
-    
-=======
->>>>>>> Stashed changes
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             // Book cover image
@@ -65,8 +51,8 @@ struct BookCard: View {
     let decoder = JSONDecoder()
     if let book = try? decoder.decode(Book.self, from: sampleJSON) {
         BookCard(book: book)
-            .frame(width: 150)
-            .padding()
+    .frame(width: 150)
+    .padding()
     } else {
         Text("Preview Error")
     }

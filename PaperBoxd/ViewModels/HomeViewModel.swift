@@ -6,22 +6,15 @@ import Combine
 class HomeViewModel: ObservableObject {
     @Published var books: [Book] = []
     @Published var isLoading: Bool = false
+    @Published var hasMore: Bool = true
+    @Published var currentPage: Int = 1
     
-<<<<<<< Updated upstream
-    /// Load books from the API
-=======
     /// Load books from the Mobile API (BFF Pattern)
     /// Fetches: latest + personalized recommendations (if authenticated)
->>>>>>> Stashed changes
     func loadBooks() async {
         isLoading = true
         
         do {
-<<<<<<< Updated upstream
-            let response = try await APIClient.shared.fetchSphereBooks()
-            books = response.books
-            print("✅ HomeViewModel: Successfully loaded \(books.count) books")
-=======
             // 1. Fetch Latest Feed (Public) - Mobile API
             async let latestBooksTask = APIClient.shared.fetchLatestBooks(page: 1, pageSize: 50)
             
@@ -83,7 +76,6 @@ class HomeViewModel: ObservableObject {
             
             let personalizedCount = personalizedResponses.reduce(0) { $0 + $1.books.count }
             print("✅ HomeViewModel: Successfully loaded \(books.count) books (latest: \(latestResponse.books.count), personalized: \(personalizedCount))")
->>>>>>> Stashed changes
         } catch {
             print("❌ HomeViewModel: Failed to load books: \(error.localizedDescription)")
             // Optionally, you could add error handling here (e.g., show alert to user)
@@ -91,8 +83,6 @@ class HomeViewModel: ObservableObject {
         
         isLoading = false
     }
-<<<<<<< Updated upstream
-=======
     
     /// Load more books (pagination) - Mobile API
     func loadMoreBooks() async {
@@ -122,6 +112,5 @@ class HomeViewModel: ObservableObject {
         
         isLoading = false
     }
->>>>>>> Stashed changes
 }
 

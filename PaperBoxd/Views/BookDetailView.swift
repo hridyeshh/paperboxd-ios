@@ -24,20 +24,9 @@ struct BookDetailView: View {
     @State private var showDescriptionDialog = false
     @State private var isSavingStatus = false
     
-<<<<<<< Updated upstream
-    // Helper to ensure HTTPS for the cover image
-    private var secureCoverURL: URL? {
-        guard let src = book.src else { return nil }
-        if src.hasPrefix("http://") {
-            let secureSrc = src.replacingOccurrences(of: "http://", with: "https://")
-            return URL(string: secureSrc)
-        }
-        return URL(string: src)
-=======
     // Use fullBook if available, otherwise fall back to initialBook
     private var displayBook: Book {
         return fullBook ?? initialBook
->>>>>>> Stashed changes
     }
     
     // Helper to strip HTML tags from description (matching web version)
@@ -103,31 +92,10 @@ struct BookDetailView: View {
                     .padding(.horizontal, 20)
                     }
                     
-                    // 2. HEADER INFO
-<<<<<<< Updated upstream
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text(book.title)
-                            .font(.system(size: 32, weight: .bold, design: .serif))
-                            .foregroundColor(.primary)
-                        
-                        Text(book.author)
-                            .font(.title3)
-                            .foregroundColor(.secondary)
-=======
                     if isLoadingFullDetails {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text(displayBook.title)
-                                .font(.system(size: 32, weight: .bold, design: .serif))
-                                .foregroundColor(.primary)
-                            
-                            Text(displayBook.authorString)
-                                .font(.title3)
-                                .foregroundColor(.secondary)
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 24)
-                        .padding(.top, 20)
+                        ProgressView().padding(50)
                     } else {
+                        // 2. HEADER INFO
                         VStack(alignment: .leading, spacing: 8) {
                             Text(displayBook.title)
                                 .font(.system(size: 32, weight: .bold, design: .serif))
@@ -140,81 +108,70 @@ struct BookDetailView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.horizontal, 24)
                         .padding(.top, 20)
+                        
+                        // 3. THE "PAPERBOXD" ACTION DOCK
+                        HStack(spacing: 12) {
+                            // LIKE BUTTON (Haptic Pulse Heart)
+                            ActionButton(
+                                icon: isLiked ? "heart.fill" : "heart",
+                                color: isLiked ? .red : .primary,
+                                active: isLiked
+                            ) {
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
+                                    isLiked.toggle()
+                                }
+                                // Haptic feedback
+                                let generator = UIImpactFeedbackGenerator(style: .medium)
+                                generator.impactOccurred()
+                            }
+                            
+                            // ADAPTIVE BOOKSHELF STATUS BUTTON
+                            Button(action: {
+                                showStatusPicker = true
+                            }) {
+                                HStack(spacing: 8) {
+                                    Image(systemName: "books.vertical.fill")
+                                    Text(shelfStatus)
+                                        .fontWeight(.semibold)
+                                        .lineLimit(1)
+                                }
+                                .padding(.vertical, 14)
+                                .padding(.horizontal, 20)
+                                .background(Color.primary)
+                                .foregroundColor(Color(uiColor: .systemBackground))
+                                .cornerRadius(14)
+                            }
+                            
+                            // SHARE BUTTON
+                            ActionButton(
+                                icon: "square.and.arrow.up",
+                                color: .primary,
+                                active: false
+                            ) {
+                                showShareSheet = true
+                                // Haptic feedback
+                                let generator = UIImpactFeedbackGenerator(style: .light)
+                                generator.impactOccurred()
+                            }
+                            
+                            Spacer()
+                        }
+                        .padding(.horizontal, 24)
+                        .padding(.top, 25)
+                        
+                        // 4. SYNOPSIS & STATS
+                        VStack(alignment: .leading, spacing: 15) {
+                            Text("About this book")
+                                .font(.headline)
+                                .foregroundColor(.primary)
+                            
+                            descriptionView
+                        }
+                        .padding(24)
+                        .padding(.bottom, 100)
                         .opacity(animateContent ? 1 : 0)
                         .offset(y: animateContent ? 0 : 20)
->>>>>>> Stashed changes
                     }
-                    
-                    // 3. THE "PAPERBOXD" ACTION DOCK
-                    HStack(spacing: 12) {
-                        // LIKE BUTTON (Haptic Pulse Heart)
-                        ActionButton(
-                            icon: isLiked ? "heart.fill" : "heart",
-                            color: isLiked ? .red : .primary,
-                            active: isLiked
-                        ) {
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
-                                isLiked.toggle()
-                            }
-                            // Haptic feedback
-                            let generator = UIImpactFeedbackGenerator(style: .medium)
-                            generator.impactOccurred()
-                        }
-                        
-                        // ADAPTIVE BOOKSHELF STATUS BUTTON
-                        Button(action: {
-                            showStatusPicker = true
-                        }) {
-                            HStack(spacing: 8) {
-                                if isSavingStatus {
-                                    ProgressView()
-                                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                                        .scaleEffect(0.8)
-                                } else {
-                                    Image(systemName: "books.vertical.fill")
-                                }
-                                Text(shelfStatus)
-                                    .fontWeight(.semibold)
-                                    .lineLimit(1)
-                            }
-                            .padding(.vertical, 14)
-                            .padding(.horizontal, 20) // Horizontal padding creates the "pill" shape
-                            .background(Color.primary)
-                            .foregroundColor(Color(uiColor: .systemBackground))
-                            .cornerRadius(14)
-                            .disabled(isSavingStatus)
-                        }
-                        // Removing .frame(maxWidth: .infinity) makes it adaptive
-                        
-                        // SHARE BUTTON
-                        ActionButton(
-                            icon: "square.and.arrow.up",
-                            color: .primary,
-                            active: false
-                        ) {
-                            showShareSheet = true
-                            // Haptic feedback
-                            let generator = UIImpactFeedbackGenerator(style: .light)
-                            generator.impactOccurred()
-                        }
-                        
-                        Spacer() // Pushes items to the left, allowing the status button to size itself
-                    }
-                    .padding(.horizontal, 24)
-                    .padding(.top, 25)
-                    
-                    // 4. SYNOPSIS & STATS
-                    VStack(alignment: .leading, spacing: 15) {
-                        Text("About this book")
-                            .font(.headline)
-                            .foregroundColor(.primary)
-                        
-                        descriptionView
-                    }
-                    .padding(24)
-                    .padding(.bottom, 100)
-                    .opacity(animateContent ? 1 : 0)
-                    .offset(y: animateContent ? 0 : 20)
                 }
             }
             .ignoresSafeArea()
@@ -239,11 +196,6 @@ struct BookDetailView: View {
                         }
                     }
             )
-            .onAppear {
-                withAnimation(.easeOut(duration: 0.2).delay(0.2)) {
-                    animateContent = true
-                }
-            }
         }
         .sheet(isPresented: $showStatusPicker) {
             StatusPickerSheet(
@@ -290,11 +242,7 @@ struct BookDetailView: View {
     // Share items for share sheet
     private var shareItems: [Any] {
         var items: [Any] = []
-<<<<<<< Updated upstream
-        let shareText = "Check out \(book.title) by \(book.author) on PaperBoxd!"
-=======
         let shareText = "Check out \(displayBook.title) by \(displayBook.authorString) on PaperBoxd!"
->>>>>>> Stashed changes
         items.append(shareText)
         if let secureCoverURL = displayBook.secureCoverURL {
             items.append(secureCoverURL)
@@ -513,21 +461,6 @@ struct StatusPickerSheet: View {
         @Namespace var namespace
         
         var body: some View {
-<<<<<<< Updated upstream
-            BookDetailView(
-                book: Book(
-                    id: "1",
-                    bookId: "1",
-                    title: "Sample Book Title",
-                    author: "Author Name",
-                    src: "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=600&q=80",
-                    alt: "Sample Book Cover",
-                    description: "This is a sample book description for preview purposes. It demonstrates how the description text will appear in the detail view."
-                ),
-                namespace: namespace,
-                isShowing: .constant(true)
-            )
-=======
             // Create a sample book using JSON decoder for preview
             let sampleJSON = """
             {
@@ -549,7 +482,6 @@ struct StatusPickerSheet: View {
             } else {
                 Text("Preview Error")
             }
->>>>>>> Stashed changes
         }
     }
     

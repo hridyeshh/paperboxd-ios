@@ -28,8 +28,6 @@ struct AppCoordinator: View {
                     .zIndex(1)
             }
         }
-<<<<<<< Updated upstream
-=======
         .onAppear {
             // Check for existing authentication token on app launch
             checkAuthenticationStatus()
@@ -58,7 +56,6 @@ struct AppCoordinator: View {
             print("ℹ️ AppCoordinator: No auth token found, showing landing page for new user")
             isLoggedIn = false
         }
->>>>>>> Stashed changes
     }
 }
 

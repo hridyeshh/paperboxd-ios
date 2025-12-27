@@ -60,12 +60,12 @@ struct Book: Codable, Identifiable {
     // Optional fields from the API response
     let bookId: String?
     let title: String
-    let author: String // Singular string from API (first author)
-    let src: String? // Image URL
+    let author: String? // Singular string from API (first author) - made optional
+    let authors: [String]? // Array of authors (for mobile API)
+    let src: String? // Image URL (legacy field)
+    let cover: String? // Image URL (mobile API field)
     let alt: String? // Alt text for image
     let description: String? // Truncated description
-<<<<<<< Updated upstream
-=======
     let publishedDate: String?
     let isbn: String?
     let isbn13: String?
@@ -104,16 +104,79 @@ struct Book: Codable, Identifiable {
         }
         return "Unknown Author"
     }
->>>>>>> Stashed changes
     
     enum CodingKeys: String, CodingKey {
         case id
+        case _id // Support MongoDB's _id format
         case bookId
         case title
         case author
+        case authors
         case src
+        case cover
         case alt
         case description
+        case publishedDate
+        case isbn
+        case isbn13
+        case averageRating
+        case ratingsCount
+        case pageCount
+        case categories
+        case publisher
+    }
+    
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        
+        // Handle both "id" and "_id" for the id field
+        if let idValue = try? container.decode(String.self, forKey: .id) {
+            id = idValue
+        } else if let idValue = try? container.decode(String.self, forKey: ._id) {
+            id = idValue
+        } else {
+            throw DecodingError.keyNotFound(CodingKeys.id, DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "Neither 'id' nor '_id' found in Book"))
+        }
+        
+        bookId = try? container.decode(String.self, forKey: .bookId)
+        title = try container.decode(String.self, forKey: .title)
+        author = try? container.decode(String.self, forKey: .author)
+        authors = try? container.decode([String].self, forKey: .authors)
+        src = try? container.decode(String.self, forKey: .src)
+        cover = try? container.decode(String.self, forKey: .cover)
+        alt = try? container.decode(String.self, forKey: .alt)
+        description = try? container.decode(String.self, forKey: .description)
+        publishedDate = try? container.decode(String.self, forKey: .publishedDate)
+        isbn = try? container.decode(String.self, forKey: .isbn)
+        isbn13 = try? container.decode(String.self, forKey: .isbn13)
+        averageRating = try? container.decode(Double.self, forKey: .averageRating)
+        ratingsCount = try? container.decode(Int.self, forKey: .ratingsCount)
+        pageCount = try? container.decode(Int.self, forKey: .pageCount)
+        categories = try? container.decode([String].self, forKey: .categories)
+        publisher = try? container.decode(String.self, forKey: .publisher)
+    }
+    
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        
+        // Always encode as "id" (not "_id")
+        try container.encode(id, forKey: .id)
+        try container.encodeIfPresent(bookId, forKey: .bookId)
+        try container.encode(title, forKey: .title)
+        try container.encodeIfPresent(author, forKey: .author)
+        try container.encodeIfPresent(authors, forKey: .authors)
+        try container.encodeIfPresent(src, forKey: .src)
+        try container.encodeIfPresent(cover, forKey: .cover)
+        try container.encodeIfPresent(alt, forKey: .alt)
+        try container.encodeIfPresent(description, forKey: .description)
+        try container.encodeIfPresent(publishedDate, forKey: .publishedDate)
+        try container.encodeIfPresent(isbn, forKey: .isbn)
+        try container.encodeIfPresent(isbn13, forKey: .isbn13)
+        try container.encodeIfPresent(averageRating, forKey: .averageRating)
+        try container.encodeIfPresent(ratingsCount, forKey: .ratingsCount)
+        try container.encodeIfPresent(pageCount, forKey: .pageCount)
+        try container.encodeIfPresent(categories, forKey: .categories)
+        try container.encodeIfPresent(publisher, forKey: .publisher)
     }
 }
 

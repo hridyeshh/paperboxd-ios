@@ -4,16 +4,18 @@ import Foundation
 class APIClient {
     static let shared = APIClient()
     
-<<<<<<< Updated upstream
-    private let baseURL = "https://paperboxd.in/api"
-=======
     // BFF Pattern: Dedicated mobile API namespace
     // Always use www.paperboxd.in to avoid redirect that strips Authorization header
     // URLSession strips headers when following redirects to different subdomains
     private let baseURL = "https://www.paperboxd.in/api/mobile/v1"
->>>>>>> Stashed changes
     
     private init() {}
+    
+    /// Get the authentication token from Keychain
+    /// - Returns: The stored JWT token, or nil if not found
+    private func getAuthToken() -> String? {
+        return KeychainHelper.shared.readToken()
+    }
     
     /// Generic request function that performs a GET request and decodes the response
     /// - Parameters:
@@ -25,21 +27,6 @@ class APIClient {
         endpoint: String,
         queryItems: [URLQueryItem]? = nil
     ) async throws -> T {
-<<<<<<< Updated upstream
-        // Construct URL
-        guard let baseURLInstance = URL(string: baseURL) else {
-            throw APIError.invalidURL
-        }
-        
-        var urlComponents = URLComponents(url: baseURLInstance.appendingPathComponent(endpoint), resolvingAgainstBaseURL: false)
-        
-        if let queryItems = queryItems {
-            urlComponents?.queryItems = queryItems
-        }
-        
-        guard let url = urlComponents?.url else {
-            throw APIError.invalidURL
-=======
         // Ensure token is valid before making authenticated requests
         // Skip for public endpoints (like /books/sphere)
         if endpoint.contains("/auth/") == false && getAuthToken() != nil {
@@ -84,7 +71,7 @@ class APIClient {
         print("🔍 APIClient: Token check for \(endpoint) - rawToken is \(rawToken != nil ? "present (length: \(rawToken!.count))" : "nil")")
         
         if let token = rawToken {
-            let cleanToken = token.trimmingCharacters(in: .whitespacesAndNewlines)
+            let cleanToken = token.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
             
             if !cleanToken.isEmpty {
                 // Set standard Authorization header
@@ -117,14 +104,11 @@ class APIClient {
         } else {
             print("⚠️ APIClient: Attempted authenticated request but token was empty or missing")
             print("⚠️ APIClient: Endpoint: \(endpoint) - This request will fail without authentication")
->>>>>>> Stashed changes
         }
-        
-        print("🌐 APIClient: Making request to \(url.absoluteString)")
         
         // Perform request
         do {
-            let (data, response) = try await URLSession.shared.data(from: url)
+            let (data, response) = try await URLSession.shared.data(for: request)
             
             // Check HTTP response
             guard let httpResponse = response as? HTTPURLResponse else {
@@ -191,8 +175,6 @@ class APIClient {
         }
     }
     
-<<<<<<< Updated upstream
-=======
     /// Generic POST request function
     /// - Parameters:
     ///   - endpoint: The API endpoint path (e.g., "/auth/token/login")
@@ -239,7 +221,7 @@ class APIClient {
         // Add authentication header if token exists and is valid (strict validation)
         // CRITICAL: Trim whitespaces AND newlines - hidden characters break headers
         if let token = getAuthToken() {
-            let cleanToken = token.trimmingCharacters(in: .whitespacesAndNewlines)
+            let cleanToken = token.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
             
             if !cleanToken.isEmpty {
                 // Set standard Authorization header
@@ -375,7 +357,6 @@ class APIClient {
         return getAuthToken() != nil
     }
     
->>>>>>> Stashed changes
     /// Fetch books for the sphere visualization
     /// - Returns: SphereResponse containing an array of books
     /// - Throws: Network errors or decoding errors
@@ -383,8 +364,7 @@ class APIClient {
         let queryItems = [URLQueryItem(name: "limit", value: "80")]
         return try await request(endpoint: "/books/sphere", queryItems: queryItems)
     }
-<<<<<<< Updated upstream
-=======
+    
     
     /// Fetch latest books (Mobile API - BFF Pattern)
     /// - Parameters:
@@ -488,11 +468,28 @@ struct LogBookRequest: Codable {
 
 // MARK: - Response Models
 
+struct LatestBooksResponse: Codable {
+    let books: [Book]
+    let pagination: Pagination?
+}
+
+struct Pagination: Codable {
+    let page: Int
+    let pageSize: Int
+    let total: Int
+    let totalPages: Int
+}
+
+struct PersonalizedBooksResponse: Codable {
+    let books: [Book]
+    let count: Int?
+}
+
 struct LogBookResponse: Codable {
     let success: Bool
     let status: String
     let message: String
->>>>>>> Stashed changes
+    let removed: Bool?
 }
 
 /// API error types
