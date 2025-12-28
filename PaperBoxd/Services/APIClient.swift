@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 
 /// Singleton API client for making requests to the PaperBoxd API
 class APIClient {
@@ -441,19 +442,257 @@ class APIClient {
     ///   - rating: Optional rating (1-5)
     ///   - thoughts: Optional thoughts/review
     ///   - format: Optional format ("Print", "Digital", "Audio")
+    ///   - cover: Optional cover image URL (to ensure correct cover is saved)
     /// - Returns: Success response
     /// - Throws: Network errors or decoding errors
-    func logBook(bookId: String, status: String, rating: Int? = nil, thoughts: String? = nil, format: String? = nil) async throws -> LogBookResponse {
+    func logBook(bookId: String, status: String, rating: Int? = nil, thoughts: String? = nil, format: String? = nil, cover: String? = nil) async throws -> LogBookResponse {
         let encodedBookId = bookId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? bookId
         
         let body = LogBookRequest(
             status: status,
             rating: rating,
             thoughts: thoughts,
-            format: format
+            format: format,
+            cover: cover
         )
         
         return try await post(endpoint: "books/\(encodedBookId)/log", body: body)
+    }
+    
+    /// Update user profile
+    /// - Parameters:
+    ///   - username: The username (required for API endpoint)
+    ///   - name: Optional name
+    ///   - bio: Optional bio
+    ///   - pronouns: Optional pronouns array
+    ///   - birthday: Optional birthday (yyyy-MM-dd format)
+    ///   - gender: Optional gender
+    ///   - links: Optional links array
+    ///   - avatar: Optional avatar URL
+    /// - Returns: Update response
+    /// - Throws: Network errors or decoding errors
+    func updateProfile(
+        username: String,
+        name: String? = nil,
+        bio: String? = nil,
+        pronouns: [String]? = nil,
+        birthday: String? = nil,
+        gender: String? = nil,
+        links: [String]? = nil,
+        avatar: String? = nil
+    ) async throws -> ProfileUpdateResponse {
+        let encodedUsername = username.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? username
+        
+        // Use web API endpoint (not mobile API) for profile updates
+        let webBaseURL = baseURL.replacingOccurrences(of: "/mobile/v1", with: "")
+        let urlString = "\(webBaseURL)/users/\(encodedUsername)"
+        guard let url = URL(string: urlString) else {
+            throw APIError.invalidURL
+        }
+        
+        var body: [String: Any] = [:]
+        if let name = name { body["name"] = name }
+        if let bio = bio { body["bio"] = bio }
+        if let pronouns = pronouns { body["pronouns"] = pronouns }
+        if let birthday = birthday { body["birthday"] = birthday }
+        if let gender = gender { body["gender"] = gender }
+        if let links = links { body["links"] = links }
+        if let avatar = avatar { body["avatar"] = avatar }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "PATCH"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        if let token = getAuthToken() {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+        
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIError.invalidResponse
+        }
+        
+        guard (200...299).contains(httpResponse.statusCode) else {
+            throw APIError.httpError(statusCode: httpResponse.statusCode)
+        }
+        
+        return try JSONDecoder().decode(ProfileUpdateResponse.self, from: data)
+    }
+    
+    /// Upload avatar image
+    /// - Parameter image: The UIImage to upload
+    /// - Returns: Avatar URL
+    /// - Throws: Network errors
+    func uploadAvatar(image: UIImage) async throws -> String {
+        guard let imageData = image.jpegData(compressionQuality: 0.8) else {
+            throw APIError.invalidResponse
+        }
+        
+        // Use web API endpoint (not mobile API) for avatar upload
+        let webBaseURL = baseURL.replacingOccurrences(of: "/mobile/v1", with: "")
+        guard let url = URL(string: "\(webBaseURL)/upload/avatar") else {
+            throw APIError.invalidURL
+        }
+        
+        let boundary = UUID().uuidString
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        
+        if let token = getAuthToken() {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+        
+        var body = Data()
+        body.append("--\(boundary)\r\n".data(using: .utf8)!)
+        body.append("Content-Disposition: form-data; name=\"avatar\"; filename=\"avatar.jpg\"\r\n".data(using: .utf8)!)
+        body.append("Content-Type: image/jpeg\r\n\r\n".data(using: .utf8)!)
+        body.append(imageData)
+        body.append("\r\n--\(boundary)--\r\n".data(using: .utf8)!)
+        
+        request.httpBody = body
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIError.invalidResponse
+        }
+        
+        guard (200...299).contains(httpResponse.statusCode) else {
+            throw APIError.httpError(statusCode: httpResponse.statusCode)
+        }
+        
+        struct AvatarResponse: Codable {
+            let avatar: String
+        }
+        
+        let avatarResponse = try JSONDecoder().decode(AvatarResponse.self, from: data)
+        return avatarResponse.avatar
+    }
+    
+    /// Check if username is available
+    /// - Parameter username: The username to check
+    /// - Returns: true if available, false if taken
+    /// - Throws: Network errors
+    func checkUsernameAvailability(_ username: String) async throws -> Bool {
+        // Use web API endpoint (not mobile API) for username check
+        let webBaseURL = baseURL.replacingOccurrences(of: "/mobile/v1", with: "")
+        let encodedUsername = username.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? username
+        let urlString = "\(webBaseURL)/users/check-username?username=\(encodedUsername)"
+        
+        guard let url = URL(string: urlString) else {
+            throw APIError.invalidURL
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        
+        // Username check doesn't require authentication
+        // But we can include token if available for rate limiting purposes
+        if let token = getAuthToken() {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIError.invalidResponse
+        }
+        
+        guard (200...299).contains(httpResponse.statusCode) else {
+            throw APIError.httpError(statusCode: httpResponse.statusCode)
+        }
+        
+        struct UsernameCheckResponse: Codable {
+            let available: Bool
+            let username: String?
+        }
+        
+        let checkResponse = try JSONDecoder().decode(UsernameCheckResponse.self, from: data)
+        return checkResponse.available
+    }
+    
+    /// Send OTP to new email address for email change
+    /// - Parameter newEmail: The new email address
+    /// - Returns: Success response
+    /// - Throws: Network errors
+    func sendEmailChangeOTP(newEmail: String) async throws -> EmailChangeOTPResponse {
+        let webBaseURL = baseURL.replacingOccurrences(of: "/mobile/v1", with: "")
+        guard let url = URL(string: "\(webBaseURL)/users/change-email/send-otp") else {
+            throw APIError.invalidURL
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        if let token = getAuthToken() {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+        
+        let body = ["newEmail": newEmail]
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIError.invalidResponse
+        }
+        
+        guard (200...299).contains(httpResponse.statusCode) else {
+            // Try to extract error message from response
+            if let errorData = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let errorMessage = errorData["error"] as? String {
+                // Create a custom error with the message
+                throw NSError(domain: "APIClient", code: httpResponse.statusCode, userInfo: [NSLocalizedDescriptionKey: errorMessage])
+            }
+            throw APIError.httpError(statusCode: httpResponse.statusCode)
+        }
+        
+        return try JSONDecoder().decode(EmailChangeOTPResponse.self, from: data)
+    }
+    
+    /// Verify OTP and update email address
+    /// - Parameter code: The 6-digit OTP code
+    /// - Returns: Success response with new email
+    /// - Throws: Network errors
+    func verifyEmailChangeOTP(code: String) async throws -> EmailChangeVerifyResponse {
+        let webBaseURL = baseURL.replacingOccurrences(of: "/mobile/v1", with: "")
+        guard let url = URL(string: "\(webBaseURL)/users/change-email/verify-otp") else {
+            throw APIError.invalidURL
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        if let token = getAuthToken() {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+        
+        let body = ["code": code]
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIError.invalidResponse
+        }
+        
+        guard (200...299).contains(httpResponse.statusCode) else {
+            // Try to extract error message from response
+            if let errorData = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let errorMessage = errorData["error"] as? String {
+                // Create a custom error with the message
+                throw NSError(domain: "APIClient", code: httpResponse.statusCode, userInfo: [NSLocalizedDescriptionKey: errorMessage])
+            }
+            throw APIError.httpError(statusCode: httpResponse.statusCode)
+        }
+        
+        return try JSONDecoder().decode(EmailChangeVerifyResponse.self, from: data)
     }
 }
 
@@ -464,6 +703,7 @@ struct LogBookRequest: Codable {
     let rating: Int?
     let thoughts: String?
     let format: String?
+    let cover: String? // Cover image URL to ensure correct cover is saved
 }
 
 // MARK: - Response Models
@@ -514,5 +754,31 @@ enum APIError: LocalizedError {
             return "Network error: \(error.localizedDescription)"
         }
     }
+}
+
+// MARK: - Response Models
+struct ProfileUpdateResponse: Codable {
+    let message: String
+    let user: UpdatedUser?
+}
+
+struct UpdatedUser: Codable {
+    let id: String?
+    let username: String?
+    let name: String?
+    let bio: String?
+    let avatar: String?
+    let pronouns: [String]?
+}
+
+struct EmailChangeOTPResponse: Codable {
+    let success: Bool
+    let message: String
+}
+
+struct EmailChangeVerifyResponse: Codable {
+    let success: Bool
+    let message: String
+    let email: String
 }
 

@@ -74,6 +74,7 @@ struct Book: Codable, Identifiable {
     let pageCount: Int?
     let categories: [String]?
     let publisher: String?
+    let userInteraction: UserInteraction? // User's interaction with this book
     
     // Computed property to get the best available image URL
     var imageURL: String? {
@@ -124,6 +125,7 @@ struct Book: Codable, Identifiable {
         case pageCount
         case categories
         case publisher
+        case userInteraction
     }
     
     init(from decoder: Decoder) throws {
@@ -154,6 +156,7 @@ struct Book: Codable, Identifiable {
         pageCount = try? container.decode(Int.self, forKey: .pageCount)
         categories = try? container.decode([String].self, forKey: .categories)
         publisher = try? container.decode(String.self, forKey: .publisher)
+        userInteraction = try? container.decode(UserInteraction.self, forKey: .userInteraction)
     }
     
     func encode(to encoder: Encoder) throws {
@@ -177,7 +180,14 @@ struct Book: Codable, Identifiable {
         try container.encodeIfPresent(pageCount, forKey: .pageCount)
         try container.encodeIfPresent(categories, forKey: .categories)
         try container.encodeIfPresent(publisher, forKey: .publisher)
+        try container.encodeIfPresent(userInteraction, forKey: .userInteraction)
     }
+}
+
+// MARK: - UserInteraction
+struct UserInteraction: Codable {
+    let isLiked: Bool?
+    let shelfStatus: String? // "None", "Want to Read", "Reading", "Read", "DNF"
 }
 
 // MARK: - SphereResponse

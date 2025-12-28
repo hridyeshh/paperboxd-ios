@@ -17,12 +17,64 @@ struct BookDetailView: View {
     
     // USER STATES (Synced with PaperBoxd DB)
     @State private var isLiked: Bool = false
-    @State private var shelfStatus: String = "Want to Read" // Reading, Read, Want to Read, DNF
+    @State private var isInBookshelf: Bool = false
     @State private var isDNF: Bool = false
-    @State private var showStatusPicker = false
+    @State private var showLogSheet = false
+    @State private var currentShelfStatus: String? = nil // Local state for immediate UI updates
     @State private var showShareSheet = false
     @State private var showDescriptionDialog = false
     @State private var isSavingStatus = false
+    
+    // Get current shelf status (prioritize local state for immediate updates)
+    private var effectiveShelfStatus: String {
+        if let currentStatus = currentShelfStatus {
+            return currentStatus
+        }
+        return displayBook.userInteraction?.shelfStatus ?? "None"
+    }
+    
+    // Computed property for button text
+    private var logButtonText: String {
+        let shelfStatus = effectiveShelfStatus
+        if shelfStatus == "DNF" {
+            return "DNF"
+        } else if shelfStatus == "Read" || shelfStatus == "Reading" || shelfStatus == "Want to Read" {
+            return "Bookshelf"
+        } else {
+            return "Log"
+        }
+    }
+    
+    // Computed property for the Log button icon
+    @ViewBuilder
+    private var logButtonIcon: some View {
+        let shelfStatus = effectiveShelfStatus
+        
+        if shelfStatus == "DNF" {
+            // DNF icon: book with cross
+            ZStack {
+                Image(systemName: "book.closed")
+                    .font(.system(size: 14, weight: .semibold))
+                Image(systemName: "xmark")
+                    .font(.system(size: 8, weight: .bold))
+            }
+        } else if shelfStatus == "Read" || shelfStatus == "Reading" || shelfStatus == "Want to Read" {
+            // Bookshelf icon
+            Image(systemName: "books.vertical.fill")
+                .font(.system(size: 14, weight: .semibold))
+        } else {
+            // Default: circle with plus sign (no gray fill, just outline)
+            ZStack {
+                Circle()
+                    .stroke(Color(uiColor: .systemBackground), lineWidth: 1.5)
+                    .frame(width: 14, height: 14)
+                
+                Image(systemName: "plus")
+                    .font(.system(size: 8, weight: .semibold))
+                    .foregroundColor(Color(uiColor: .systemBackground))
+            }
+        }
+    }
     
     // Use fullBook if available, otherwise fall back to initialBook
     private var displayBook: Book {
@@ -125,13 +177,15 @@ struct BookDetailView: View {
                                 generator.impactOccurred()
                             }
                             
-                            // ADAPTIVE BOOKSHELF STATUS BUTTON
+                            // LOG BUTTON (opens bottom sheet with options)
                             Button(action: {
-                                showStatusPicker = true
+                                showLogSheet = true
                             }) {
                                 HStack(spacing: 8) {
-                                    Image(systemName: "books.vertical.fill")
-                                    Text(shelfStatus)
+                                    // Dynamic icon based on book status
+                                    logButtonIcon
+                                    
+                                    Text(logButtonText)
                                         .fontWeight(.semibold)
                                         .lineLimit(1)
                                 }
@@ -141,6 +195,7 @@ struct BookDetailView: View {
                                 .foregroundColor(Color(uiColor: .systemBackground))
                                 .cornerRadius(14)
                             }
+                            .disabled(isSavingStatus)
                             
                             // SHARE BUTTON
                             ActionButton(
@@ -197,17 +252,28 @@ struct BookDetailView: View {
                     }
             )
         }
-        .sheet(isPresented: $showStatusPicker) {
-            StatusPickerSheet(
-                selectedStatus: $shelfStatus,
-                isDNF: $isDNF,
-                onStatusSelected: { newStatus in
+        .sheet(isPresented: $showLogSheet) {
+            LogBookSheet(
+                isDNF: isDNF,
+                isInBookshelf: isInBookshelf,
+                onDNFSelected: {
+                    // Update local state immediately for instant UI feedback
+                    currentShelfStatus = "DNF"
+                    showLogSheet = false
                     Task {
-                        await saveBookStatus(newStatus)
+                        await saveBookStatus("DNF")
+                    }
+                },
+                onBookshelfSelected: {
+                    // Update local state immediately for instant UI feedback
+                    currentShelfStatus = "Read"
+                    showLogSheet = false
+                    Task {
+                        await saveBookStatus("Read")
                     }
                 }
             )
-            .presentationDetents([.height(300)]) // Fixed height for a true bottom-sheet feel
+            .presentationDetents([.height(200)])
             .presentationDragIndicator(.visible)
         }
         .sheet(isPresented: $showShareSheet) {
@@ -261,8 +327,26 @@ struct BookDetailView: View {
                     self.isLoadingFullDetails = false
                     
                     // Update user interaction state from API response
-                    // Note: The API returns userInteraction, but we'll need to decode it separately
-                    // For now, we'll keep the local state and update it when status changes
+                    if let userInteraction = detailed.userInteraction {
+                        self.isLiked = userInteraction.isLiked ?? false
+                        
+                        // Update bookshelf and DNF states based on shelfStatus
+                        if let shelfStatus = userInteraction.shelfStatus {
+                            // Update local shelf status to match API response
+                            self.currentShelfStatus = shelfStatus
+                            
+                            if shelfStatus == "DNF" {
+                                self.isDNF = true
+                                self.isInBookshelf = false
+                            } else if shelfStatus == "Read" || shelfStatus == "Reading" || shelfStatus == "Want to Read" {
+                                self.isInBookshelf = true
+                                self.isDNF = false
+                            } else {
+                                self.isDNF = false
+                                self.isInBookshelf = false
+                            }
+                        }
+                    }
                     
                     withAnimation(.easeOut(duration: 0.2).delay(0.2)) {
                         self.animateContent = true
@@ -289,20 +373,40 @@ struct BookDetailView: View {
         }
         
         do {
+            // Get the cover URL from the display book (use secureCoverURL if available, otherwise fallback to cover/src)
+            let coverURL = displayBook.secureCoverURL?.absoluteString ?? displayBook.cover ?? displayBook.imageURL
+            
             let response = try await APIClient.shared.logBook(
                 bookId: initialBook.id,
                 status: status,
                 rating: nil,
-                thoughts: isDNF ? "DNF" : nil,
-                format: nil
+                thoughts: status == "DNF" ? "DNF" : nil,
+                format: nil,
+                cover: coverURL
             )
             
             await MainActor.run {
-                self.shelfStatus = status
+                // Update local state based on status
+                self.currentShelfStatus = status // Keep local state in sync
+                if status == "DNF" {
+                    self.isDNF = true
+                    self.isInBookshelf = false // DNF removes from bookshelf
+                } else if status == "Read" {
+                    self.isInBookshelf = true
+                    self.isDNF = false // Bookshelf removes from DNF
+                }
                 self.isSavingStatus = false
+                
+                // Refresh full book details to sync with API
+                loadFullDetails()
             }
             
             print("✅ BookDetailView: Book status saved: \(response.message)")
+            
+            // Refresh profile data since bookshelf/DNF/TBR lists may have changed
+            Task {
+                await ProfileViewModel.shared.refreshProfile()
+            }
         } catch {
             print("❌ BookDetailView: Failed to save book status: \(error.localizedDescription)")
             await MainActor.run {
@@ -350,6 +454,68 @@ struct BookDetailView: View {
                 .foregroundColor(.secondary)
                 .lineSpacing(6)
         }
+    }
+}
+
+// MARK: - Log Book Sheet
+struct LogBookSheet: View {
+    let isDNF: Bool
+    let isInBookshelf: Bool
+    let onDNFSelected: () -> Void
+    let onBookshelfSelected: () -> Void
+    
+    var body: some View {
+        VStack(spacing: 0) {
+            // Header
+            Text("Log Book")
+                .font(.headline)
+                .padding(.top, 20)
+                .padding(.bottom, 20)
+            
+            Divider()
+            
+            // Options
+            VStack(spacing: 0) {
+                // Add to DNF option
+                Button(action: onDNFSelected) {
+                    HStack {
+                        Image(systemName: isDNF ? "xmark.circle.fill" : "xmark.circle")
+                            .foregroundColor(isDNF ? .red : .primary)
+                        Text("Add to DNF")
+                            .foregroundColor(.primary)
+                        Spacer()
+                        if isDNF {
+                            Image(systemName: "checkmark")
+                                .foregroundColor(.red)
+                        }
+                    }
+                    .padding(.vertical, 16)
+                    .padding(.horizontal, 20)
+                }
+                
+                Divider()
+                
+                // Add to Bookshelf option
+                Button(action: onBookshelfSelected) {
+                    HStack {
+                        Image(systemName: isInBookshelf ? "books.vertical.fill" : "books.vertical")
+                            .foregroundColor(isInBookshelf ? .green : .primary)
+                        Text("Add to Bookshelf")
+                            .foregroundColor(.primary)
+                        Spacer()
+                        if isInBookshelf {
+                            Image(systemName: "checkmark")
+                                .foregroundColor(.green)
+                        }
+                    }
+                    .padding(.vertical, 16)
+                    .padding(.horizontal, 20)
+                }
+            }
+            
+            Spacer()
+        }
+        .background(Color(uiColor: .systemBackground))
     }
 }
 
@@ -419,42 +585,6 @@ struct ActionButton: View {
     }
 }
 
-// MARK: - Status Picker Sheet (CORRECTED LOGIC)
-struct StatusPickerSheet: View {
-    @Environment(\.dismiss) var dismiss
-    @Binding var selectedStatus: String
-    @Binding var isDNF: Bool
-    let onStatusSelected: (String) -> Void
-    
-    let statuses = ["Want to Read", "Reading", "Read", "DNF"]
-    
-    var body: some View {
-        NavigationStack {
-            List(statuses, id: \.self) { status in
-                Button(action: {
-                    withAnimation {
-                        selectedStatus = status
-                        isDNF = (status == "DNF")
-                    }
-                    onStatusSelected(status)
-                    dismiss()
-                }) {
-                    HStack {
-                        Text(status)
-                            .foregroundColor(.primary)
-                        Spacer()
-                        if selectedStatus == status {
-                            Image(systemName: "checkmark")
-                                .foregroundColor(.primary)
-                        }
-                    }
-                }
-            }
-            .navigationTitle("Update Status")
-            .navigationBarTitleDisplayMode(.inline)
-        }
-    }
-}
 
 #Preview {
     struct PreviewWrapper: View {

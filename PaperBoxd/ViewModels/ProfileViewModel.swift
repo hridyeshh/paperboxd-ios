@@ -4,9 +4,15 @@ import Combine
 /// ViewModel for the Profile screen that manages user stats and library books
 @MainActor
 class ProfileViewModel: ObservableObject {
+    // Shared singleton instance for app-wide profile state
+    static let shared = ProfileViewModel()
+    
     @Published var profile: UserProfile?
     @Published var isLoading: Bool = false
     @Published var errorMessage: String?
+    
+    // Track if profile has been loaded to avoid unnecessary reloads
+    private var hasLoadedProfile: Bool = false
     
     // Computed properties for easy access
     var favoriteBoards: [BookBoard] {
@@ -95,9 +101,17 @@ class ProfileViewModel: ObservableObject {
         return dnfBooks
     }
     
-    /// Load user profile from the API
-    /// - Parameter username: The username to fetch (if nil, will fetch current user's profile)
-    func loadProfile(username: String? = nil) async {
+    /// Load user profile from the API (only if not already loaded)
+    /// - Parameters:
+    ///   - username: The username to fetch (if nil, will fetch current user's profile)
+    ///   - forceRefresh: If true, will reload even if profile is already loaded
+    func loadProfile(username: String? = nil, forceRefresh: Bool = false) async {
+        // Skip loading if profile is already loaded and not forcing refresh
+        if hasLoadedProfile && !forceRefresh && profile != nil {
+            print("ℹ️ ProfileViewModel: Profile already loaded, skipping reload")
+            return
+        }
+        
         isLoading = true
         errorMessage = nil
         
@@ -115,6 +129,7 @@ class ProfileViewModel: ObservableObject {
             }
             
             profile = response.user
+            hasLoadedProfile = true
             print("✅ ProfileViewModel: Successfully loaded profile for \(response.user.username ?? "unknown")")
         } catch let error as APIError {
             print("❌ ProfileViewModel: API Error - \(error.localizedDescription)")
@@ -124,6 +139,8 @@ class ProfileViewModel: ObservableObject {
                     errorMessage = "User not found"
                 } else if statusCode == 401 {
                     errorMessage = "Please log in again"
+                    // Clear loaded state on auth error
+                    hasLoadedProfile = false
                 } else {
                     errorMessage = "Failed to load profile (Error \(statusCode))"
                 }
@@ -141,6 +158,20 @@ class ProfileViewModel: ObservableObject {
         }
         
         isLoading = false
+    }
+    
+    /// Refresh profile data (forces reload from API)
+    func refreshProfile() async {
+        print("🔄 ProfileViewModel: Refreshing profile data...")
+        await loadProfile(forceRefresh: true)
+    }
+    
+    /// Clear profile data (e.g., on logout)
+    func clearProfile() {
+        profile = nil
+        hasLoadedProfile = false
+        errorMessage = nil
+        print("🗑️ ProfileViewModel: Profile data cleared")
     }
     
     // MARK: - Helper Methods
