@@ -255,8 +255,8 @@ struct PinterestNavBar: View {
             
             Spacer()
             
-            // 3. Write (The Pen Button)
-            NavIcon(icon: "pencil", index: 2, selectedTab: $selectedTab)
+            // 3. Write (The Plus Button)
+            NavIcon(icon: "plus", index: 2, selectedTab: $selectedTab)
             
             Spacer()
             
@@ -299,6 +299,8 @@ struct NavIcon: View {
 struct ProfileNavButton: View {
     let index: Int
     @Binding var selectedTab: Int
+    @StateObject private var profileViewModel = ProfileViewModel()
+    @State private var avatarURL: String? = nil
     
     var body: some View {
         Button(action: { 
@@ -307,21 +309,56 @@ struct ProfileNavButton: View {
             }
         }) {
             // Avatar circle with border (matching web version)
-            Circle()
-                .fill(Color.secondary.opacity(0.2))
-                .frame(width: 32, height: 32)
-                .overlay(
+            ZStack {
+                Circle()
+                    .fill(Color.secondary.opacity(0.2))
+                    .frame(width: 32, height: 32)
+                
+                // Profile photo or initial fallback
+                if let avatarURL = avatarURL, let url = URL(string: avatarURL) {
+                    KFImage(url)
+                        .setProcessor(DownsamplingImageProcessor(size: CGSize(width: 64, height: 64)))
+                        .placeholder {
+                            Circle()
+                                .fill(Color.secondary.opacity(0.2))
+                                .frame(width: 28, height: 28)
+                        }
+                        .forceRefresh(false)
+                        .cacheMemoryOnly(false)
+                        .fade(duration: 0.2)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .frame(width: 28, height: 28)
+                        .clipShape(Circle())
+                } else {
+                    // Fallback to initial if no avatar
+                    let initial = profileViewModel.profile?.name?.prefix(1).uppercased() ?? 
+                                 profileViewModel.profile?.username?.prefix(1).uppercased() ?? 
+                                 "U"
+                    Text(initial)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(.primary)
+                }
+                
+                // Border overlay (only when profile is selected)
+                if selectedTab == index {
                     Circle()
                         .stroke(Color.primary.opacity(0.8), lineWidth: 2)
-                )
-                .overlay(
-                    // Placeholder: You can replace this with actual user avatar image
-                    Text("H")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(.primary)
-                )
+                        .frame(width: 32, height: 32)
+                }
+            }
         }
         .frame(maxWidth: .infinity)
+        .onAppear {
+            // Load profile to get avatar
+            Task {
+                await profileViewModel.loadProfile()
+            }
+        }
+        .onChange(of: profileViewModel.profile?.avatar) { oldValue, newValue in
+            // Update avatar URL when profile loads
+            avatarURL = newValue
+        }
     }
 }
 
