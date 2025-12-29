@@ -299,8 +299,13 @@ struct NavIcon: View {
 struct ProfileNavButton: View {
     let index: Int
     @Binding var selectedTab: Int
-    @StateObject private var profileViewModel = ProfileViewModel()
-    @State private var avatarURL: String? = nil
+    // Use shared instance instead of creating new one
+    @ObservedObject private var profileViewModel = ProfileViewModel.shared
+    
+    // Computed property to get avatar URL directly from profile
+    private var avatarURL: String? {
+        return profileViewModel.profile?.avatar
+    }
     
     var body: some View {
         Button(action: { 
@@ -350,14 +355,10 @@ struct ProfileNavButton: View {
         }
         .frame(maxWidth: .infinity)
         .onAppear {
-            // Load profile to get avatar
+            // Load profile to get avatar (only if not already loaded)
             Task {
                 await profileViewModel.loadProfile()
             }
-        }
-        .onChange(of: profileViewModel.profile?.avatar) { oldValue, newValue in
-            // Update avatar URL when profile loads
-            avatarURL = newValue
         }
     }
 }

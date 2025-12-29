@@ -2,8 +2,12 @@ import SwiftUI
 import Kingfisher
 
 struct ProfileView: View {
-    @StateObject private var viewModel = ProfileViewModel()
+    // Use shared instance instead of creating new one
+    @ObservedObject private var viewModel = ProfileViewModel.shared
     @State private var selectedTab = "Bookshelf"
+    @State private var showEditProfile = false
+    @State private var showSettings = false
+    @State private var showShare = false
     // Your 4 specific items (Liked removed for now, kept in DB for future use)
     let navigationItems = ["Favorites", "Lists", "Bookshelf", "DNF"]
     
@@ -26,33 +30,82 @@ struct ProfileView: View {
                     }
                 }
             } else {
-                ScrollView(showsIndicators: false) {
-                    VStack(spacing: 25) {
-                        // 1. CLEAN HEADER (No search or tags)
-                        ProfileSimpleHeader(
-                            name: viewModel.profile?.name ?? "User",
-                            avatar: viewModel.profile?.avatar,
-                            bio: viewModel.profile?.bio
-                        )
+            ScrollView(showsIndicators: false) {
+                    VStack(spacing: 20) {
+                        // 1. PROFILE INFO CONTAINER (Avatar, username, pronouns, name, stats, bio)
+                        VStack(spacing: 0) {
+                            // Settings and Share buttons overlay at top
+                            HStack {
+                                // Settings button on the left
+                                Button(action: {
+                                    showSettings = true
+                                }) {
+                                    Image(systemName: "gearshape")
+                                        .font(.system(size: 20))
+                                        .foregroundColor(.primary)
+                                        .padding(8)
+                                }
+                                
+                                Spacer()
+                                
+                                // Share button on the right
+                                Button(action: {
+                                    showShare = true
+                                }) {
+                                    Image(systemName: "square.and.arrow.up")
+                                        .font(.system(size: 20))
+                                        .foregroundColor(.primary)
+                                        .padding(8)
+                                }
+                            }
+                            .padding(.horizontal, 20)
+                            .padding(.top, 10)
+                            
+                            ProfileHeader(
+                                username: viewModel.profile?.username,
+                                name: viewModel.profile?.name,
+                                avatar: viewModel.profile?.avatar,
+                                pronouns: viewModel.profile?.pronouns,
+                                bookshelfCount: viewModel.bookshelfBooksList.count,
+                                followersCount: viewModel.profile?.followers?.count ?? 0,
+                                followingCount: viewModel.profile?.following?.count ?? 0,
+                                bio: viewModel.profile?.bio
+                            )
+                            
+                            // Edit Profile Button (below the container)
+                            Button(action: {
+                                showEditProfile = true
+                            }) {
+                                Text("Edit profile")
+                                    .font(.system(size: 15, weight: .semibold))
+                                    .foregroundColor(.primary)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 12)
+                                    .background(Color.secondary.opacity(0.1))
+                                    .cornerRadius(10)
+                            }
+                            .padding(.horizontal, 20)
+                            .padding(.top, 16)
+                        }
                         
-                        // 2. TOP NAVIGATION (Pinterest Style)
-                        CategoryPicker(selection: $selectedTab, options: navigationItems)
-                        
+                        // 2. TOP NAVIGATION TABS (Below header)
+                    CategoryPicker(selection: $selectedTab, options: navigationItems)
+                    
                         // 3. CONTENT (Boards for Lists, Collection for Books)
                         if selectedTab == "Lists" {
                             // Lists: Show as boards (Pinterest style)
-                            LazyVGrid(
-                                columns: [
-                                    GridItem(.flexible(), spacing: 16),
-                                    GridItem(.flexible(), spacing: 16)
-                                ],
-                                spacing: 20
-                            ) {
+                    LazyVGrid(
+                        columns: [
+                            GridItem(.flexible(), spacing: 16),
+                            GridItem(.flexible(), spacing: 16)
+                        ],
+                        spacing: 20
+                    ) {
                                 ForEach(viewModel.readingListBoards) { board in
-                                    BoardPreviewCard(board: board)
-                                }
-                            }
-                            .padding(.horizontal)
+                            BoardPreviewCard(board: board)
+                        }
+                    }
+                    .padding(.horizontal)
                         } else {
                             // Favorites, Bookshelf, DNF: Show as book collection (grid)
                             LazyVGrid(
@@ -69,14 +122,35 @@ struct ProfileView: View {
                             }
                             .padding(.horizontal)
                         }
-                        
-                        Spacer().frame(height: 120) // Dock padding
-                    }
-                    .padding(.top, 10)
+                    
+                    Spacer().frame(height: 120) // Dock padding
+                }
+                .padding(.top, 10)
+            }
+                .refreshable {
+                    // Pull-to-refresh: Force reload profile data
+                    await viewModel.refreshProfile()
                 }
             }
         }
+        .sheet(isPresented: $showEditProfile) {
+            if let profile = viewModel.profile {
+                EditProfileView(profile: profile) {
+                    // After saving, refresh profile
+                    Task {
+                        await viewModel.refreshProfile()
+                    }
+                }
+            }
+        }
+        .fullScreenCover(isPresented: $showSettings) {
+            SettingsView()
+        }
+        .sheet(isPresented: $showShare) {
+            ShareView()
+        }
         .onAppear {
+            // Only load if not already loaded (shared instance handles caching)
             Task {
                 await viewModel.loadProfile()
             }
@@ -120,62 +194,123 @@ struct ProfileView: View {
 }
 
 // MARK: - COMPONENT: SIMPLIFIED PROFILE HEADER
-struct ProfileSimpleHeader: View {
-    let name: String
+// MARK: - PROFILE HEADER (Avatar left, info right - matching image design)
+struct ProfileHeader: View {
+    let username: String?
+    let name: String?
     let avatar: String?
+    let pronouns: [String]?
+    let bookshelfCount: Int
+    let followersCount: Int
+    let followingCount: Int
     let bio: String?
     
     var body: some View {
-        VStack(spacing: 16) {
-            // Centered Avatar
+        HStack(alignment: .top, spacing: 16) {
+            // Avatar on the left
             if let avatarURL = avatar, let url = URL(string: avatarURL) {
                 KFImage(url)
                     .placeholder {
                         Circle()
                             .fill(Color.secondary.opacity(0.1))
-                            .frame(width: 90, height: 90)
+                            .frame(width: 80, height: 80)
                             .overlay(
-                                Text(name.prefix(1))
-                                    .font(.system(size: 32, weight: .black))
+                                Text((name ?? username ?? "U").prefix(1).uppercased())
+                                    .font(.system(size: 28, weight: .black))
                                     .foregroundColor(.primary)
                             )
                     }
                     .resizable()
                     .aspectRatio(contentMode: .fill)
-                    .frame(width: 90, height: 90)
+                    .frame(width: 80, height: 80)
                     .clipShape(Circle())
-                    .padding(.top, 10)
             } else {
-                Circle()
-                    .fill(Color.secondary.opacity(0.1))
-                    .frame(width: 90, height: 90)
-                    .overlay(
-                        Text(name.prefix(1))
-                            .font(.system(size: 32, weight: .black))
+            Circle()
+                .fill(Color.secondary.opacity(0.1))
+                    .frame(width: 80, height: 80)
+                .overlay(
+                        Text((name ?? username ?? "U").prefix(1).uppercased())
+                            .font(.system(size: 28, weight: .black))
                             .foregroundColor(.primary)
                     )
-                    .padding(.top, 10)
             }
             
-            VStack(spacing: 4) {
-                Text(name)
-                    .font(.title2.bold())
-                    .foregroundColor(.primary)
+            // User info on the right
+            VStack(alignment: .leading, spacing: 6) {
+                // Username and pronouns
+                HStack(spacing: 8) {
+                    Text(username ?? "username")
+                        .font(.system(size: 20, weight: .bold))
+                        .foregroundColor(.primary)
+                        .lineLimit(1)
+                    
+                    if let pronouns = pronouns, !pronouns.isEmpty {
+                        Text(pronouns.joined(separator: "/"))
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(.primary)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 3)
+                            .background(
+                                RoundedRectangle(cornerRadius: 10)
+                                    .stroke(Color.primary.opacity(0.3), lineWidth: 1)
+                            )
+                    }
+                }
                 
+                // Full name
+                if let name = name {
+                Text(name)
+                        .font(.system(size: 14, weight: .regular))
+                        .foregroundColor(.secondary)
+                        .lineLimit(1)
+                }
+                
+                // Stats: books, followers, following (count on top, label below)
+                HStack(spacing: 20) {
+                    // Books count (bookshelf count)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("\(bookshelfCount)")
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundColor(.primary)
+                        Text("books")
+                            .font(.system(size: 11, weight: .regular))
+                            .foregroundColor(.primary)
+                    }
+                    
+                    // Followers count
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("\(followersCount)")
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundColor(.primary)
+                        Text("followers")
+                            .font(.system(size: 10, weight: .regular))
+                            .foregroundColor(.primary)
+                    }
+                    
+                    // Following count
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("\(followingCount)")
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundColor(.primary)
+                        Text("following")
+                            .font(.system(size: 10, weight: .regular))
+                    .foregroundColor(.primary)
+                    }
+                }
+                
+                // Bio (if available)
                 if let bio = bio, !bio.isEmpty {
                     Text(bio)
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                        .multilineTextAlignment(.center)
-                        .lineLimit(3)
-                } else {
-                    Text("@username")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
+                        .font(.system(size: 14, weight: .regular))
+                        .foregroundColor(.primary)
+                        .padding(.top, 4)
                 }
             }
-            .padding(.horizontal, 40)
-        }
+            
+            Spacer()
+            }
+        .padding(.horizontal, 20)
+        .padding(.top, 10)
     }
 }
 
@@ -197,8 +332,8 @@ struct CategoryPicker: View {
                     }
                 }) {
                     VStack(spacing: 8) {
-                        Text(option)
-                            .fontWeight(selection == option ? .bold : .medium)
+                        // Icon only (no text)
+                        ProfileTabIcon(tabName: option, isActive: selection == option)
                             .foregroundColor(selection == option ? .primary : .secondary)
                         
                         if selection == option {

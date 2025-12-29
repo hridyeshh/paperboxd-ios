@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 
 /// Singleton API client for making requests to the PaperBoxd API
 class APIClient {
@@ -191,11 +192,20 @@ class APIClient {
             try? await TokenRefreshService.shared.ensureValidToken()
         }
         // Construct URL using URLComponents for robust URL building
-        // BFF Pattern: Mobile API routes always get trailing slashes to prevent redirects
+        // BFF Pattern: Mobile API routes get trailing slashes to prevent redirects
+        // BUT: Auth endpoints should NOT have trailing slashes to avoid 405 errors
         let normalizedEndpoint = endpoint.hasPrefix("/") ? String(endpoint.dropFirst()) : endpoint
         
-        // Force a trailing slash so Vercel doesn't redirect /profile to /profile/
-        let finalPath = normalizedEndpoint.hasSuffix("/") ? normalizedEndpoint : "\(normalizedEndpoint)/"
+        // Force a trailing slash for most endpoints, but NOT for auth endpoints
+        // Auth endpoints can have issues with trailing slashes causing 405 errors
+        let finalPath: String
+        if normalizedEndpoint.contains("/auth/") {
+            // Don't add trailing slash for auth endpoints
+            finalPath = normalizedEndpoint
+        } else {
+            // Add trailing slash for other endpoints
+            finalPath = normalizedEndpoint.hasSuffix("/") ? normalizedEndpoint : "\(normalizedEndpoint)/"
+        }
         
         // Use URLComponents from the start for proper URL construction
         guard var components = URLComponents(string: baseURL) else {
@@ -352,6 +362,47 @@ class APIClient {
         print("✅ APIClient: User logged out, token cleared")
     }
     
+    /// Delete user account
+    /// - Parameter reasons: Array of reasons for account deletion
+    /// - Throws: Network errors
+    func deleteAccount(reasons: [String]) async throws {
+        // Use web API endpoint (not mobile API) for account deletion
+        let webBaseURL = baseURL.replacingOccurrences(of: "/mobile/v1", with: "")
+        guard let url = URL(string: "\(webBaseURL)/users/delete-account") else {
+            throw APIError.invalidURL
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "DELETE"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        // Add authentication header
+        if let token = getAuthToken() {
+            let cleanToken = token.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
+            if !cleanToken.isEmpty {
+                request.setValue("Bearer \(cleanToken)", forHTTPHeaderField: "Authorization")
+                request.setValue("Bearer \(cleanToken)", forHTTPHeaderField: "X-User-Authorization")
+            }
+        }
+        
+        let body = ["reasons": reasons]
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIError.invalidResponse
+        }
+        
+        guard (200...299).contains(httpResponse.statusCode) else {
+            if let errorData = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let errorMessage = errorData["error"] as? String {
+                throw APIError.httpError(statusCode: httpResponse.statusCode)
+            }
+            throw APIError.httpError(statusCode: httpResponse.statusCode)
+        }
+    }
+    
     /// Check if user is authenticated
     var isAuthenticated: Bool {
         return getAuthToken() != nil
@@ -441,19 +492,244 @@ class APIClient {
     ///   - rating: Optional rating (1-5)
     ///   - thoughts: Optional thoughts/review
     ///   - format: Optional format ("Print", "Digital", "Audio")
+    ///   - cover: Optional cover image URL (to ensure correct cover is saved)
     /// - Returns: Success response
     /// - Throws: Network errors or decoding errors
-    func logBook(bookId: String, status: String, rating: Int? = nil, thoughts: String? = nil, format: String? = nil) async throws -> LogBookResponse {
+    func logBook(bookId: String, status: String, rating: Int? = nil, thoughts: String? = nil, format: String? = nil, cover: String? = nil) async throws -> LogBookResponse {
         let encodedBookId = bookId.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? bookId
         
         let body = LogBookRequest(
             status: status,
             rating: rating,
             thoughts: thoughts,
-            format: format
+            format: format,
+            cover: cover
         )
         
         return try await post(endpoint: "books/\(encodedBookId)/log", body: body)
+    }
+    
+    /// Update user profile
+    /// - Parameters:
+    ///   - username: The username (required for API endpoint)
+    ///   - name: Optional name
+    ///   - bio: Optional bio
+    ///   - pronouns: Optional pronouns array
+    ///   - birthday: Optional birthday (yyyy-MM-dd format)
+    ///   - gender: Optional gender
+    ///   - links: Optional links array
+    ///   - avatar: Optional avatar URL
+    /// - Returns: Update response
+    /// - Throws: Network errors or decoding errors
+    func updateProfile(
+        username: String,
+        name: String? = nil,
+        bio: String? = nil,
+        pronouns: [String]? = nil,
+        birthday: String? = nil,
+        gender: String? = nil,
+        links: [String]? = nil,
+        avatar: String? = nil
+    ) async throws -> ProfileUpdateResponse {
+        let encodedUsername = username.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? username
+        
+        // Use web API endpoint (not mobile API) for profile updates
+        let webBaseURL = baseURL.replacingOccurrences(of: "/mobile/v1", with: "")
+        let urlString = "\(webBaseURL)/users/\(encodedUsername)"
+        guard let url = URL(string: urlString) else {
+            throw APIError.invalidURL
+        }
+        
+        var body: [String: Any] = [:]
+        if let name = name { body["name"] = name }
+        if let bio = bio { body["bio"] = bio }
+        if let pronouns = pronouns { body["pronouns"] = pronouns }
+        if let birthday = birthday { body["birthday"] = birthday }
+        if let gender = gender { body["gender"] = gender }
+        if let links = links { body["links"] = links }
+        if let avatar = avatar { body["avatar"] = avatar }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "PATCH"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        if let token = getAuthToken() {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+        
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIError.invalidResponse
+        }
+        
+        guard (200...299).contains(httpResponse.statusCode) else {
+            throw APIError.httpError(statusCode: httpResponse.statusCode)
+        }
+        
+        return try JSONDecoder().decode(ProfileUpdateResponse.self, from: data)
+    }
+    
+    /// Upload avatar image
+    /// - Parameter image: The UIImage to upload
+    /// - Returns: Avatar URL
+    /// - Throws: Network errors
+    func uploadAvatar(image: UIImage) async throws -> String {
+        print("📤 APIClient: Starting avatar upload...")
+        
+        // Ensure token is valid before making authenticated request
+        if getAuthToken() != nil {
+            try? await TokenRefreshService.shared.ensureValidToken()
+        }
+        
+        guard let imageData = image.jpegData(compressionQuality: 0.8) else {
+            print("❌ APIClient: Failed to convert image to JPEG data")
+            throw APIError.invalidResponse
+        }
+        
+        print("📤 APIClient: Image data size: \(imageData.count) bytes")
+        
+        // Use web API endpoint (not mobile API) for avatar upload
+        let webBaseURL = baseURL.replacingOccurrences(of: "/mobile/v1", with: "")
+        guard let url = URL(string: "\(webBaseURL)/upload/avatar") else {
+            print("❌ APIClient: Invalid URL: \(webBaseURL)/upload/avatar")
+            throw APIError.invalidURL
+        }
+        
+        print("📤 APIClient: Upload URL: \(url.absoluteString)")
+        
+        let boundary = UUID().uuidString
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        
+        // Add authentication header with same pattern as request() function
+        // CRITICAL: Trim whitespaces AND newlines - hidden characters break headers
+        let rawToken = getAuthToken()
+        print("🔍 APIClient: Token check for upload - rawToken is \(rawToken != nil ? "present (length: \(rawToken!.count))" : "nil")")
+        
+        if let token = rawToken {
+            let cleanToken = token.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
+            
+            if !cleanToken.isEmpty {
+                // Set standard Authorization header
+                request.setValue("Bearer \(cleanToken)", forHTTPHeaderField: "Authorization")
+                
+                // CRITICAL: Also set custom header as fallback
+                // Vercel sometimes strips/replaces the Authorization header, so we send it in a custom header too
+                // The backend will check both Authorization and X-User-Authorization
+                request.setValue("Bearer \(cleanToken)", forHTTPHeaderField: "X-User-Authorization")
+                
+                print("🔐 APIClient: Successfully added valid Bearer token (length: \(cleanToken.count), prefix: \(cleanToken.prefix(10))...)")
+                print("🔐 APIClient: Set both 'Authorization' and 'X-User-Authorization' headers (fallback for Vercel)")
+                
+                // Verify both headers were actually set
+                if let authHeader = request.value(forHTTPHeaderField: "Authorization") {
+                    print("✅ APIClient: Verified Authorization header is set (length: \(authHeader.count))")
+                } else {
+                    print("❌ APIClient: ERROR - Authorization header was NOT set despite token being valid!")
+                }
+                
+                if let customAuthHeader = request.value(forHTTPHeaderField: "X-User-Authorization") {
+                    print("✅ APIClient: Verified X-User-Authorization header is set (length: \(customAuthHeader.count))")
+                } else {
+                    print("❌ APIClient: ERROR - X-User-Authorization header was NOT set!")
+                }
+            } else {
+                print("⚠️ APIClient: Token is empty after trimming")
+            }
+        } else {
+            print("⚠️ APIClient: No auth token available")
+        }
+        
+        var body = Data()
+        body.append("--\(boundary)\r\n".data(using: .utf8)!)
+        body.append("Content-Disposition: form-data; name=\"avatar\"; filename=\"avatar.jpg\"\r\n".data(using: .utf8)!)
+        body.append("Content-Type: image/jpeg\r\n\r\n".data(using: .utf8)!)
+        body.append(imageData)
+        body.append("\r\n--\(boundary)--\r\n".data(using: .utf8)!)
+        
+        request.httpBody = body
+        print("📤 APIClient: Request body size: \(body.count) bytes")
+        
+        print("📤 APIClient: Sending upload request...")
+        let (data, response) = try await URLSession.shared.data(for: request)
+        print("📤 APIClient: Received response")
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            print("❌ APIClient: Invalid response type")
+            throw APIError.invalidResponse
+        }
+        
+        print("📤 APIClient: Response status code: \(httpResponse.statusCode)")
+        
+        guard (200...299).contains(httpResponse.statusCode) else {
+            print("❌ APIClient: HTTP error with status code: \(httpResponse.statusCode)")
+            if let responseString = String(data: data, encoding: .utf8) {
+                print("❌ APIClient: Response body: \(responseString)")
+            }
+            throw APIError.httpError(statusCode: httpResponse.statusCode)
+        }
+        
+        struct AvatarResponse: Codable {
+            let avatar: String
+        }
+        
+        do {
+            let avatarResponse = try JSONDecoder().decode(AvatarResponse.self, from: data)
+            print("✅ APIClient: Avatar uploaded successfully, URL: \(avatarResponse.avatar)")
+            return avatarResponse.avatar
+        } catch {
+            print("❌ APIClient: Failed to decode response: \(error.localizedDescription)")
+            if let responseString = String(data: data, encoding: .utf8) {
+                print("❌ APIClient: Response body: \(responseString)")
+            }
+            throw error
+        }
+    }
+    
+    /// Check if username is available
+    /// - Parameter username: The username to check
+    /// - Returns: true if available, false if taken
+    /// - Throws: Network errors
+    func checkUsernameAvailability(_ username: String) async throws -> Bool {
+        // Use web API endpoint (not mobile API) for username check
+        let webBaseURL = baseURL.replacingOccurrences(of: "/mobile/v1", with: "")
+        let encodedUsername = username.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? username
+        let urlString = "\(webBaseURL)/users/check-username?username=\(encodedUsername)"
+        
+        guard let url = URL(string: urlString) else {
+            throw APIError.invalidURL
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        
+        // Username check doesn't require authentication
+        // But we can include token if available for rate limiting purposes
+        if let token = getAuthToken() {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIError.invalidResponse
+        }
+        
+        guard (200...299).contains(httpResponse.statusCode) else {
+            throw APIError.httpError(statusCode: httpResponse.statusCode)
+        }
+        
+        struct UsernameCheckResponse: Codable {
+            let available: Bool
+            let username: String?
+        }
+        
+        let checkResponse = try JSONDecoder().decode(UsernameCheckResponse.self, from: data)
+        return checkResponse.available
     }
 }
 
@@ -464,6 +740,7 @@ struct LogBookRequest: Codable {
     let rating: Int?
     let thoughts: String?
     let format: String?
+    let cover: String? // Cover image URL to ensure correct cover is saved
 }
 
 // MARK: - Response Models
@@ -515,4 +792,20 @@ enum APIError: LocalizedError {
         }
     }
 }
+
+// MARK: - Response Models
+struct ProfileUpdateResponse: Codable {
+    let message: String
+    let user: UpdatedUser?
+}
+
+struct UpdatedUser: Codable {
+    let id: String?
+    let username: String?
+    let name: String?
+    let bio: String?
+    let avatar: String?
+    let pronouns: [String]?
+}
+
 

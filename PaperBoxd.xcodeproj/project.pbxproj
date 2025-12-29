@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		B17F73FB2F01DFC20053D009 /* Mantis in Frameworks */ = {isa = PBXBuildFile; productRef = B17F73FA2F01DFC20053D009 /* Mantis */; };
 		B1F0E4102EFAF11600FD4039 /* Kingfisher in Frameworks */ = {isa = PBXBuildFile; productRef = B1F0E40F2EFAF11600FD4039 /* Kingfisher */; };
 		B1FBE1542EFFCAAC007F36D6 /* GoogleSignIn in Frameworks */ = {isa = PBXBuildFile; productRef = B1FBE1532EFFCAAC007F36D6 /* GoogleSignIn */; };
 		B1FBE1562EFFCAAC007F36D6 /* GoogleSignInSwift in Frameworks */ = {isa = PBXBuildFile; productRef = B1FBE1552EFFCAAC007F36D6 /* GoogleSignInSwift */; };
@@ -49,6 +50,7 @@
 			files = (
 				B1FBE1562EFFCAAC007F36D6 /* GoogleSignInSwift in Frameworks */,
 				B1F0E4102EFAF11600FD4039 /* Kingfisher in Frameworks */,
+				B17F73FB2F01DFC20053D009 /* Mantis in Frameworks */,
 				B1FBE1542EFFCAAC007F36D6 /* GoogleSignIn in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -97,6 +99,7 @@
 				B1F0E40F2EFAF11600FD4039 /* Kingfisher */,
 				B1FBE1532EFFCAAC007F36D6 /* GoogleSignIn */,
 				B1FBE1552EFFCAAC007F36D6 /* GoogleSignInSwift */,
+				B17F73FA2F01DFC20053D009 /* Mantis */,
 			);
 			productName = PaperBoxd;
 			productReference = B1F0E3FA2EFAEFE200FD4039 /* PaperBoxd.app */;
@@ -129,6 +132,7 @@
 			packageReferences = (
 				B1F0E40E2EFAF11600FD4039 /* XCRemoteSwiftPackageReference "Kingfisher" */,
 				B1FBE1522EFFCAAC007F36D6 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */,
+				B17F73F92F01DFC20053D009 /* XCRemoteSwiftPackageReference "Mantis" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = B1F0E3FB2EFAEFE200FD4039 /* Products */;
@@ -393,6 +397,14 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
+		B17F73F92F01DFC20053D009 /* XCRemoteSwiftPackageReference "Mantis" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/guoyingtao/Mantis";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.7.5;
+			};
+		};
 		B1F0E40E2EFAF11600FD4039 /* XCRemoteSwiftPackageReference "Kingfisher" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/onevcat/Kingfisher.git";
@@ -412,6 +424,11 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		B17F73FA2F01DFC20053D009 /* Mantis */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = B17F73F92F01DFC20053D009 /* XCRemoteSwiftPackageReference "Mantis" */;
+			productName = Mantis;
+		};
 		B1F0E40F2EFAF11600FD4039 /* Kingfisher */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = B1F0E40E2EFAF11600FD4039 /* XCRemoteSwiftPackageReference "Kingfisher" */;
