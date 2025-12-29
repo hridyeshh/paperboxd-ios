@@ -6,6 +6,8 @@ struct ProfileView: View {
     @ObservedObject private var viewModel = ProfileViewModel.shared
     @State private var selectedTab = "Bookshelf"
     @State private var showEditProfile = false
+    @State private var showSettings = false
+    @State private var showShare = false
     // Your 4 specific items (Liked removed for now, kept in DB for future use)
     let navigationItems = ["Favorites", "Lists", "Bookshelf", "DNF"]
     
@@ -28,16 +30,43 @@ struct ProfileView: View {
                     }
                 }
             } else {
-                ScrollView(showsIndicators: false) {
+            ScrollView(showsIndicators: false) {
                     VStack(spacing: 20) {
                         // 1. PROFILE INFO CONTAINER (Avatar, username, pronouns, name, stats, bio)
                         VStack(spacing: 0) {
+                            // Settings and Share buttons overlay at top
+                            HStack {
+                                // Settings button on the left
+                                Button(action: {
+                                    showSettings = true
+                                }) {
+                                    Image(systemName: "gearshape")
+                                        .font(.system(size: 20))
+                                        .foregroundColor(.primary)
+                                        .padding(8)
+                                }
+                                
+                                Spacer()
+                                
+                                // Share button on the right
+                                Button(action: {
+                                    showShare = true
+                                }) {
+                                    Image(systemName: "square.and.arrow.up")
+                                        .font(.system(size: 20))
+                                        .foregroundColor(.primary)
+                                        .padding(8)
+                                }
+                            }
+                            .padding(.horizontal, 20)
+                            .padding(.top, 10)
+                            
                             ProfileHeader(
                                 username: viewModel.profile?.username,
                                 name: viewModel.profile?.name,
                                 avatar: viewModel.profile?.avatar,
                                 pronouns: viewModel.profile?.pronouns,
-                                totalBooksRead: viewModel.profile?.totalBooksRead ?? 0,
+                                bookshelfCount: viewModel.bookshelfBooksList.count,
                                 followersCount: viewModel.profile?.followers?.count ?? 0,
                                 followingCount: viewModel.profile?.following?.count ?? 0,
                                 bio: viewModel.profile?.bio
@@ -60,23 +89,23 @@ struct ProfileView: View {
                         }
                         
                         // 2. TOP NAVIGATION TABS (Below header)
-                        CategoryPicker(selection: $selectedTab, options: navigationItems)
-                        
+                    CategoryPicker(selection: $selectedTab, options: navigationItems)
+                    
                         // 3. CONTENT (Boards for Lists, Collection for Books)
                         if selectedTab == "Lists" {
                             // Lists: Show as boards (Pinterest style)
-                            LazyVGrid(
-                                columns: [
-                                    GridItem(.flexible(), spacing: 16),
-                                    GridItem(.flexible(), spacing: 16)
-                                ],
-                                spacing: 20
-                            ) {
+                    LazyVGrid(
+                        columns: [
+                            GridItem(.flexible(), spacing: 16),
+                            GridItem(.flexible(), spacing: 16)
+                        ],
+                        spacing: 20
+                    ) {
                                 ForEach(viewModel.readingListBoards) { board in
-                                    BoardPreviewCard(board: board)
-                                }
-                            }
-                            .padding(.horizontal)
+                            BoardPreviewCard(board: board)
+                        }
+                    }
+                    .padding(.horizontal)
                         } else {
                             // Favorites, Bookshelf, DNF: Show as book collection (grid)
                             LazyVGrid(
@@ -93,11 +122,11 @@ struct ProfileView: View {
                             }
                             .padding(.horizontal)
                         }
-                        
-                        Spacer().frame(height: 120) // Dock padding
-                    }
-                    .padding(.top, 10)
+                    
+                    Spacer().frame(height: 120) // Dock padding
                 }
+                .padding(.top, 10)
+            }
                 .refreshable {
                     // Pull-to-refresh: Force reload profile data
                     await viewModel.refreshProfile()
@@ -113,6 +142,12 @@ struct ProfileView: View {
                     }
                 }
             }
+        }
+        .fullScreenCover(isPresented: $showSettings) {
+            SettingsView()
+        }
+        .sheet(isPresented: $showShare) {
+            ShareView()
         }
         .onAppear {
             // Only load if not already loaded (shared instance handles caching)
@@ -165,7 +200,7 @@ struct ProfileHeader: View {
     let name: String?
     let avatar: String?
     let pronouns: [String]?
-    let totalBooksRead: Int
+    let bookshelfCount: Int
     let followersCount: Int
     let followingCount: Int
     let bio: String?
@@ -190,10 +225,10 @@ struct ProfileHeader: View {
                     .frame(width: 80, height: 80)
                     .clipShape(Circle())
             } else {
-                Circle()
-                    .fill(Color.secondary.opacity(0.1))
+            Circle()
+                .fill(Color.secondary.opacity(0.1))
                     .frame(width: 80, height: 80)
-                    .overlay(
+                .overlay(
                         Text((name ?? username ?? "U").prefix(1).uppercased())
                             .font(.system(size: 28, weight: .black))
                             .foregroundColor(.primary)
@@ -224,7 +259,7 @@ struct ProfileHeader: View {
                 
                 // Full name
                 if let name = name {
-                    Text(name)
+                Text(name)
                         .font(.system(size: 14, weight: .regular))
                         .foregroundColor(.secondary)
                         .lineLimit(1)
@@ -232,9 +267,9 @@ struct ProfileHeader: View {
                 
                 // Stats: books, followers, following (count on top, label below)
                 HStack(spacing: 20) {
-                    // Books count
+                    // Books count (bookshelf count)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("\(totalBooksRead)")
+                        Text("\(bookshelfCount)")
                             .font(.system(size: 16, weight: .bold))
                             .foregroundColor(.primary)
                         Text("books")
@@ -259,7 +294,7 @@ struct ProfileHeader: View {
                             .foregroundColor(.primary)
                         Text("following")
                             .font(.system(size: 10, weight: .regular))
-                            .foregroundColor(.primary)
+                    .foregroundColor(.primary)
                     }
                 }
                 
@@ -273,7 +308,7 @@ struct ProfileHeader: View {
             }
             
             Spacer()
-        }
+            }
         .padding(.horizontal, 20)
         .padding(.top, 10)
     }

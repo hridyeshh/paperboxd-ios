@@ -192,11 +192,20 @@ class APIClient {
             try? await TokenRefreshService.shared.ensureValidToken()
         }
         // Construct URL using URLComponents for robust URL building
-        // BFF Pattern: Mobile API routes always get trailing slashes to prevent redirects
+        // BFF Pattern: Mobile API routes get trailing slashes to prevent redirects
+        // BUT: Auth endpoints should NOT have trailing slashes to avoid 405 errors
         let normalizedEndpoint = endpoint.hasPrefix("/") ? String(endpoint.dropFirst()) : endpoint
         
-        // Force a trailing slash so Vercel doesn't redirect /profile to /profile/
-        let finalPath = normalizedEndpoint.hasSuffix("/") ? normalizedEndpoint : "\(normalizedEndpoint)/"
+        // Force a trailing slash for most endpoints, but NOT for auth endpoints
+        // Auth endpoints can have issues with trailing slashes causing 405 errors
+        let finalPath: String
+        if normalizedEndpoint.contains("/auth/") {
+            // Don't add trailing slash for auth endpoints
+            finalPath = normalizedEndpoint
+        } else {
+            // Add trailing slash for other endpoints
+            finalPath = normalizedEndpoint.hasSuffix("/") ? normalizedEndpoint : "\(normalizedEndpoint)/"
+        }
         
         // Use URLComponents from the start for proper URL construction
         guard var components = URLComponents(string: baseURL) else {
@@ -351,6 +360,47 @@ class APIClient {
     func logout() {
         KeychainHelper.shared.deleteToken()
         print("✅ APIClient: User logged out, token cleared")
+    }
+    
+    /// Delete user account
+    /// - Parameter reasons: Array of reasons for account deletion
+    /// - Throws: Network errors
+    func deleteAccount(reasons: [String]) async throws {
+        // Use web API endpoint (not mobile API) for account deletion
+        let webBaseURL = baseURL.replacingOccurrences(of: "/mobile/v1", with: "")
+        guard let url = URL(string: "\(webBaseURL)/users/delete-account") else {
+            throw APIError.invalidURL
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "DELETE"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        // Add authentication header
+        if let token = getAuthToken() {
+            let cleanToken = token.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
+            if !cleanToken.isEmpty {
+                request.setValue("Bearer \(cleanToken)", forHTTPHeaderField: "Authorization")
+                request.setValue("Bearer \(cleanToken)", forHTTPHeaderField: "X-User-Authorization")
+            }
+        }
+        
+        let body = ["reasons": reasons]
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIError.invalidResponse
+        }
+        
+        guard (200...299).contains(httpResponse.statusCode) else {
+            if let errorData = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let errorMessage = errorData["error"] as? String {
+                throw APIError.httpError(statusCode: httpResponse.statusCode)
+            }
+            throw APIError.httpError(statusCode: httpResponse.statusCode)
+        }
     }
     
     /// Check if user is authenticated
@@ -527,23 +577,71 @@ class APIClient {
     /// - Returns: Avatar URL
     /// - Throws: Network errors
     func uploadAvatar(image: UIImage) async throws -> String {
+        print("📤 APIClient: Starting avatar upload...")
+        
+        // Ensure token is valid before making authenticated request
+        if getAuthToken() != nil {
+            try? await TokenRefreshService.shared.ensureValidToken()
+        }
+        
         guard let imageData = image.jpegData(compressionQuality: 0.8) else {
+            print("❌ APIClient: Failed to convert image to JPEG data")
             throw APIError.invalidResponse
         }
+        
+        print("📤 APIClient: Image data size: \(imageData.count) bytes")
         
         // Use web API endpoint (not mobile API) for avatar upload
         let webBaseURL = baseURL.replacingOccurrences(of: "/mobile/v1", with: "")
         guard let url = URL(string: "\(webBaseURL)/upload/avatar") else {
+            print("❌ APIClient: Invalid URL: \(webBaseURL)/upload/avatar")
             throw APIError.invalidURL
         }
+        
+        print("📤 APIClient: Upload URL: \(url.absoluteString)")
         
         let boundary = UUID().uuidString
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
         
-        if let token = getAuthToken() {
-            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        // Add authentication header with same pattern as request() function
+        // CRITICAL: Trim whitespaces AND newlines - hidden characters break headers
+        let rawToken = getAuthToken()
+        print("🔍 APIClient: Token check for upload - rawToken is \(rawToken != nil ? "present (length: \(rawToken!.count))" : "nil")")
+        
+        if let token = rawToken {
+            let cleanToken = token.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
+            
+            if !cleanToken.isEmpty {
+                // Set standard Authorization header
+                request.setValue("Bearer \(cleanToken)", forHTTPHeaderField: "Authorization")
+                
+                // CRITICAL: Also set custom header as fallback
+                // Vercel sometimes strips/replaces the Authorization header, so we send it in a custom header too
+                // The backend will check both Authorization and X-User-Authorization
+                request.setValue("Bearer \(cleanToken)", forHTTPHeaderField: "X-User-Authorization")
+                
+                print("🔐 APIClient: Successfully added valid Bearer token (length: \(cleanToken.count), prefix: \(cleanToken.prefix(10))...)")
+                print("🔐 APIClient: Set both 'Authorization' and 'X-User-Authorization' headers (fallback for Vercel)")
+                
+                // Verify both headers were actually set
+                if let authHeader = request.value(forHTTPHeaderField: "Authorization") {
+                    print("✅ APIClient: Verified Authorization header is set (length: \(authHeader.count))")
+                } else {
+                    print("❌ APIClient: ERROR - Authorization header was NOT set despite token being valid!")
+                }
+                
+                if let customAuthHeader = request.value(forHTTPHeaderField: "X-User-Authorization") {
+                    print("✅ APIClient: Verified X-User-Authorization header is set (length: \(customAuthHeader.count))")
+                } else {
+                    print("❌ APIClient: ERROR - X-User-Authorization header was NOT set!")
+                }
+            } else {
+                print("⚠️ APIClient: Token is empty after trimming")
+            }
+        } else {
+            print("⚠️ APIClient: No auth token available")
         }
         
         var body = Data()
@@ -554,14 +652,24 @@ class APIClient {
         body.append("\r\n--\(boundary)--\r\n".data(using: .utf8)!)
         
         request.httpBody = body
+        print("📤 APIClient: Request body size: \(body.count) bytes")
         
+        print("📤 APIClient: Sending upload request...")
         let (data, response) = try await URLSession.shared.data(for: request)
+        print("📤 APIClient: Received response")
         
         guard let httpResponse = response as? HTTPURLResponse else {
+            print("❌ APIClient: Invalid response type")
             throw APIError.invalidResponse
         }
         
+        print("📤 APIClient: Response status code: \(httpResponse.statusCode)")
+        
         guard (200...299).contains(httpResponse.statusCode) else {
+            print("❌ APIClient: HTTP error with status code: \(httpResponse.statusCode)")
+            if let responseString = String(data: data, encoding: .utf8) {
+                print("❌ APIClient: Response body: \(responseString)")
+            }
             throw APIError.httpError(statusCode: httpResponse.statusCode)
         }
         
@@ -569,8 +677,17 @@ class APIClient {
             let avatar: String
         }
         
-        let avatarResponse = try JSONDecoder().decode(AvatarResponse.self, from: data)
-        return avatarResponse.avatar
+        do {
+            let avatarResponse = try JSONDecoder().decode(AvatarResponse.self, from: data)
+            print("✅ APIClient: Avatar uploaded successfully, URL: \(avatarResponse.avatar)")
+            return avatarResponse.avatar
+        } catch {
+            print("❌ APIClient: Failed to decode response: \(error.localizedDescription)")
+            if let responseString = String(data: data, encoding: .utf8) {
+                print("❌ APIClient: Response body: \(responseString)")
+            }
+            throw error
+        }
     }
     
     /// Check if username is available
@@ -613,86 +730,6 @@ class APIClient {
         
         let checkResponse = try JSONDecoder().decode(UsernameCheckResponse.self, from: data)
         return checkResponse.available
-    }
-    
-    /// Send OTP to new email address for email change
-    /// - Parameter newEmail: The new email address
-    /// - Returns: Success response
-    /// - Throws: Network errors
-    func sendEmailChangeOTP(newEmail: String) async throws -> EmailChangeOTPResponse {
-        let webBaseURL = baseURL.replacingOccurrences(of: "/mobile/v1", with: "")
-        guard let url = URL(string: "\(webBaseURL)/users/change-email/send-otp") else {
-            throw APIError.invalidURL
-        }
-        
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        
-        if let token = getAuthToken() {
-            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        }
-        
-        let body = ["newEmail": newEmail]
-        request.httpBody = try JSONSerialization.data(withJSONObject: body)
-        
-        let (data, response) = try await URLSession.shared.data(for: request)
-        
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw APIError.invalidResponse
-        }
-        
-        guard (200...299).contains(httpResponse.statusCode) else {
-            // Try to extract error message from response
-            if let errorData = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-               let errorMessage = errorData["error"] as? String {
-                // Create a custom error with the message
-                throw NSError(domain: "APIClient", code: httpResponse.statusCode, userInfo: [NSLocalizedDescriptionKey: errorMessage])
-            }
-            throw APIError.httpError(statusCode: httpResponse.statusCode)
-        }
-        
-        return try JSONDecoder().decode(EmailChangeOTPResponse.self, from: data)
-    }
-    
-    /// Verify OTP and update email address
-    /// - Parameter code: The 6-digit OTP code
-    /// - Returns: Success response with new email
-    /// - Throws: Network errors
-    func verifyEmailChangeOTP(code: String) async throws -> EmailChangeVerifyResponse {
-        let webBaseURL = baseURL.replacingOccurrences(of: "/mobile/v1", with: "")
-        guard let url = URL(string: "\(webBaseURL)/users/change-email/verify-otp") else {
-            throw APIError.invalidURL
-        }
-        
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        
-        if let token = getAuthToken() {
-            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        }
-        
-        let body = ["code": code]
-        request.httpBody = try JSONSerialization.data(withJSONObject: body)
-        
-        let (data, response) = try await URLSession.shared.data(for: request)
-        
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw APIError.invalidResponse
-        }
-        
-        guard (200...299).contains(httpResponse.statusCode) else {
-            // Try to extract error message from response
-            if let errorData = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-               let errorMessage = errorData["error"] as? String {
-                // Create a custom error with the message
-                throw NSError(domain: "APIClient", code: httpResponse.statusCode, userInfo: [NSLocalizedDescriptionKey: errorMessage])
-            }
-            throw APIError.httpError(statusCode: httpResponse.statusCode)
-        }
-        
-        return try JSONDecoder().decode(EmailChangeVerifyResponse.self, from: data)
     }
 }
 
@@ -771,14 +808,4 @@ struct UpdatedUser: Codable {
     let pronouns: [String]?
 }
 
-struct EmailChangeOTPResponse: Codable {
-    let success: Bool
-    let message: String
-}
-
-struct EmailChangeVerifyResponse: Codable {
-    let success: Bool
-    let message: String
-    let email: String
-}
 

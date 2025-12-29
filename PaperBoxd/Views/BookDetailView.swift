@@ -147,85 +147,85 @@ struct BookDetailView: View {
                     if isLoadingFullDetails {
                         ProgressView().padding(50)
                     } else {
-                        // 2. HEADER INFO
-                        VStack(alignment: .leading, spacing: 8) {
+                    // 2. HEADER INFO
+                    VStack(alignment: .leading, spacing: 8) {
                             Text(displayBook.title)
-                                .font(.system(size: 32, weight: .bold, design: .serif))
-                                .foregroundColor(.primary)
-                            
-                            Text(displayBook.authorString)
-                                .font(.title3)
-                                .foregroundColor(.secondary)
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 24)
-                        .padding(.top, 20)
+                            .font(.system(size: 32, weight: .bold, design: .serif))
+                            .foregroundColor(.primary)
                         
-                        // 3. THE "PAPERBOXD" ACTION DOCK
-                        HStack(spacing: 12) {
-                            // LIKE BUTTON (Haptic Pulse Heart)
-                            ActionButton(
-                                icon: isLiked ? "heart.fill" : "heart",
-                                color: isLiked ? .red : .primary,
-                                active: isLiked
-                            ) {
-                                withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
-                                    isLiked.toggle()
-                                }
-                                // Haptic feedback
-                                let generator = UIImpactFeedbackGenerator(style: .medium)
-                                generator.impactOccurred()
+                            Text(displayBook.authorString)
+                            .font(.title3)
+                            .foregroundColor(.secondary)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 24)
+                    .padding(.top, 20)
+                    
+                    // 3. THE "PAPERBOXD" ACTION DOCK
+                    HStack(spacing: 12) {
+                        // LIKE BUTTON (Haptic Pulse Heart)
+                        ActionButton(
+                            icon: isLiked ? "heart.fill" : "heart",
+                            color: isLiked ? .red : .primary,
+                            active: isLiked
+                        ) {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
+                                isLiked.toggle()
                             }
-                            
+                            // Haptic feedback
+                            let generator = UIImpactFeedbackGenerator(style: .medium)
+                            generator.impactOccurred()
+                        }
+                        
                             // LOG BUTTON (opens bottom sheet with options)
-                            Button(action: {
+                        Button(action: {
                                 showLogSheet = true
-                            }) {
-                                HStack(spacing: 8) {
+                        }) {
+                            HStack(spacing: 8) {
                                     // Dynamic icon based on book status
                                     logButtonIcon
                                     
                                     Text(logButtonText)
-                                        .fontWeight(.semibold)
-                                        .lineLimit(1)
-                                }
-                                .padding(.vertical, 14)
+                                    .fontWeight(.semibold)
+                                    .lineLimit(1)
+                            }
+                            .padding(.vertical, 14)
                                 .padding(.horizontal, 20)
-                                .background(Color.primary)
-                                .foregroundColor(Color(uiColor: .systemBackground))
-                                .cornerRadius(14)
-                            }
+                            .background(Color.primary)
+                            .foregroundColor(Color(uiColor: .systemBackground))
+                            .cornerRadius(14)
+                        }
                             .disabled(isSavingStatus)
-                            
-                            // SHARE BUTTON
-                            ActionButton(
-                                icon: "square.and.arrow.up",
-                                color: .primary,
-                                active: false
-                            ) {
-                                showShareSheet = true
-                                // Haptic feedback
-                                let generator = UIImpactFeedbackGenerator(style: .light)
-                                generator.impactOccurred()
-                            }
-                            
-                            Spacer()
-                        }
-                        .padding(.horizontal, 24)
-                        .padding(.top, 25)
                         
-                        // 4. SYNOPSIS & STATS
-                        VStack(alignment: .leading, spacing: 15) {
-                            Text("About this book")
-                                .font(.headline)
-                                .foregroundColor(.primary)
-                            
-                            descriptionView
+                        // SHARE BUTTON
+                        ActionButton(
+                            icon: "square.and.arrow.up",
+                            color: .primary,
+                            active: false
+                        ) {
+                            showShareSheet = true
+                            // Haptic feedback
+                            let generator = UIImpactFeedbackGenerator(style: .light)
+                            generator.impactOccurred()
                         }
-                        .padding(24)
-                        .padding(.bottom, 100)
-                        .opacity(animateContent ? 1 : 0)
-                        .offset(y: animateContent ? 0 : 20)
+                        
+                            Spacer()
+                    }
+                    .padding(.horizontal, 24)
+                    .padding(.top, 25)
+                    
+                    // 4. SYNOPSIS & STATS
+                    VStack(alignment: .leading, spacing: 15) {
+                        Text("About this book")
+                            .font(.headline)
+                            .foregroundColor(.primary)
+                        
+                        descriptionView
+                    }
+                    .padding(24)
+                    .padding(.bottom, 100)
+                    .opacity(animateContent ? 1 : 0)
+                    .offset(y: animateContent ? 0 : 20)
                     }
                 }
             }
@@ -604,11 +604,11 @@ struct ActionButton: View {
             
             let decoder = JSONDecoder()
             if let book = try? decoder.decode(Book.self, from: sampleJSON) {
-                BookDetailView(
+            BookDetailView(
                     initialBook: book,
-                    namespace: namespace,
-                    isShowing: .constant(true)
-                )
+                namespace: namespace,
+                isShowing: .constant(true)
+            )
             } else {
                 Text("Preview Error")
             }

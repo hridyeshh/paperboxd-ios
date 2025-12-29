@@ -19,6 +19,7 @@ struct EditProfileView: View {
     @State private var avatarImage: UIImage?
     @State private var rawAvatarImage: UIImage? // Store the raw selected image before cropping
     @State private var showImageCropper = false
+    @State private var imageReadyForCropper = false // Track when image is ready
     @State private var isSaving = false
     @State private var errorMessage: String?
     @State private var showPronounPicker = false
@@ -29,14 +30,6 @@ struct EditProfileView: View {
     @State private var usernameAvailable: Bool? = nil
     @State private var usernameCheckTask: Task<Void, Never>? = nil
     
-    // Email change with OTP
-    @State private var showEmailChangeDialog = false
-    @State private var newEmail: String = ""
-    @State private var isSendingOTP = false
-    @State private var showOTPVerification = false
-    @State private var otpCode: String = ""
-    @State private var isVerifyingOTP = false
-    @State private var emailChangeError: String? = nil
     
     // Pronoun options (matching web version)
     private let pronounOptions = ["He", "Him", "His", "She", "Her", "They", "Them", "Theirs"]
@@ -82,9 +75,9 @@ struct EditProfileView: View {
             Form {
                 Section {
                     // Avatar picker
-                    HStack {
-                        Spacer()
-                        PhotosPicker(selection: $selectedAvatar, matching: .images) {
+                    VStack(spacing: 12) {
+                        HStack {
+                            Spacer()
                             if let avatarImage = avatarImage {
                                 Image(uiImage: avatarImage)
                                     .resizable()
@@ -112,14 +105,25 @@ struct EditProfileView: View {
                                             .font(.system(size: 40, weight: .bold))
                                     )
                             }
+                            Spacer()
                         }
-                        Spacer()
+                        
+                        // Edit picture button
+                        PhotosPicker(selection: $selectedAvatar, matching: .images) {
+                            Text("Edit picture")
+                                .font(.system(size: 15, weight: .medium))
+                                .foregroundColor(.blue)
+                        }
                     }
                     .padding(.vertical, 8)
                 }
                 
                 Section("Profile Information") {
+                    // Username
                     VStack(alignment: .leading, spacing: 4) {
+                        Text("Username")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
                         TextField("Username", text: $username)
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
@@ -164,75 +168,96 @@ struct EditProfileView: View {
                         }
                     }
                     
-                    TextField("Name", text: $name)
+                    // Name
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Name")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        TextField("Name", text: $name)
+                    }
                     
-                    // Email (editable with OTP verification)
-                    if let email = profile.email {
+                    // Bio
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Bio")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        TextField("Bio", text: $bio, axis: .vertical)
+                            .lineLimit(3...6)
+                    }
+                }
+                
+                Section("Pronouns") {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Pronouns")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
                         Button(action: {
-                            showEmailChangeDialog = true
+                            showPronounPicker = true
                         }) {
                             HStack {
-                                Text("Email")
+                                if pronouns.isEmpty {
+                                    Text("Select pronouns")
+                                        .foregroundColor(.secondary)
+                                } else {
+                                    Text(pronouns.joined(separator: ", "))
+                                        .foregroundColor(.primary)
+                                }
                                 Spacer()
-                                Text(email)
-                                    .foregroundColor(.secondary)
                                 Image(systemName: "chevron.right")
                                     .foregroundColor(.secondary)
                                     .font(.caption)
                             }
                         }
                     }
-                    
-                    TextField("Bio", text: $bio, axis: .vertical)
-                        .lineLimit(3...6)
-                }
-                
-                Section("Pronouns") {
-                    Button(action: {
-                        showPronounPicker = true
-                    }) {
-                        HStack {
-                            Text("Pronouns")
-                            Spacer()
-                            if pronouns.isEmpty {
-                                Text("Select pronouns")
-                                    .foregroundColor(.secondary)
-                            } else {
-                                Text(pronouns.joined(separator: ", "))
-                                    .foregroundColor(.primary)
-                            }
-                            Image(systemName: "chevron.right")
-                                .foregroundColor(.secondary)
-                                .font(.caption)
-                        }
-                    }
                 }
                 
                 Section("Personal Information") {
                     // Birthday
-                    DatePicker("Birthday", selection: Binding(
-                        get: { birthday ?? Date() },
-                        set: { birthday = $0 }
-                    ), displayedComponents: .date)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Birthday")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        DatePicker("Birthday", selection: Binding(
+                            get: { birthday ?? Date() },
+                            set: { birthday = $0 }
+                        ), displayedComponents: .date)
+                        .labelsHidden()
+                    }
                     
                     // Gender
-                    Picker("Gender", selection: $gender) {
-                        Text("Select gender").tag("")
-                        ForEach(genderOptions, id: \.self) { option in
-                            Text(option).tag(option)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Gender")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        Picker("Gender", selection: $gender) {
+                            Text("Select gender").tag("")
+                            ForEach(genderOptions, id: \.self) { option in
+                                Text(option).tag(option)
+                            }
                         }
+                        .labelsHidden()
                     }
                     
                     // Custom gender field (shown when "Custom" is selected)
                     if gender == "Custom" {
-                        TextField("Enter custom gender", text: $customGender)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Custom Gender")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            TextField("Enter custom gender", text: $customGender)
+                        }
                     }
                 }
                 
                 Section("Links") {
-                    TextField("Links (comma-separated)", text: $links)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Links")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        TextField("Links (comma-separated)", text: $links)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                    }
                 }
                 
                 if let errorMessage = errorMessage {
@@ -252,23 +277,56 @@ struct EditProfileView: View {
                     }
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Save") {
-                        Task {
-                            await saveProfile()
+                    if isSaving {
+                        ProgressView()
+                            .progressViewStyle(CircularProgressViewStyle())
+                    } else {
+                        Button("Save") {
+                            Task {
+                                await saveProfile()
+                            }
                         }
                     }
-                    .disabled(isSaving)
                 }
             }
             .onChange(of: selectedAvatar) { _, newItem in
                 Task {
-                    if let newItem = newItem {
-                        if let data = try? await newItem.loadTransferable(type: Data.self),
-                           let image = UIImage(data: data) {
-                            await MainActor.run {
-                                rawAvatarImage = image
-                                showImageCropper = true // Show Mantis cropper after image is loaded
-                            }
+                    guard let newItem = newItem else { return }
+                    
+                    print("📸 EditProfileView: Starting image load from PhotosPicker...")
+                    
+                    // Load the image data
+                    guard let data = try? await newItem.loadTransferable(type: Data.self) else {
+                        print("❌ EditProfileView: Failed to load image data")
+                        return
+                    }
+                    
+                    print("📸 EditProfileView: Image data loaded, size: \(data.count) bytes")
+                    
+                    // Create UIImage from data
+                    guard let uiImage = UIImage(data: data) else {
+                        print("❌ EditProfileView: Failed to create UIImage from data")
+                        return
+                    }
+                    
+                    print("📸 EditProfileView: Image created. Size: \(uiImage.size.width) x \(uiImage.size.height)")
+                    
+                    // Set the image first, then show cropper after a tiny delay to ensure state propagation
+                    await MainActor.run {
+                        rawAvatarImage = uiImage
+                        print("✅ EditProfileView: rawAvatarImage set to image with size \(uiImage.size.width)x\(uiImage.size.height)")
+                    }
+                    
+                    // Small delay to ensure state propagates before showing cropper
+                    try? await Task.sleep(nanoseconds: 50_000_000) // 0.05 seconds
+                    
+                    // Now show the cropper - rawAvatarImage should be set by now
+                    await MainActor.run {
+                        if rawAvatarImage != nil {
+                            showImageCropper = true
+                            print("✅ EditProfileView: showImageCropper set to true, image confirmed ready")
+                        } else {
+                            print("❌ EditProfileView: rawAvatarImage is nil! This shouldn't happen.")
                         }
                     }
                 }
@@ -277,31 +335,22 @@ struct EditProfileView: View {
                 PronounPickerView(selectedPronouns: $pronouns, options: pronounOptions)
             }
             .fullScreenCover(isPresented: $showImageCropper) {
-                if rawAvatarImage != nil {
-                    ImageCropper(image: $rawAvatarImage)
-                        .onChange(of: rawAvatarImage) { _, newImage in
-                            // Update avatarImage whenever rawAvatarImage changes (after cropping)
-                            if let newImage = newImage {
-                                avatarImage = newImage
-                            }
+                ZStack {
+                    Color.black.ignoresSafeArea()
+                    // Use a view that re-evaluates when rawAvatarImage changes
+                    ImageCropperView(
+                        rawAvatarImage: $rawAvatarImage,
+                        onImageCropped: { croppedImage in
+                            print("✅ EditProfileView: onImageCropped called with image size: \(croppedImage.size.width)x\(croppedImage.size.height)")
+                            avatarImage = croppedImage
+                            print("✅ EditProfileView: avatarImage set successfully")
+                        },
+                        onDismiss: {
+                            print("✅ EditProfileView: ImageCropperView dismissed")
+                            showImageCropper = false
                         }
+                    )
                 }
-            }
-            .sheet(isPresented: $showEmailChangeDialog) {
-                EmailChangeView(
-                    currentEmail: profile.email ?? "",
-                    onEmailChanged: { newEmail in
-                        // Refresh profile after email change
-                        showEmailChangeDialog = false
-                        // Trigger profile refresh
-                        Task {
-                            await ProfileViewModel.shared.refreshProfile()
-                        }
-                    },
-                    onCancel: {
-                        showEmailChangeDialog = false
-                    }
-                )
             }
         }
     }
@@ -366,12 +415,22 @@ struct EditProfileView: View {
             var avatarURL = profile.avatar
             
             // Check if avatarImage has been set (user selected and cropped a new image)
-            // Also check rawAvatarImage in case it was just updated
+            // Also check rawAvatarImage in case it was just updated (cropped image)
+            // Prioritize avatarImage as it's the final cropped version
             let imageToUpload = avatarImage ?? rawAvatarImage
+            print("📸 EditProfileView: Checking for image to upload...")
+            print("📸 EditProfileView: avatarImage is \(avatarImage != nil ? "set" : "nil")")
+            print("📸 EditProfileView: rawAvatarImage is \(rawAvatarImage != nil ? "set" : "nil")")
+            
             if let imageToUpload = imageToUpload {
-                print("📸 EditProfileView: Uploading avatar image...")
-                avatarURL = try await APIClient.shared.uploadAvatar(image: imageToUpload)
-                print("✅ EditProfileView: Avatar uploaded successfully: \(avatarURL)")
+                print("📸 EditProfileView: Uploading avatar image with size: \(imageToUpload.size.width)x\(imageToUpload.size.height)...")
+                do {
+                    avatarURL = try await APIClient.shared.uploadAvatar(image: imageToUpload)
+                    print("✅ EditProfileView: Avatar uploaded successfully: \(avatarURL)")
+                } catch {
+                    print("❌ EditProfileView: Avatar upload failed: \(error.localizedDescription)")
+                    throw error // Re-throw to be caught by outer catch block
+                }
             } else {
                 print("ℹ️ EditProfileView: No avatar image to upload")
             }
@@ -399,23 +458,35 @@ struct EditProfileView: View {
             
             // Then update profile
             let usernameToUse = username.isEmpty ? profile.username ?? "" : username
-            _ = try await APIClient.shared.updateProfile(
-                username: usernameToUse,
-                name: name.isEmpty ? nil : name,
-                bio: bio.isEmpty ? nil : bio,
-                pronouns: pronouns.isEmpty ? nil : pronouns,
-                birthday: birthdayString,
-                gender: finalGender,
-                links: linksArray.isEmpty ? nil : linksArray,
-                avatar: avatarURL
-            )
+            print("📝 EditProfileView: Updating profile with username: \(usernameToUse)")
+            print("📝 EditProfileView: Profile data - name: \(name), bio: \(bio.prefix(20))..., avatarURL: \(avatarURL ?? "nil")")
+            
+            do {
+                _ = try await APIClient.shared.updateProfile(
+                    username: usernameToUse,
+                    name: name.isEmpty ? nil : name,
+                    bio: bio.isEmpty ? nil : bio,
+                    pronouns: pronouns.isEmpty ? nil : pronouns,
+                    birthday: birthdayString,
+                    gender: finalGender,
+                    links: linksArray.isEmpty ? nil : linksArray,
+                    avatar: avatarURL
+                )
+                print("✅ EditProfileView: Profile updated successfully")
+            } catch {
+                print("❌ EditProfileView: Profile update failed: \(error.localizedDescription)")
+                throw error // Re-throw to be caught by outer catch block
+            }
             
             await MainActor.run {
                 isSaving = false
+                print("✅ EditProfileView: Calling onSave() callback")
                 onSave()
+                print("✅ EditProfileView: Dismissing edit profile view")
                 dismiss()
             }
         } catch {
+            print("❌ EditProfileView: Error in saveProfile: \(error.localizedDescription)")
             await MainActor.run {
                 isSaving = false
                 errorMessage = error.localizedDescription

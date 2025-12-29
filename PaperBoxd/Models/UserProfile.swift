@@ -155,6 +155,15 @@ struct BookshelfBook: Codable {
 struct LikedBook: Codable {
     let bookId: String?
     let likedAt: String?
+    // Populated book details
+    let title: String?
+    let author: String?
+    let authors: [String]?
+    let cover: String?
+    let isbn: String?
+    let isbn13: String?
+    let openLibraryId: String?
+    let isbndbId: String?
 }
 
 // MARK: - TbrBook
