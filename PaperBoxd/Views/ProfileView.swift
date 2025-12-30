@@ -8,8 +8,11 @@ struct ProfileView: View {
     @State private var showEditProfile = false
     @State private var showSettings = false
     @State private var showShare = false
-    // Your 4 specific items (Liked removed for now, kept in DB for future use)
-    let navigationItems = ["Favorites", "Lists", "Bookshelf", "DNF"]
+    @State private var selectedBook: Book? = nil
+    @State private var showBookDetail = false
+    @Namespace private var bookNamespace
+    // Your 5 specific items (Liked removed for now, kept in DB for future use)
+    let navigationItems = ["Favorites", "Lists", "Bookshelf", "DNF", "Diary"]
     
     var body: some View {
         ZStack {
@@ -30,7 +33,8 @@ struct ProfileView: View {
                     }
                 }
             } else {
-            ScrollView(showsIndicators: false) {
+            NavigationStack {
+                ScrollView(showsIndicators: false) {
                     VStack(spacing: 20) {
                         // 1. PROFILE INFO CONTAINER (Avatar, username, pronouns, name, stats, bio)
                         VStack(spacing: 0) {
@@ -38,9 +42,11 @@ struct ProfileView: View {
                             HStack {
                                 // Settings button on the left
                                 Button(action: {
-                                    showSettings = true
+                                    withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
+                                        showSettings = true
+                                    }
                                 }) {
-                                    Image(systemName: "gearshape")
+                                    Image(systemName: "list.bullet")
                                         .font(.system(size: 20))
                                         .foregroundColor(.primary)
                                         .padding(8)
@@ -102,10 +108,48 @@ struct ProfileView: View {
                         spacing: 20
                     ) {
                                 ForEach(viewModel.readingListBoards) { board in
-                            BoardPreviewCard(board: board)
+                                    NavigationLink(destination: {
+                                        if let readingList = viewModel.profile?.readingLists?.first(where: { $0.title == board.title }) {
+                                            ListDetailView(readingList: readingList)
+                                        }
+                                    }) {
+                                        BoardPreviewCard(board: board)
+                                    }
+                                    .buttonStyle(PlainButtonStyle())
                         }
                     }
                     .padding(.horizontal)
+                        } else if selectedTab == "Diary" {
+                            // Diary: Show diary entries directly
+                            let diaryEntries = viewModel.profile?.diaryEntries ?? []
+                            Group {
+                                if !diaryEntries.isEmpty {
+                                    VStack(spacing: 0) {
+                                        ForEach(diaryEntries) { entry in
+                                            DiaryEntryCard(entry: entry)
+                                                .padding(.bottom, 20)
+                                        }
+                                    }
+                                    .padding(.horizontal)
+                                    .onAppear {
+                                        print("📔 ProfileView: Diary tab selected, entries count: \(diaryEntries.count)")
+                                    }
+                                } else {
+                                    VStack(spacing: 12) {
+                                        Image(systemName: "book.pages")
+                                            .font(.system(size: 48))
+                                            .foregroundColor(.secondary)
+                                        Text("No diary entries yet")
+                                            .font(.system(size: 16))
+                                            .foregroundColor(.secondary)
+                                    }
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 40)
+                                    .onAppear {
+                                        print("📔 ProfileView: Diary tab selected, entries count: 0")
+                                    }
+                                }
+                            }
                         } else {
                             // Favorites, Bookshelf, DNF: Show as book collection (grid)
                             LazyVGrid(
@@ -118,6 +162,10 @@ struct ProfileView: View {
                             ) {
                                 ForEach(books(for: selectedTab)) { book in
                                     BookCoverCard(book: book)
+                                        .onTapGesture {
+                                            selectedBook = book.toBook()
+                                            showBookDetail = true
+                                        }
                                 }
                             }
                             .padding(.horizontal)
@@ -132,6 +180,7 @@ struct ProfileView: View {
                     await viewModel.refreshProfile()
                 }
             }
+            }
         }
         .sheet(isPresented: $showEditProfile) {
             if let profile = viewModel.profile {
@@ -143,11 +192,51 @@ struct ProfileView: View {
                 }
             }
         }
-        .fullScreenCover(isPresented: $showSettings) {
-            SettingsView()
-        }
+        .overlay(
+            // Left sliding sheet
+            Group {
+                if showSettings {
+                    ZStack(alignment: .leading) {
+                        // Backdrop
+                        Color.black.opacity(0.3)
+                            .ignoresSafeArea()
+                            .onTapGesture {
+                                withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
+                                    showSettings = false
+                                }
+                            }
+                        
+                        // Settings sheet - full screen
+                        GeometryReader { geometry in
+                            SettingsView(onDismiss: {
+                                withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
+                                    showSettings = false
+                                }
+                            })
+                            .frame(width: geometry.size.width)
+                            .frame(height: geometry.size.height)
+                            .background(Color(uiColor: .systemBackground))
+                            .offset(x: showSettings ? 0 : -geometry.size.width)
+                            .shadow(color: .black.opacity(0.2), radius: 10, x: 10, y: 0)
+                        }
+                    }
+                    .transition(.opacity)
+                }
+            }
+        )
         .sheet(isPresented: $showShare) {
             ShareView()
+                .presentationDetents([.fraction(0.75)])
+                .presentationDragIndicator(.visible)
+        }
+        .fullScreenCover(isPresented: $showBookDetail) {
+            if let book = selectedBook {
+                BookDetailView(
+                    initialBook: book,
+                    namespace: bookNamespace,
+                    isShowing: $showBookDetail
+                )
+            }
         }
         .onAppear {
             // Only load if not already loaded (shared instance handles caching)
@@ -462,6 +551,30 @@ struct ProfileBook: Identifiable {
         }
         return URL(string: coverURL)
     }
+    
+    // Convert ProfileBook to Book for BookDetailView
+    func toBook() -> Book {
+        return Book(
+            id: self.id,
+            bookId: self.id,
+            title: self.title,
+            author: self.author,
+            authors: [self.author],
+            src: self.cover,
+            cover: self.cover,
+            alt: nil,
+            description: nil,
+            publishedDate: nil,
+            isbn: nil,
+            isbn13: nil,
+            averageRating: nil,
+            ratingsCount: nil,
+            pageCount: nil,
+            categories: nil,
+            publisher: nil,
+            userInteraction: nil
+        )
+    }
 }
 
 // MARK: - COMPONENT: BOOK COVER CARD (For Collection View)
@@ -511,6 +624,21 @@ struct BookCoverCard: View {
                 .foregroundColor(.secondary)
                 .lineLimit(1)
         }
+    }
+}
+
+// MARK: - Custom Shape for Rounded Corners
+struct RoundedCornersShape: Shape {
+    var corners: UIRectCorner
+    var radius: CGFloat
+    
+    func path(in rect: CGRect) -> Path {
+        let path = UIBezierPath(
+            roundedRect: rect,
+            byRoundingCorners: corners,
+            cornerRadii: CGSize(width: radius, height: radius)
+        )
+        return Path(path.cgPath)
     }
 }
 

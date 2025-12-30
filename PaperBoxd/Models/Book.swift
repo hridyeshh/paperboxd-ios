@@ -190,6 +190,49 @@ struct UserInteraction: Codable {
     let shelfStatus: String? // "None", "Want to Read", "Reading", "Read", "DNF"
 }
 
+// MARK: - Book Extension for Manual Creation
+extension Book {
+    init(
+        id: String,
+        bookId: String? = nil,
+        title: String,
+        author: String? = nil,
+        authors: [String]? = nil,
+        src: String? = nil,
+        cover: String? = nil,
+        alt: String? = nil,
+        description: String? = nil,
+        publishedDate: String? = nil,
+        isbn: String? = nil,
+        isbn13: String? = nil,
+        averageRating: Double? = nil,
+        ratingsCount: Int? = nil,
+        pageCount: Int? = nil,
+        categories: [String]? = nil,
+        publisher: String? = nil,
+        userInteraction: UserInteraction? = nil
+    ) {
+        self.id = id
+        self.bookId = bookId
+        self.title = title
+        self.author = author
+        self.authors = authors
+        self.src = src
+        self.cover = cover
+        self.alt = alt
+        self.description = description
+        self.publishedDate = publishedDate
+        self.isbn = isbn
+        self.isbn13 = isbn13
+        self.averageRating = averageRating
+        self.ratingsCount = ratingsCount
+        self.pageCount = pageCount
+        self.categories = categories
+        self.publisher = publisher
+        self.userInteraction = userInteraction
+    }
+}
+
 // MARK: - SphereResponse
 
 struct SphereResponse: Codable {

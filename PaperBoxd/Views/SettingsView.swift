@@ -6,48 +6,53 @@ struct SettingsView: View {
     @State private var showLikes = false
     @State private var showLogoutConfirmation = false
     @State private var showDeleteAccount = false
+    var onDismiss: (() -> Void)?
+    
+    init(onDismiss: (() -> Void)? = nil) {
+        self.onDismiss = onDismiss
+    }
     
     var body: some View {
-        ZStack {
-            Color(uiColor: .systemBackground)
-                .ignoresSafeArea()
-            
-            VStack(spacing: 0) {
-                // Header
-                HStack {
-                    Button(action: {
-                        dismiss()
-                    }) {
-                        Image(systemName: "chevron.left")
-                            .font(.system(size: 18, weight: .semibold))
-                            .foregroundColor(.primary)
-                    }
-                    
-                    Spacer()
-                    
-                    Text("Settings")
-                        .font(.system(size: 18, weight: .semibold))
+        VStack(spacing: 0) {
+            // Header
+            HStack {
+                Button(action: {
+                    dismiss()
+                    onDismiss?()
+                }) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 16, weight: .semibold))
                         .foregroundColor(.primary)
-                    
-                    Spacer()
-                    
-                    // Invisible button to center the title
-                    Button(action: {}) {
-                        Image(systemName: "chevron.left")
-                            .font(.system(size: 18, weight: .semibold))
-                            .foregroundColor(.clear)
-                    }
-                    .disabled(true)
+                        .padding(8)
+                        .background(Color.secondary.opacity(0.1))
+                        .clipShape(Circle())
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
-                .background(Color(uiColor: .systemBackground))
                 
-                Divider()
+                Spacer()
                 
-                // Settings Options
-                ScrollView {
-                    VStack(spacing: 0) {
+                Text("Settings")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundColor(.primary)
+                
+                Spacer()
+                
+                // Invisible button to center the title
+                Button(action: {}) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(.clear)
+                        .padding(8)
+                }
+                .disabled(true)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            
+            Divider()
+            
+            // Settings Options
+            ScrollView {
+                VStack(spacing: 0) {
                         // Likes option
                         SettingsRow(
                             icon: "heart.fill",
@@ -81,7 +86,6 @@ struct SettingsView: View {
                                 showDeleteAccount = true
                             }
                         )
-                    }
                 }
             }
         }
