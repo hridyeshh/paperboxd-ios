@@ -59,5 +59,16 @@
 			</array>
 		</dict>
 	</array>
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>instagram</string>
+		<string>instagram-stories</string>
+		<string>whatsapp</string>
+		<string>twitter</string>
+	</array>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>PaperBoxd needs access to your photo library to save your share card image.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>PaperBoxd needs access to save your share card to your photo library.</string>
 </dict>
 </plist>

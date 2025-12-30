@@ -52,6 +52,17 @@ struct DNFTabIcon: View {
     }
 }
 
+/// Notebook pen icon for Diary tab
+struct DiaryIcon: View {
+    let isActive: Bool
+    
+    var body: some View {
+        Image(systemName: "book.pages")
+            .font(.system(size: 18, weight: isActive ? .semibold : .regular))
+            .symbolVariant(isActive ? .fill : .none)
+    }
+}
+
 // MARK: - Icon Helper
 struct ProfileTabIcon: View {
     let tabName: String
@@ -68,6 +79,8 @@ struct ProfileTabIcon: View {
                 BookshelfIcon(isActive: isActive)
             case "DNF":
                 DNFTabIcon(isActive: isActive)
+            case "Diary":
+                DiaryIcon(isActive: isActive)
             default:
                 EmptyView()
             }

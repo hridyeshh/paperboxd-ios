@@ -14,6 +14,10 @@ class ProfileViewModel: ObservableObject {
     // Track if profile has been loaded to avoid unnecessary reloads
     private var hasLoadedProfile: Bool = false
     
+    // Track if the profile being viewed is the current user's profile
+    @Published var isCurrentUserProfile: Bool = false
+    private var currentUsername: String?
+    
     // Computed properties for easy access
     var favoriteBoards: [BookBoard] {
         guard let favoriteBooks = profile?.favoriteBooks, !favoriteBooks.isEmpty else {
@@ -122,15 +126,37 @@ class ProfileViewModel: ObservableObject {
                 // Fetch specific user's profile
                 print("📖 ProfileViewModel: Fetching profile for username: \(username)")
                 response = try await APIClient.shared.fetchUserProfile(username: username)
+                
+                // Check if this is the current user's profile
+                if currentUsername == nil {
+                    // Get current user's username if not already stored
+                    do {
+                        let currentUser = try await APIClient.shared.verifyToken()
+                        currentUsername = currentUser.username
+                    } catch {
+                        print("⚠️ ProfileViewModel: Could not verify token to check ownership: \(error.localizedDescription)")
+                    }
+                }
+                
+                isCurrentUserProfile = (response.user.username == currentUsername)
             } else {
                 // Fetch current user's profile
                 print("📖 ProfileViewModel: Fetching current user's profile")
                 response = try await APIClient.shared.fetchCurrentUserProfile()
+                
+                // Store current username for future comparisons
+                currentUsername = response.user.username
+                isCurrentUserProfile = true
             }
             
             profile = response.user
             hasLoadedProfile = true
             print("✅ ProfileViewModel: Successfully loaded profile for \(response.user.username ?? "unknown")")
+            print("👤 ProfileViewModel: Is current user profile: \(isCurrentUserProfile)")
+            print("📔 ProfileViewModel: Diary entries count: \(response.user.diaryEntries?.count ?? 0)")
+            if let entries = response.user.diaryEntries, !entries.isEmpty {
+                print("📔 ProfileViewModel: First diary entry - id: \(entries[0].id), subject: \(entries[0].subject ?? "nil"), bookTitle: \(entries[0].bookTitle ?? "nil")")
+            }
         } catch let error as APIError {
             print("❌ ProfileViewModel: API Error - \(error.localizedDescription)")
             switch error {
@@ -171,6 +197,8 @@ class ProfileViewModel: ObservableObject {
         profile = nil
         hasLoadedProfile = false
         errorMessage = nil
+        isCurrentUserProfile = false
+        currentUsername = nil
         print("🗑️ ProfileViewModel: Profile data cleared")
     }
     

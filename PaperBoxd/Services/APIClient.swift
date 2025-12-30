@@ -731,6 +731,155 @@ class APIClient {
         let checkResponse = try JSONDecoder().decode(UsernameCheckResponse.self, from: data)
         return checkResponse.available
     }
+    
+    /// Delete a diary entry
+    /// - Parameters:
+    ///   - username: The username of the diary entry owner
+    ///   - entryId: The ID of the diary entry (for general entries)
+    ///   - bookId: The book ID (for book entries, optional)
+    /// - Throws: Network errors
+    func deleteDiaryEntry(username: String, entryId: String? = nil, bookId: String? = nil) async throws {
+        // Use web API endpoint (not mobile API) for diary deletion
+        let webBaseURL = baseURL.replacingOccurrences(of: "/mobile/v1", with: "")
+        let encodedUsername = username.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? username
+        guard let url = URL(string: "\(webBaseURL)/users/\(encodedUsername)/diary") else {
+            throw APIError.invalidURL
+        }
+        
+        // Ensure token is valid before making authenticated requests
+        if getAuthToken() != nil {
+            try? await TokenRefreshService.shared.ensureValidToken()
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "DELETE"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        // Add authentication header
+        if let token = getAuthToken() {
+            let cleanToken = token.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
+            if !cleanToken.isEmpty {
+                request.setValue("Bearer \(cleanToken)", forHTTPHeaderField: "Authorization")
+                request.setValue("Bearer \(cleanToken)", forHTTPHeaderField: "X-User-Authorization")
+            }
+        }
+        
+        // Build request body
+        var body: [String: String] = [:]
+        if let entryId = entryId {
+            body["entryId"] = entryId
+        } else if let bookId = bookId {
+            body["bookId"] = bookId
+        } else {
+            throw APIError.invalidResponse // Need either entryId or bookId
+        }
+        
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIError.invalidResponse
+        }
+        
+        guard (200...299).contains(httpResponse.statusCode) else {
+            if let errorData = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let errorMessage = errorData["error"] as? String {
+                throw NSError(domain: "APIClient", code: httpResponse.statusCode, userInfo: [NSLocalizedDescriptionKey: errorMessage])
+            }
+            throw APIError.httpError(statusCode: httpResponse.statusCode)
+        }
+    }
+    
+    /// Like or unlike a diary entry
+    /// - Parameters:
+    ///   - username: The username of the diary entry owner
+    ///   - entryId: The ID of the diary entry
+    /// - Returns: LikeResponse with liked status and likesCount
+    /// - Throws: Network errors
+    func toggleDiaryEntryLike(username: String, entryId: String) async throws -> DiaryLikeResponse {
+        // Use web API endpoint (not mobile API) for diary likes
+        let webBaseURL = baseURL.replacingOccurrences(of: "/mobile/v1", with: "")
+        let encodedUsername = username.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? username
+        let encodedEntryId = entryId.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? entryId
+        guard let url = URL(string: "\(webBaseURL)/users/\(encodedUsername)/diary/\(encodedEntryId)/like") else {
+            throw APIError.invalidURL
+        }
+        
+        // Ensure token is valid before making authenticated requests
+        // CRITICAL: This is an authenticated endpoint, so we need a valid token
+        guard let rawToken = getAuthToken() else {
+            print("❌ APIClient: No auth token available for diary like request")
+            throw APIError.httpError(statusCode: 401)
+        }
+        
+        // Try to refresh token if needed
+        do {
+            try await TokenRefreshService.shared.ensureValidToken()
+        } catch {
+            print("⚠️ APIClient: Token refresh failed, proceeding with current token: \(error.localizedDescription)")
+        }
+        
+        // Get the token again (might have been refreshed)
+        guard let token = getAuthToken() else {
+            print("❌ APIClient: Token is missing after refresh attempt")
+            throw APIError.httpError(statusCode: 401)
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        
+        // Add authentication header with proper trimming
+        let cleanToken = token.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
+        if !cleanToken.isEmpty {
+            // Set standard Authorization header
+            request.setValue("Bearer \(cleanToken)", forHTTPHeaderField: "Authorization")
+            
+            // CRITICAL: Also set custom header as fallback
+            // Vercel sometimes strips/replaces the Authorization header, so we send it in a custom header too
+            request.setValue("Bearer \(cleanToken)", forHTTPHeaderField: "X-User-Authorization")
+            
+            print("🔐 APIClient: Successfully added Bearer token for diary like (length: \(cleanToken.count))")
+        } else {
+            print("❌ APIClient: Token is empty after trimming")
+            throw APIError.httpError(statusCode: 401)
+        }
+        
+        print("🌐 APIClient: Making POST request to \(url.absoluteString)")
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIError.invalidResponse
+        }
+        
+        print("📊 APIClient: Diary like response status code: \(httpResponse.statusCode)")
+        
+        guard (200...299).contains(httpResponse.statusCode) else {
+            // Try to extract error message from response
+            if let errorString = String(data: data, encoding: .utf8) {
+                print("📄 APIClient: Error response body: \(errorString)")
+            }
+            
+            if let errorData = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let errorMessage = errorData["error"] as? String {
+                throw NSError(domain: "APIClient", code: httpResponse.statusCode, userInfo: [NSLocalizedDescriptionKey: errorMessage])
+            }
+            throw APIError.httpError(statusCode: httpResponse.statusCode)
+        }
+        
+        let likeResponse = try JSONDecoder().decode(DiaryLikeResponse.self, from: data)
+        print("✅ APIClient: Successfully toggled diary entry like")
+        return likeResponse
+    }
+}
+
+// MARK: - Diary Like Response
+struct DiaryLikeResponse: Codable {
+    let liked: Bool
+    let likesCount: Int
 }
 
 // MARK: - Request Models
