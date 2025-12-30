@@ -396,7 +396,7 @@ class APIClient {
         
         guard (200...299).contains(httpResponse.statusCode) else {
             if let errorData = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-               let errorMessage = errorData["error"] as? String {
+               let _ = errorData["error"] as? String {
                 throw APIError.httpError(statusCode: httpResponse.statusCode)
             }
             throw APIError.httpError(statusCode: httpResponse.statusCode)
@@ -732,6 +732,334 @@ class APIClient {
         return checkResponse.available
     }
     
+    /// Create a diary entry (book-related or general)
+    /// - Parameters:
+    ///   - username: The username of the diary entry owner
+    ///   - bookId: Optional book ID (if writing about a book)
+    ///   - bookTitle: Optional book title
+    ///   - bookAuthor: Optional book author
+    ///   - bookCover: Optional book cover URL
+    ///   - subject: Optional subject/title for the entry
+    ///   - content: The diary entry content
+    /// - Returns: Created diary entry
+    /// - Throws: Network errors
+    func createDiaryEntry(
+        username: String,
+        bookId: String? = nil,
+        bookTitle: String? = nil,
+        bookAuthor: String? = nil,
+        bookCover: String? = nil,
+        subject: String? = nil,
+        content: String
+    ) async throws -> DiaryEntry {
+        // Use web API endpoint (not mobile API) for diary creation
+        let webBaseURL = baseURL.replacingOccurrences(of: "/mobile/v1", with: "")
+        let encodedUsername = username.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? username
+        guard let url = URL(string: "\(webBaseURL)/users/\(encodedUsername)/diary") else {
+            throw APIError.invalidURL
+        }
+        
+        // Ensure token is valid before making authenticated requests
+        guard getAuthToken() != nil else {
+            print("❌ APIClient: No auth token available for diary creation request")
+            throw APIError.httpError(statusCode: 401)
+        }
+        
+        // Try to refresh token if needed
+        do {
+            try await TokenRefreshService.shared.ensureValidToken()
+        } catch {
+            print("⚠️ APIClient: Token refresh failed, proceeding with current token: \(error.localizedDescription)")
+        }
+        
+        // Get the token again (might have been refreshed)
+        guard let token = getAuthToken() else {
+            print("❌ APIClient: Token is missing after refresh attempt")
+            throw APIError.httpError(statusCode: 401)
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        
+        // Add authentication header with proper trimming
+        let cleanToken = token.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
+        if !cleanToken.isEmpty {
+            request.setValue("Bearer \(cleanToken)", forHTTPHeaderField: "Authorization")
+            request.setValue("Bearer \(cleanToken)", forHTTPHeaderField: "X-User-Authorization")
+            print("🔐 APIClient: Successfully added Bearer token for diary creation (length: \(cleanToken.count))")
+        } else {
+            print("❌ APIClient: Token is empty after trimming")
+            throw APIError.httpError(statusCode: 401)
+        }
+        
+        // Build request body
+        var body: [String: Any] = [
+            "content": content
+        ]
+        
+        if let bookId = bookId {
+            body["bookId"] = bookId
+        }
+        if let bookTitle = bookTitle {
+            body["bookTitle"] = bookTitle
+        }
+        if let bookAuthor = bookAuthor {
+            body["bookAuthor"] = bookAuthor
+        }
+        if let bookCover = bookCover {
+            body["bookCover"] = bookCover
+        }
+        if let subject = subject {
+            body["subject"] = subject
+        }
+        
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        
+        print("🌐 APIClient: Making POST request to \(url.absoluteString)")
+        print("📝 APIClient: Diary entry body: \(body)")
+        
+        // Retry configuration
+        let maxRetries = 3
+        let baseDelay: TimeInterval = 1.0 // Start with 1 second
+        
+        // Attempt request with retry logic
+        var lastError: Error?
+        
+        for attempt in 0...maxRetries {
+            do {
+                let (data, response) = try await URLSession.shared.data(for: request)
+                
+                guard let httpResponse = response as? HTTPURLResponse else {
+                    throw APIError.invalidResponse
+                }
+                
+                print("📊 APIClient: Diary creation response status code: \(httpResponse.statusCode) (attempt \(attempt + 1)/\(maxRetries + 1))")
+                
+                // Success case
+                if (200...299).contains(httpResponse.statusCode) {
+                    // Process successful response (code continues below)
+                    return try await processDiaryEntryResponse(data: data, bookId: bookId, bookTitle: bookTitle, bookAuthor: bookAuthor, bookCover: bookCover, subject: subject, content: content)
+                }
+                
+                // Check if error is retryable
+                let isRetryable = isRetryableError(statusCode: httpResponse.statusCode, attempt: attempt, maxRetries: maxRetries)
+                
+                if !isRetryable {
+                    // Non-retryable error - extract and throw immediately
+                    if let errorString = String(data: data, encoding: .utf8) {
+                        print("📄 APIClient: Error response body: \(errorString)")
+                    }
+                    
+                    if let errorData = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                       let errorMessage = errorData["error"] as? String {
+                        throw NSError(domain: "APIClient", code: httpResponse.statusCode, userInfo: [NSLocalizedDescriptionKey: errorMessage])
+                    }
+                    throw APIError.httpError(statusCode: httpResponse.statusCode)
+                }
+                
+                // Retryable error - prepare for retry
+                lastError = APIError.httpError(statusCode: httpResponse.statusCode)
+                let delay = baseDelay * pow(2.0, Double(attempt)) // Exponential backoff: 1s, 2s, 4s
+                
+                if attempt < maxRetries {
+                    print("⚠️ APIClient: Retryable error \(httpResponse.statusCode), retrying in \(delay)s (attempt \(attempt + 1)/\(maxRetries + 1))")
+                    try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                    
+                    // Refresh token before retry (might have expired)
+                    try? await TokenRefreshService.shared.ensureValidToken()
+                    
+                    // Update token in request if it was refreshed
+                    if let refreshedToken = getAuthToken() {
+                        let cleanToken = refreshedToken.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
+                        if !cleanToken.isEmpty {
+                            request.setValue("Bearer \(cleanToken)", forHTTPHeaderField: "Authorization")
+                            request.setValue("Bearer \(cleanToken)", forHTTPHeaderField: "X-User-Authorization")
+                        }
+                    }
+                }
+                
+            } catch let error as URLError {
+                // Network errors (timeout, no connection, etc.)
+                let isRetryable = isRetryableNetworkError(error, attempt: attempt, maxRetries: maxRetries)
+                
+                if !isRetryable {
+                    print("❌ APIClient: Non-retryable network error: \(error.localizedDescription)")
+                    throw APIError.networkError(error)
+                }
+                
+                lastError = error
+                let delay = baseDelay * pow(2.0, Double(attempt))
+                
+                if attempt < maxRetries {
+                    print("⚠️ APIClient: Network error (\(error.localizedDescription)), retrying in \(delay)s (attempt \(attempt + 1)/\(maxRetries + 1))")
+                    try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                }
+                
+            } catch let error as APIError {
+                // Don't retry API errors (decoding, invalid URL, etc.)
+                throw error
+            } catch {
+                // Other errors - don't retry
+                print("❌ APIClient: Non-retryable error: \(error.localizedDescription)")
+                throw APIError.networkError(error)
+            }
+        }
+        
+        // All retries exhausted
+        if let lastError = lastError {
+            print("❌ APIClient: All retry attempts exhausted. Last error: \(lastError.localizedDescription)")
+            throw APIError.networkError(lastError)
+        } else {
+            throw APIError.networkError(NSError(domain: "APIClient", code: -1, userInfo: [NSLocalizedDescriptionKey: "Request failed after \(maxRetries + 1) attempts"]))
+        }
+    }
+    
+    /// Process successful diary entry response
+    private func processDiaryEntryResponse(
+        data: Data,
+        bookId: String?,
+        bookTitle: String?,
+        bookAuthor: String?,
+        bookCover: String?,
+        subject: String?,
+        content: String
+    ) async throws -> DiaryEntry {
+        
+        // Log the response body for debugging
+        if let responseString = String(data: data, encoding: .utf8) {
+            print("📄 APIClient: Diary creation response body: \(responseString)")
+        }
+        
+        // Check if response is empty - if so, treat as success (entry was created)
+        if data.isEmpty {
+            print("⚠️ APIClient: Empty response from diary creation endpoint - treating as success")
+            // Return a minimal DiaryEntry - the profile will be refreshed anyway to get the actual entry
+            let formatter = ISO8601DateFormatter()
+            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            let now = formatter.string(from: Date())
+            return DiaryEntry(
+                _id: nil,
+                idValue: nil,
+                bookId: bookId,
+                bookTitle: bookTitle,
+                bookAuthor: bookAuthor,
+                bookCover: bookCover,
+                subject: subject,
+                content: content,
+                createdAt: now,
+                updatedAt: now,
+                likesCount: 0,
+                isLiked: false
+            )
+        }
+        
+        // Try to decode the response - it might be wrapped in an object or be the entry directly
+        do {
+            // First try decoding as DiaryEntry directly
+            let diaryEntry = try JSONDecoder().decode(DiaryEntry.self, from: data)
+            print("✅ APIClient: Successfully created diary entry")
+            return diaryEntry
+        } catch let decodingError {
+            // If direct decode fails, try decoding as wrapped response
+            print("⚠️ APIClient: Failed to decode DiaryEntry directly, trying wrapped format")
+            print("📄 APIClient: Decoding error: \(decodingError.localizedDescription)")
+            
+            if let jsonObject = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                // Try to find the entry in common wrapper formats
+                if let entryData = jsonObject["entry"] as? [String: Any],
+                   let entryJSON = try? JSONSerialization.data(withJSONObject: entryData) {
+                    let diaryEntry = try JSONDecoder().decode(DiaryEntry.self, from: entryJSON)
+                    print("✅ APIClient: Successfully created diary entry (wrapped format)")
+                    return diaryEntry
+                } else if let entryData = jsonObject["diaryEntry"] as? [String: Any],
+                          let entryJSON = try? JSONSerialization.data(withJSONObject: entryData) {
+                    let diaryEntry = try JSONDecoder().decode(DiaryEntry.self, from: entryJSON)
+                    print("✅ APIClient: Successfully created diary entry (wrapped format)")
+                    return diaryEntry
+                }
+            }
+            
+            // If all decoding fails, but status was 200, treat as success
+            // The entry was likely created successfully, just the response format is unexpected
+            print("⚠️ APIClient: Could not decode diary entry response, but status was 200. Treating as success.")
+            // Return a minimal entry - the profile will be refreshed anyway
+            let formatter = ISO8601DateFormatter()
+            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            let now = formatter.string(from: Date())
+            return DiaryEntry(
+                _id: nil,
+                idValue: nil,
+                bookId: bookId,
+                bookTitle: bookTitle,
+                bookAuthor: bookAuthor,
+                bookCover: bookCover,
+                subject: subject,
+                content: content,
+                createdAt: now,
+                updatedAt: now,
+                likesCount: 0,
+                isLiked: false
+            )
+        }
+    }
+    
+    /// Check if an HTTP status code is retryable
+    /// - Parameters:
+    ///   - statusCode: The HTTP status code
+    ///   - attempt: Current attempt number (0-indexed)
+    ///   - maxRetries: Maximum number of retries
+    /// - Returns: True if the error is retryable
+    private func isRetryableError(statusCode: Int, attempt: Int, maxRetries: Int) -> Bool {
+        // Don't retry if we've exhausted attempts
+        guard attempt < maxRetries else { return false }
+        
+        // Retry on server errors (5xx) - these are usually transient
+        if (500...599).contains(statusCode) {
+            return true
+        }
+        
+        // Retry on specific client errors that might be transient
+        switch statusCode {
+        case 408: // Request Timeout
+            return true
+        case 429: // Too Many Requests (rate limiting)
+            return true
+        case 401: // Unauthorized - might be token refresh issue, retry once
+            return attempt == 0 // Only retry once for 401
+        default:
+            return false
+        }
+    }
+    
+    /// Check if a network error is retryable
+    /// - Parameters:
+    ///   - error: The URLError
+    ///   - attempt: Current attempt number (0-indexed)
+    ///   - maxRetries: Maximum number of retries
+    /// - Returns: True if the error is retryable
+    private func isRetryableNetworkError(_ error: URLError, attempt: Int, maxRetries: Int) -> Bool {
+        // Don't retry if we've exhausted attempts
+        guard attempt < maxRetries else { return false }
+        
+        // Retry on transient network errors
+        switch error.code {
+        case .timedOut,
+             .networkConnectionLost,
+             .notConnectedToInternet,
+             .cannotConnectToHost,
+             .cannotFindHost,
+             .dnsLookupFailed,
+             .internationalRoamingOff,
+             .callIsActive,
+             .dataNotAllowed:
+            return true
+        default:
+            return false
+        }
+    }
+    
     /// Delete a diary entry
     /// - Parameters:
     ///   - username: The username of the diary entry owner
@@ -808,7 +1136,7 @@ class APIClient {
         
         // Ensure token is valid before making authenticated requests
         // CRITICAL: This is an authenticated endpoint, so we need a valid token
-        guard let rawToken = getAuthToken() else {
+        guard getAuthToken() != nil else {
             print("❌ APIClient: No auth token available for diary like request")
             throw APIError.httpError(statusCode: 401)
         }
