@@ -301,7 +301,7 @@ struct ShareView: View {
                 shareCardImage = createProfileCardImage()
             }
         }
-        .onChange(of: showNativeShare) { newValue in
+        .onChange(of: showNativeShare) { oldValue, newValue in
             if newValue && shareCardImage == nil {
                 // Generate card image when share sheet opens if not already generated
                 Task { @MainActor in
@@ -330,7 +330,7 @@ struct ShareView: View {
                 ShareSheet(activityItems: [shareText])
             }
         }
-        .onChange(of: showNativeShare) { newValue in
+        .onChange(of: showNativeShare) { oldValue, newValue in
             if newValue {
                 // Generate card image when share sheet is about to open
                 Task { @MainActor in

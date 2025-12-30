@@ -426,7 +426,7 @@ struct EditProfileView: View {
                 print("📸 EditProfileView: Uploading avatar image with size: \(imageToUpload.size.width)x\(imageToUpload.size.height)...")
                 do {
                     avatarURL = try await APIClient.shared.uploadAvatar(image: imageToUpload)
-                    print("✅ EditProfileView: Avatar uploaded successfully: \(avatarURL)")
+                    print("✅ EditProfileView: Avatar uploaded successfully: \(avatarURL ?? "nil")")
                 } catch {
                     print("❌ EditProfileView: Avatar upload failed: \(error.localizedDescription)")
                     throw error // Re-throw to be caught by outer catch block

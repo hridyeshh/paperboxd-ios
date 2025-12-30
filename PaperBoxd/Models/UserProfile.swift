@@ -240,6 +240,35 @@ struct DiaryEntry: Codable, Identifiable {
         case createdAt, updatedAt, likesCount, isLiked
     }
     
+    // Public initializer for creating DiaryEntry instances
+    init(
+        _id: String? = nil,
+        idValue: String? = nil,
+        bookId: String? = nil,
+        bookTitle: String? = nil,
+        bookAuthor: String? = nil,
+        bookCover: String? = nil,
+        subject: String? = nil,
+        content: String,
+        createdAt: String,
+        updatedAt: String,
+        likesCount: Int? = nil,
+        isLiked: Bool? = nil
+    ) {
+        self._id = _id
+        self.idValue = idValue
+        self.bookId = bookId
+        self.bookTitle = bookTitle
+        self.bookAuthor = bookAuthor
+        self.bookCover = bookCover
+        self.subject = subject
+        self.content = content
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+        self.likesCount = likesCount
+        self.isLiked = isLiked
+    }
+    
     // Check if this is a book-related entry
     var isBookEntry: Bool {
         return bookId != nil && bookTitle != nil
