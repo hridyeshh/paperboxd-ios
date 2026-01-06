@@ -12,6 +12,13 @@ struct HomeView: View {
     @State private var selectedBook: Book? = nil
     @State private var showDetail = false
     
+    // Create options popup
+    @State private var showCreateOptions = false
+    @State private var showGeneralWriteView = false
+    @State private var showCreateListView = false
+    @State private var showListDetail = false
+    @State private var selectedList: ReadingList?
+    
     // Hide the default standard tab bar so we can make our own custom one
     init() {
         UITabBar.appearance().isHidden = true
@@ -57,7 +64,7 @@ struct HomeView: View {
                 if !showDetail {
                     VStack {
                         Spacer()
-                        PinterestNavBar(selectedTab: $selectedTab)
+                        PinterestNavBar(selectedTab: $selectedTab, showCreateOptions: $showCreateOptions)
                             .transition(.move(edge: .bottom).combined(with: .opacity))
                     }
                 }
@@ -76,8 +83,56 @@ struct HomeView: View {
                 ))
                 .zIndex(2) // Ensure it sits above the dock
             }
+            
+            // 4. CREATE OPTIONS POPUP (Pinterest-style)
+            if showCreateOptions {
+                CreateOptionsView(
+                    isPresented: $showCreateOptions,
+                    showGeneralWriteView: $showGeneralWriteView,
+                    showCreateListView: $showCreateListView
+                )
+                    .zIndex(3) // Above everything
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
         }
         .ignoresSafeArea(.keyboard) // Prevents keyboard from pushing it up awkwardly
+        .sheet(isPresented: $showGeneralWriteView) {
+            GeneralWriteView()
+        }
+        .sheet(isPresented: $showCreateListView) {
+            CreateListView(onListCreated: { list in
+                print("📝 HomeView: List created callback received, list: '\(list.title)'")
+                selectedList = list
+                showCreateListView = false
+                // Small delay to ensure smooth transition
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    print("📝 HomeView: Setting showListDetail = true")
+                    showListDetail = true
+                    print("📝 HomeView: showListDetail is now: \(showListDetail)")
+                }
+            })
+        }
+        .fullScreenCover(isPresented: Binding(
+            get: { showListDetail && selectedList != nil },
+            set: { newValue in
+                showListDetail = newValue
+                if !newValue {
+                    selectedList = nil
+                }
+            }
+        )) {
+            if let list = selectedList {
+                NavigationStack {
+                    ListDetailView(readingList: list)
+                        .onAppear {
+                            print("✅ HomeView: ListDetailView appeared for: '\(list.title)'")
+                        }
+                }
+            }
+        }
+        .onChange(of: showListDetail) { oldValue, newValue in
+            print("📝 HomeView: showListDetail changed from \(oldValue) to \(newValue)")
+        }
     }
 }
 
@@ -242,6 +297,7 @@ struct HomeFeedContent: View {
 // MARK: - COMPONENT: BOTTOM NAV BAR (Stuck to bottom like web version)
 struct PinterestNavBar: View {
     @Binding var selectedTab: Int
+    @Binding var showCreateOptions: Bool
     
     var body: some View {
         HStack(spacing: 0) {
@@ -255,8 +311,17 @@ struct PinterestNavBar: View {
             
             Spacer()
             
-            // 3. Write (The Plus Button)
-            NavIcon(icon: "plus", index: 2, selectedTab: $selectedTab)
+            // 3. Write (The Plus Button) - Shows popup instead of switching tabs
+            Button(action: {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                    showCreateOptions = true
+                }
+            }) {
+                Image(systemName: "plus")
+                    .font(.system(size: 24))
+                    .foregroundColor(.secondary)
+            }
+            .frame(maxWidth: .infinity)
             
             Spacer()
             
@@ -454,6 +519,152 @@ struct ReadingProgressCard: View {
         .padding(.trailing, 20)
         .background(Color(uiColor: .secondarySystemBackground))
         .cornerRadius(20)
+    }
+}
+
+// MARK: - CREATE OPTIONS POPUP (Pinterest-style)
+struct CreateOptionsView: View {
+    @Binding var isPresented: Bool
+    @Binding var showGeneralWriteView: Bool
+    @Binding var showCreateListView: Bool
+    
+    var body: some View {
+        ZStack {
+            // Blurred background overlay
+            Color.black.opacity(0.4)
+                .ignoresSafeArea()
+                .onTapGesture {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                        isPresented = false
+                    }
+                }
+            
+            // Main popup panel
+            VStack(spacing: 0) {
+                // Header with close button and title
+                HStack {
+                    // Close button (X)
+                    Button(action: {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                            isPresented = false
+                        }
+                    }) {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundColor(.white)
+                            .frame(width: 44, height: 44)
+                    }
+                    
+                    Spacer()
+                    
+                    // Title centered
+                    Text("Start creating now")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundColor(.white)
+                    
+                    Spacer()
+                    
+                    // Invisible spacer to balance the close button
+                    Color.clear
+                        .frame(width: 44, height: 44)
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 20)
+                .padding(.bottom, 30)
+                
+                // Options: Write and List
+                HStack(spacing: 20) {
+                    // Write option
+                    CreateOptionButton(
+                        icon: "pencil",
+                        title: "Write",
+                        action: {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                isPresented = false
+                            }
+                            // Small delay to allow popup to dismiss first
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                                showGeneralWriteView = true
+                            }
+                        }
+                    )
+                    
+                    // List option
+                    CreateOptionButton(
+                        icon: "list.bullet",
+                        title: "List",
+                        action: {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                isPresented = false
+                            }
+                            // Small delay to allow popup to dismiss first
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                                showCreateListView = true
+                            }
+                        }
+                    )
+                }
+                .padding(.horizontal, 20)
+                .padding(.bottom, 40)
+            }
+            .frame(maxWidth: .infinity)
+            .background(
+                Color(red: 0.15, green: 0.15, blue: 0.15) // Dark gray background
+            )
+            .cornerRadius(24, corners: [.topLeft, .topRight])
+            .frame(maxHeight: .infinity, alignment: .bottom)
+        }
+    }
+}
+
+// MARK: - CREATE OPTION BUTTON
+struct CreateOptionButton: View {
+    let icon: String
+    let title: String
+    let action: () -> Void
+    
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 12) {
+                // Icon
+                Image(systemName: icon)
+                    .font(.system(size: 28, weight: .medium))
+                    .foregroundColor(.white)
+                
+                // Title
+                Text(title)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(.white)
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: 120)
+            .background(
+                Color(red: 0.2, green: 0.2, blue: 0.2) // Slightly lighter dark gray
+            )
+            .cornerRadius(16)
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
+}
+
+// MARK: - CORNER RADIUS EXTENSION
+extension View {
+    func cornerRadius(_ radius: CGFloat, corners: UIRectCorner) -> some View {
+        clipShape(RoundedCorner(radius: radius, corners: corners))
+    }
+}
+
+struct RoundedCorner: Shape {
+    var radius: CGFloat = .infinity
+    var corners: UIRectCorner = .allCorners
+
+    func path(in rect: CGRect) -> Path {
+        let path = UIBezierPath(
+            roundedRect: rect,
+            byRoundingCorners: corners,
+            cornerRadii: CGSize(width: radius, height: radius)
+        )
+        return Path(path.cgPath)
     }
 }
 

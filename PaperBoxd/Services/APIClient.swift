@@ -1202,6 +1202,101 @@ class APIClient {
         print("✅ APIClient: Successfully toggled diary entry like")
         return likeResponse
     }
+    
+    /// Create a new reading list
+    /// - Parameters:
+    ///   - username: The username of the list owner
+    ///   - title: The list title
+    ///   - description: Optional list description
+    ///   - isPublic: Whether the list is public (default: true)
+    /// - Returns: Created reading list
+    /// - Throws: Network errors
+    func createList(
+        username: String,
+        title: String,
+        description: String = "",
+        isPublic: Bool = true
+    ) async throws -> ReadingList {
+        // Use web API endpoint (not mobile API) for list creation
+        let webBaseURL = baseURL.replacingOccurrences(of: "/mobile/v1", with: "")
+        let encodedUsername = username.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? username
+        guard let url = URL(string: "\(webBaseURL)/users/\(encodedUsername)/lists") else {
+            throw APIError.invalidURL
+        }
+        
+        // Ensure token is valid before making authenticated requests
+        guard getAuthToken() != nil else {
+            print("❌ APIClient: No auth token available for list creation request")
+            throw APIError.httpError(statusCode: 401)
+        }
+        
+        // Try to refresh token if needed
+        do {
+            try await TokenRefreshService.shared.ensureValidToken()
+        } catch {
+            print("⚠️ APIClient: Token refresh failed, proceeding with current token: \(error.localizedDescription)")
+        }
+        
+        // Get the token again (might have been refreshed)
+        guard let token = getAuthToken() else {
+            print("❌ APIClient: Token is missing after refresh attempt")
+            throw APIError.httpError(statusCode: 401)
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        
+        // Add authentication header with proper trimming
+        let cleanToken = token.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
+        if !cleanToken.isEmpty {
+            request.setValue("Bearer \(cleanToken)", forHTTPHeaderField: "Authorization")
+            request.setValue("Bearer \(cleanToken)", forHTTPHeaderField: "X-User-Authorization")
+            print("🔐 APIClient: Successfully added Bearer token for list creation (length: \(cleanToken.count))")
+        } else {
+            print("❌ APIClient: Token is empty after trimming")
+            throw APIError.httpError(statusCode: 401)
+        }
+        
+        // Build request body
+        let body: [String: Any] = [
+            "title": title,
+            "description": description,
+            "isPublic": isPublic,
+            "books": []
+        ]
+        
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        
+        print("🌐 APIClient: Making POST request to \(url.absoluteString)")
+        print("📝 APIClient: List creation body: \(body)")
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIError.invalidResponse
+        }
+        
+        print("📊 APIClient: List creation response status code: \(httpResponse.statusCode)")
+        
+        guard (200...299).contains(httpResponse.statusCode) else {
+            if let errorString = String(data: data, encoding: .utf8) {
+                print("📄 APIClient: Error response body: \(errorString)")
+            }
+            
+            if let errorData = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let errorMessage = errorData["error"] as? String {
+                throw NSError(domain: "APIClient", code: httpResponse.statusCode, userInfo: [NSLocalizedDescriptionKey: errorMessage])
+            }
+            throw APIError.httpError(statusCode: httpResponse.statusCode)
+        }
+        
+        // Decode response
+        let responseData = try JSONDecoder().decode(CreateListResponse.self, from: data)
+        print("✅ APIClient: Successfully created list")
+        return responseData.list
+    }
 }
 
 // MARK: - Diary Like Response
@@ -1283,6 +1378,12 @@ struct UpdatedUser: Codable {
     let bio: String?
     let avatar: String?
     let pronouns: [String]?
+}
+
+// MARK: - Create List Response
+struct CreateListResponse: Codable {
+    let message: String
+    let list: ReadingList
 }
 
 

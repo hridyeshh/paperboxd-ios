@@ -318,6 +318,29 @@ struct WriteAboutBookView: View {
                 // Get book cover URL
                 let coverURL = book.secureCoverURL?.absoluteString ?? book.cover ?? book.imageURL
                 
+                // Convert plain text to HTML format (wrap in <p> tags)
+                // The API expects HTML content like the web version
+                let htmlContent: String
+                if trimmedContent.isEmpty {
+                    htmlContent = "<p></p>"
+                } else {
+                    // Escape HTML entities and wrap in paragraph tags
+                    let escapedContent = trimmedContent
+                        .replacingOccurrences(of: "&", with: "&amp;")
+                        .replacingOccurrences(of: "<", with: "&lt;")
+                        .replacingOccurrences(of: ">", with: "&gt;")
+                        .replacingOccurrences(of: "\"", with: "&quot;")
+                        .replacingOccurrences(of: "'", with: "&#39;")
+                    
+                    // Split by newlines and wrap each paragraph
+                    let paragraphs = escapedContent.components(separatedBy: "\n\n")
+                        .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                        .filter { !$0.isEmpty }
+                        .map { "<p>\($0.replacingOccurrences(of: "\n", with: "<br>"))</p>" }
+                    
+                    htmlContent = paragraphs.isEmpty ? "<p>\(escapedContent.replacingOccurrences(of: "\n", with: "<br>"))</p>" : paragraphs.joined(separator: "")
+                }
+                
                 // Create diary entry
                 _ = try await APIClient.shared.createDiaryEntry(
                     username: username,
@@ -326,7 +349,7 @@ struct WriteAboutBookView: View {
                     bookAuthor: book.author ?? book.authors?.first,
                     bookCover: coverURL,
                     subject: nil,
-                    content: trimmedContent
+                    content: htmlContent
                 )
                 
                 await MainActor.run {

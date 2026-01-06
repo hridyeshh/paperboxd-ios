@@ -179,7 +179,7 @@ struct TbrBook: Codable {
 
 // MARK: - ReadingList
 
-struct ReadingList: Codable {
+struct ReadingList: Codable, Equatable {
     let _id: String?
     let title: String
     let description: String?
@@ -187,6 +187,10 @@ struct ReadingList: Codable {
     let isPublic: Bool?
     let createdAt: String?
     let updatedAt: String?
+    
+    static func == (lhs: ReadingList, rhs: ReadingList) -> Bool {
+        return lhs._id == rhs._id && lhs.title == rhs.title
+    }
 }
 
 struct ReadingListBook: Codable {
