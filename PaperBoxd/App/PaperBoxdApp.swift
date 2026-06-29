@@ -35,7 +35,7 @@ struct PaperBoxdApp: App {
                     removal: .opacity
                 ))
         case .main(let user):
-            MainPlaceholderView(user: user)
+            MainTabView(user: user)
                 .transition(.opacity)
         }
     }

@@ -175,4 +175,6 @@ final class AppState: ObservableObject {
 
 extension Notification.Name {
     static let paperboxdSessionExpired = Notification.Name("paperboxd.sessionExpired")
+    static let diaryEntryCreated = Notification.Name("paperboxd.diaryEntryCreated")
+    static let diaryEntryDeleted = Notification.Name("paperboxd.diaryEntryDeleted")
 }

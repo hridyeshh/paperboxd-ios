@@ -92,6 +92,7 @@ struct SplashView: View {
             }
         }
         .task {
+            guard !PreviewRuntime.isRunning else { return }
             await appState.bootstrap()
         }
     }
