@@ -22,6 +22,7 @@ enum Endpoints {
     static let avatarUpload       = "/api/v1/users/me/avatar/upload"
     static let bannerUpload       = "/api/v1/users/me/banner/upload"
     static let recommendationsHome = "/api/v1/recommendations/home"
+    static let scanAnalyze        = "/api/v1/scan/analyze"
 
     static func addToBookshelf(username: String) -> String {
         "/api/v1/users/\(username)/bookshelf"

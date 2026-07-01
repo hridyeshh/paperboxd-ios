@@ -8,6 +8,9 @@ struct UserProfile: Codable, Identifiable, Equatable {
     let bannerURL: String?
     let bio: String?
     let pronouns: [String]
+    let birthday: String?
+    let gender: String?
+    let links: [String]
     let isPublic: Bool
     let booksReadCount: Int
     let totalPagesRead: Int
@@ -21,7 +24,7 @@ struct UserProfile: Codable, Identifiable, Equatable {
     var isFollowing: Bool?
 
     enum CodingKeys: String, CodingKey {
-        case id, username, name, bio, pronouns
+        case id, username, name, bio, pronouns, birthday, gender, links
         case avatarURL = "avatar_url"
         case bannerURL = "banner_url"
         case isPublic = "is_public"

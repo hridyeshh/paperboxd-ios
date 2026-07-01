@@ -32,6 +32,31 @@ final class AppState: ObservableObject {
                 self?.currentScreen = .auth
             }
         }
+
+        // Keep the cached session user's avatar in sync after an edit-profile
+        // upload so re-mounts (and the dock's static `user` copy) see the new
+        // image instead of the stale one.
+        NotificationCenter.default.addObserver(
+            forName: .paperboxdAvatarUpdated,
+            object: nil,
+            queue: .main
+        ) { [weak self] note in
+            let url = note.userInfo?["url"] as? String
+            Task { @MainActor in
+                guard let self, let user = self.currentUser else { return }
+                let updated = User(
+                    id: user.id,
+                    username: user.username,
+                    email: user.email,
+                    avatarURL: url,
+                    level: user.level,
+                    xp: user.xp,
+                    onboardingCompleted: user.onboardingCompleted
+                )
+                self.currentUser = updated
+                KeychainManager.shared.saveUser(updated)
+            }
+        }
     }
 
     /// Boots the app: keychain → health → refresh. Sets currentScreen.
@@ -175,6 +200,7 @@ final class AppState: ObservableObject {
 
 extension Notification.Name {
     static let paperboxdSessionExpired = Notification.Name("paperboxd.sessionExpired")
+    static let paperboxdAvatarUpdated = Notification.Name("paperboxd.avatarUpdated")
     static let diaryEntryCreated = Notification.Name("paperboxd.diaryEntryCreated")
     static let diaryEntryDeleted = Notification.Name("paperboxd.diaryEntryDeleted")
 }

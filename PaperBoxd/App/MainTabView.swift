@@ -46,12 +46,29 @@ struct MainTabView: View {
     @State private var previousTab: DockTab = .home
     @State private var hideDock = false
     @State private var profileImage: Image?
+    @State private var showScan = false
 
     var body: some View {
-        if #available(iOS 26.0, *) {
-            nativeTabView
-        } else {
-            dock
+        Group {
+            if #available(iOS 26.0, *) {
+                nativeTabView
+            } else {
+                dock
+            }
+        }
+        // Scan & Know is a modal flow, not a tab destination. Intercept selection of
+        // the .scan tab: present the flow and bounce the selection back so the tab
+        // highlight never sticks on Scan.
+        .fullScreenCover(isPresented: $showScan) {
+            ScanFlowView()
+        }
+        .onChange(of: selectedTab) { _, newTab in
+            if newTab == .scan {
+                showScan = true
+                selectedTab = previousTab
+            } else {
+                previousTab = newTab
+            }
         }
     }
 
@@ -94,6 +111,13 @@ struct MainTabView: View {
             if profileImage == nil {
                 profileImage = await Self.loadCircularAvatar(from: user.avatarURL)
             }
+        }
+        // Reload the baked dock avatar when the user changes it in Edit Profile.
+        // The static `user.avatarURL` is stale by then, so rebuild from the URL
+        // the edit flow broadcasts.
+        .onReceive(NotificationCenter.default.publisher(for: .paperboxdAvatarUpdated)) { note in
+            let url = note.userInfo?["url"] as? String
+            Task { profileImage = await Self.loadCircularAvatar(from: url) }
         }
     }
 

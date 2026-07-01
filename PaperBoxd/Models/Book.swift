@@ -38,6 +38,14 @@ struct Book: Codable, Identifiable, Hashable {
     var categories: [String] { volumeInfo.categories ?? [] }
     var averageRating: Double? { volumeInfo.averageRating }
 
+    /// Best ISBN for this book — prefers ISBN-13, falls back to ISBN-10.
+    var isbn: String? {
+        let ids = volumeInfo.industryIdentifiers ?? []
+        return ids.first { $0.type == "ISBN_13" }?.identifier
+            ?? ids.first { $0.type == "ISBN_10" }?.identifier
+            ?? ids.first?.identifier
+    }
+
     /// Best available cover URL, largest to smallest. Forces HTTPS (Google Books returns http://).
     var coverURL: String? {
         let links = volumeInfo.imageLinks
@@ -60,6 +68,23 @@ extension Book {
         let averageRating: Double?
         let publisher: String?
         let language: String?
+        let industryIdentifiers: [IndustryIdentifier]?
+
+        init(title: String, authors: [String]?, publishedDate: String?, description: String?,
+             pageCount: Int?, categories: [String]?, imageLinks: ImageLinks?, averageRating: Double?,
+             publisher: String?, language: String?, industryIdentifiers: [IndustryIdentifier]? = nil) {
+            self.title = title
+            self.authors = authors
+            self.publishedDate = publishedDate
+            self.description = description
+            self.pageCount = pageCount
+            self.categories = categories
+            self.imageLinks = imageLinks
+            self.averageRating = averageRating
+            self.publisher = publisher
+            self.language = language
+            self.industryIdentifiers = industryIdentifiers
+        }
 
         enum CodingKeys: String, CodingKey {
             case title, authors, description, categories, publisher, language
@@ -67,7 +92,13 @@ extension Book {
             case pageCount = "pageCount"
             case imageLinks = "imageLinks"
             case averageRating = "averageRating"
+            case industryIdentifiers = "industryIdentifiers"
         }
+    }
+
+    struct IndustryIdentifier: Codable, Hashable {
+        let type: String       // e.g. "ISBN_13", "ISBN_10"
+        let identifier: String
     }
 
     struct ImageLinks: Codable, Hashable {

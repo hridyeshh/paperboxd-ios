@@ -7,6 +7,7 @@ struct ProfileView: View {
     @State private var shareItem: ShareItem?
     @State private var showEdit = false
     @State private var showBannerPicker = false
+    @State private var bannerCropTarget: CropTarget?
     @Environment(\.dismiss) private var dismiss
 
     init(username: String, viewer: User) {
@@ -62,8 +63,14 @@ struct ProfileView: View {
             }
         }
         .sheet(isPresented: $showBannerPicker) {
-            ImagePicker(source: .photoLibrary) { image in
-                guard let data = image.avatarJPEGData() else { return }
+            // Pick the raw image (no square crop), then crop wide in Mantis.
+            ImagePicker(source: .photoLibrary, allowsEditing: false) { image in
+                bannerCropTarget = CropTarget(image: image)
+            }
+        }
+        .fullScreenCover(item: $bannerCropTarget) { target in
+            ImageCropper(image: target.image, ratio: 2.3) { cropped in
+                guard let data = cropped.avatarJPEGData(maxDimension: 1600) else { return }
                 Task { await vm.uploadBanner(data) }
             }
         }

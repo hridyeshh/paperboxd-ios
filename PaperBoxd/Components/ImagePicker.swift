@@ -8,12 +8,15 @@ struct ImagePicker: UIViewControllerRepresentable {
     enum Source { case photoLibrary, camera }
 
     let source: Source
+    /// When true (default) UIKit shows its built-in square crop UI — right for
+    /// avatars. Banners pass false to receive the raw image and crop wide via Mantis.
+    var allowsEditing: Bool = true
     let onPick: (UIImage) -> Void
     @Environment(\.dismiss) private var dismiss
 
     func makeUIViewController(context: Context) -> UIImagePickerController {
         let picker = UIImagePickerController()
-        picker.allowsEditing = true
+        picker.allowsEditing = allowsEditing
         picker.delegate = context.coordinator
         switch source {
         case .photoLibrary:

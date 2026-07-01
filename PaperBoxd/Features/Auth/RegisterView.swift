@@ -36,9 +36,9 @@ struct RegisterView: View {
                     .foregroundStyle(.white)
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 13)
-            .background(.white.opacity(0.06), in: Capsule())
-            .overlay(Capsule().stroke(.white.opacity(0.13), lineWidth: 1))
+            .padding(.vertical, 14)
+            .background(.white.opacity(0.05))
+            .overlay(Rectangle().stroke(.white.opacity(0.85), lineWidth: 1.5))
         }
         .buttonStyle(ScaleButtonStyle())
         .disabled(viewModel.isLoading)
@@ -69,7 +69,7 @@ struct RegisterView: View {
                 .foregroundStyle(.white.opacity(0.55))
                 .padding(.horizontal, 10)
                 .padding(.vertical, 5)
-                .overlay(Capsule().stroke(.white.opacity(0.15), lineWidth: 1))
+                .overlay(Rectangle().stroke(.white.opacity(0.30), lineWidth: 1))
         }
         .padding(.horizontal, 26)
         .padding(.top, 20)
@@ -93,26 +93,8 @@ struct RegisterView: View {
         }
         .scrollBounceBehavior(.basedOnSize)
         .scrollDismissesKeyboard(.interactively)
-        .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
-        .background {
-            ZStack {
-                RoundedRectangle(cornerRadius: 28, style: .continuous)
-                    .fill(.ultraThinMaterial)
-                RoundedRectangle(cornerRadius: 28, style: .continuous)
-                    .fill(Color(red: 0.055, green: 0.055, blue: 0.065).opacity(0.54))
-                LinearGradient(
-                    colors: [.white.opacity(0.07), .clear],
-                    startPoint: .top,
-                    endPoint: UnitPoint(x: 0.5, y: 0.14)
-                )
-                .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
-            }
-        }
-        .overlay(
-            RoundedRectangle(cornerRadius: 28, style: .continuous)
-                .stroke(.white.opacity(0.10), lineWidth: 1)
-        )
-        .shadow(color: .black.opacity(0.62), radius: 58, x: 0, y: 34)
+        .clipShape(Rectangle())
+        .background(BrutalCard())
     }
 
     // MARK: - Card sections
@@ -216,14 +198,34 @@ struct RegisterView: View {
     }
 
     private var createButton: some View {
-        PrimaryButton(
-            "Create Account",
-            isLoading: viewModel.isLoading,
-            isEnabled: canSubmit
-        ) {
+        Button {
             Task { await viewModel.register() }
+        } label: {
+            ZStack {
+                if viewModel.isLoading {
+                    ProgressView().tint(.black)
+                } else {
+                    HStack(spacing: 8) {
+                        Text("Create Account")
+                        Image(systemName: "arrow.right")
+                            .font(.system(size: 13, weight: .semibold))
+                    }
+                    .font(.system(size: 14.5, weight: .semibold))
+                }
+            }
+            .foregroundStyle(.black)
+            .frame(maxWidth: .infinity)
+            .frame(height: 52)
+            .background(Color(red: 0.96, green: 0.95, blue: 0.93))
+            .overlay(Rectangle().stroke(.black.opacity(0.9), lineWidth: 2))
+            .shadow(color: .white.opacity(0.22), radius: 0, x: 4, y: 4)
+            .opacity(canSubmit ? 1 : 0.45)
         }
+        .buttonStyle(ScaleButtonStyle())
+        .disabled(!canSubmit || viewModel.isLoading)
         .padding(.top, 18)
+        .animation(.easeInOut(duration: 0.18), value: viewModel.isLoading)
+        .animation(.easeInOut(duration: 0.18), value: canSubmit)
     }
 
     private var signInLink: some View {

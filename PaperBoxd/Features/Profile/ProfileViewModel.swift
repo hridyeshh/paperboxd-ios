@@ -270,7 +270,9 @@ final class ProfileViewModel: ObservableObject {
                 p = UserProfile(
                     id: p.id, username: p.username, name: p.name, avatarURL: p.avatarURL,
                     bannerURL: p.bannerURL,
-                    bio: p.bio, pronouns: p.pronouns, isPublic: p.isPublic,
+                    bio: p.bio, pronouns: p.pronouns,
+                    birthday: p.birthday, gender: p.gender, links: p.links,
+                    isPublic: p.isPublic,
                     booksReadCount: p.booksReadCount, totalPagesRead: p.totalPagesRead,
                     favoritesCount: p.favoritesCount, listsCount: p.listsCount,
                     diaryEntriesCount: p.diaryEntriesCount,

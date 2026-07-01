@@ -47,27 +47,35 @@ struct ProfileHeaderView: View {
     // MARK: - Banner
 
     private var banner: some View {
-        ZStack {
-            if let urlStr = profile.bannerURL, let url = URL(string: urlStr) {
-                AsyncImage(url: url) { img in
-                    img.resizable().scaledToFill()
-                } placeholder: { spineStrip }
-            } else {
-                spineStrip
+        // A clear Rectangle owns the layout size (screen width × 168). The image
+        // lives in an .overlay, which is laid out *within* the host's bounds and
+        // never contributes to layout size — so an oversized uploaded banner can
+        // no longer push the whole profile wider than the screen.
+        Rectangle()
+            .fill(Color.clear)
+            .frame(maxWidth: .infinity)
+            .frame(height: 168)
+            .overlay {
+                if let urlStr = profile.bannerURL, let url = URL(string: urlStr) {
+                    AsyncImage(url: url) { img in
+                        img.resizable().scaledToFill()
+                    } placeholder: { spineStrip }
+                } else {
+                    spineStrip
+                }
             }
-
-            LinearGradient(
-                stops: [
-                    .init(color: Color("Background").opacity(0.05), location: 0),
-                    .init(color: Color("Background").opacity(0.65), location: 0.6),
-                    .init(color: Color("Background"), location: 1),
-                ],
-                startPoint: .top, endPoint: .bottom
-            )
-        }
-        .frame(height: 168)
-        .clipped()
-        .overlay(alignment: .topTrailing) {
+            .overlay {
+                LinearGradient(
+                    stops: [
+                        .init(color: Color("Background").opacity(0.05), location: 0),
+                        .init(color: Color("Background").opacity(0.65), location: 0.6),
+                        .init(color: Color("Background"), location: 1),
+                    ],
+                    startPoint: .top, endPoint: .bottom
+                )
+            }
+            .clipped()
+            .overlay(alignment: .topTrailing) {
             if let onEditBanner {
                 Button(action: onEditBanner) {
                     Image(systemName: "camera.fill")
