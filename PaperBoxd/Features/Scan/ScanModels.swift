@@ -239,6 +239,10 @@ enum ScanService {
             body: ["isbn": isbn],
             requiresAuth: true
         )
+        // Persist the live free-scan count for Settings + the result footers.
+        if let remaining = response.scansRemaining {
+            UserDefaults.standard.set(remaining, forKey: "pb_scans_remaining")
+        }
         return ScanResult(response: response)
     }
 

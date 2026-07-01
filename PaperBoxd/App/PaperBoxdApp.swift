@@ -5,6 +5,9 @@ struct PaperBoxdApp: App {
     @StateObject private var appState = AppState()
 
     init() {
+        // Free-scan quota defaults to 7 before the first scan writes a real count.
+        UserDefaults.standard.register(defaults: ["pb_scans_remaining": 7])
+
         // Force dark appearance project-wide. Belt-and-braces in case Info.plist
         // is missed in a build variant.
         UIWindow.appearance().overrideUserInterfaceStyle = .dark

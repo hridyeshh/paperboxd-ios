@@ -15,8 +15,12 @@ enum APIError: LocalizedError, Equatable {
     case unknown(code: String, message: String)
 
     /// Initialiser from the backend error envelope.
-    static func fromBackend(status: Int, code: String?, message: String?) -> APIError {
-        let msg = message ?? "Something went wrong"
+    ///
+    /// `errorCode` is the flat `error` string (e.g. "book_not_found"), `message`
+    /// the human-readable `message` field when the backend supplies one, and
+    /// `code` the structured code ("NOT_FOUND", …) used by older routes.
+    static func fromBackend(status: Int, code: String?, errorCode: String?, message: String?) -> APIError {
+        let msg = displayString(code: code, errorCode: errorCode, message: message)
         switch code {
         case "UNAUTHORIZED", "INVALID_TOKEN", "EXPIRED_TOKEN":
             return .unauthorized(message: msg)
@@ -43,6 +47,33 @@ enum APIError: LocalizedError, Equatable {
         }
     }
 
+    /// Builds the user-facing string. Prefers an explicit `message`, then a
+    /// friendly mapping for known machine codes, then any human string the
+    /// backend put in the flat `error` field.
+    private static func displayString(code: String?, errorCode: String?, message: String?) -> String {
+        if let message, !message.isEmpty {
+            return message
+        }
+        if let mapped = friendlyForCode(errorCode ?? code) {
+            return mapped
+        }
+        if let errorCode, !errorCode.isEmpty {
+            return errorCode
+        }
+        return "Something went wrong — please try again"
+    }
+
+    /// Maps known machine error codes to friendly copy. Returns nil for codes
+    /// that aren't recognised (e.g. human messages from older routes).
+    private static func friendlyForCode(_ code: String?) -> String? {
+        switch code {
+        case "book_not_found":  return "Couldn't find this book — try searching by title"
+        case "scans_exhausted": return "You've used all your free scans"
+        case "scoring_failed":  return "Something took too long — your scan hasn't been used"
+        default:                return nil
+        }
+    }
+
     var errorDescription: String? {
         switch self {
         case .transport(let m), .decoding(let m): return m
@@ -62,6 +93,8 @@ enum APIError: LocalizedError, Equatable {
 struct BackendErrorEnvelope: Decodable {
     let error: String?
     let code: String?
+    /// Explicit human-readable message (e.g. scan routes: `{error, message}`).
+    let message: String?
 
     struct NestedError: Decodable {
         let code: String?
@@ -69,22 +102,24 @@ struct BackendErrorEnvelope: Decodable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case error, code
+        case error, code, message
     }
 
-    init(error: String?, code: String?) {
+    init(error: String?, code: String?, message: String? = nil) {
         self.error = error
         self.code = code
+        self.message = message
     }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
 
-        var messageOut: String? = nil
+        var errorOut: String? = nil
         var codeOut: String? = nil
+        var messageOut: String? = nil
 
         if let str = try? c.decode(String.self, forKey: .error) {
-            messageOut = str
+            errorOut = str
         } else if let obj = try? c.decode(NestedError.self, forKey: .error) {
             messageOut = obj.message
             codeOut = obj.code
@@ -94,9 +129,14 @@ struct BackendErrorEnvelope: Decodable {
             codeOut = flat
         }
 
-        self.error = messageOut
+        if let m = try? c.decode(String.self, forKey: .message), !m.isEmpty {
+            messageOut = m
+        }
+
+        self.error = errorOut
         self.code = codeOut
+        self.message = messageOut
     }
 
-    static let empty = BackendErrorEnvelope(error: nil, code: nil)
+    static let empty = BackendErrorEnvelope(error: nil, code: nil, message: nil)
 }

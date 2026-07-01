@@ -13,8 +13,12 @@ struct AnalyzingScreen: View {
     /// real book instead of a placeholder while the backend works.
     let pendingTitle: String?
     let error: String?
+    /// True when `error` is the free-scan-quota 403 — shows a dedicated exhausted
+    /// layout (no game, no retry) instead of the generic error view.
+    var exhausted: Bool = false
     let onReveal: () -> Void
     let onRetry: () -> Void
+    var onBack: () -> Void = {}
     let onClose: () -> Void
 
     @State private var gameOpen = false
@@ -47,7 +51,9 @@ struct AnalyzingScreen: View {
         ZStack {
             SK.bg.ignoresSafeArea()
 
-            if let error {
+            if let error, exhausted {
+                exhaustedView(error)
+            } else if let error {
                 errorView(error)
             } else {
                 analysis
@@ -253,6 +259,27 @@ struct AnalyzingScreen: View {
             .padding(.horizontal, 14)
             .padding(.bottom, 22)
             .transition(.move(edge: .bottom).combined(with: .opacity))
+        }
+    }
+
+    // MARK: - Exhausted (free-scan quota used up)
+
+    private func exhaustedView(_ message: String) -> some View {
+        VStack(spacing: 16) {
+            Spacer()
+            Image(systemName: "hourglass")
+                .font(.system(size: 28)).foregroundStyle(SK.ink)
+            Text(message).font(PB.serif(18)).foregroundStyle(SK.ink)
+                .multilineTextAlignment(.center).padding(.horizontal, 40)
+            Text("Unlimited scans coming soon")
+                .font(.system(size: 13)).foregroundStyle(SK.sub)
+                .multilineTextAlignment(.center)
+            BruButton(title: "Back", action: onBack).padding(.horizontal, 40).padding(.top, 6)
+            Button(action: onClose) {
+                MonoLabel(text: "Close", size: 11, tracking: 1.4, color: SK.sub)
+            }
+            .buttonStyle(.plain)
+            Spacer()
         }
     }
 

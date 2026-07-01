@@ -12,6 +12,15 @@ struct RevealScreen: View {
     @State private var coverIn = false
     @State private var verdictIn = false
 
+    /// Score-band colour for the progress arc: green (strong), orange (mixed), red (weak).
+    private var arcColor: Color {
+        switch result.matchScore {
+        case 71...100: return Color.green
+        case 40...70:  return Color.orange
+        default:       return Color.red.opacity(0.8)
+        }
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             header
@@ -45,7 +54,10 @@ struct RevealScreen: View {
             Spacer()
             BruButton(title: "See the breakdown", trailing: "chevron.down", action: onBreakdown)
                 .padding(.horizontal, 24)
-                .padding(.bottom, 32)
+                .padding(.bottom, 12)
+                .opacity(verdictIn ? 1 : 0)
+            ScansRemainingFooter()
+                .padding(.bottom, 20)
                 .opacity(verdictIn ? 1 : 0)
         }
         .background(SK.bgSofter.ignoresSafeArea())
@@ -72,7 +84,7 @@ struct RevealScreen: View {
             Circle().stroke(SK.track, lineWidth: 8)
             Circle()
                 .trim(from: 0, to: ringProgress)
-                .stroke(SK.ink, style: StrokeStyle(lineWidth: 8, lineCap: .round))
+                .stroke(arcColor, style: StrokeStyle(lineWidth: 8, lineCap: .round))
                 .rotationEffect(.degrees(-90))
             HStack(alignment: .top, spacing: 2) {
                 CountUpText(target: result.matchScore, duration: 1.4,

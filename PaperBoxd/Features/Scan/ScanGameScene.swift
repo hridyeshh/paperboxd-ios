@@ -3,10 +3,9 @@ import UIKit
 
 /// Standalone breakout-style loading game for the "Scan & Know" flow.
 ///
-/// Phase 5 — an isolated, polished SpriteKit scene that plays while the backend
-/// scores a scan. It is NOT yet wired to the scan API (that's Phase 6). The scene
-/// owns only its own gameplay and the result-handshake contract documented on
-/// `handleScanResultReady`.
+/// A self-contained SpriteKit scene that plays while the backend scores a scan.
+/// The game never stops on its own — `AnalyzingScreen` surfaces the result as a
+/// "Results Ready" popup over the top, which is the real completion contract.
 ///
 /// Aesthetic mirrors the app's editorial dark theme (see `PBStyle` / Assets):
 /// near-black ground, muted warm/cool book-spine tones, paper-cream accents.
@@ -111,13 +110,6 @@ final class ScanGameScene: SKScene, SKPhysicsContactDelegate {
 
         lightHaptic.prepare()
         mediumHaptic.prepare()
-
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(handleScanResultReady),
-            name: Notification.Name("ScanResultReady"),
-            object: nil
-        )
     }
 
     deinit {
@@ -487,63 +479,6 @@ final class ScanGameScene: SKScene, SKPhysicsContactDelegate {
             generator.impactOccurred()
             generator.prepare()
         }
-    }
-
-    // MARK: - Result handshake (Phase 6 will post "ScanResultReady")
-
-    @objc func handleScanResultReady(_ notification: Notification) {
-        guard !isResolving else { return }
-        isResolving = true
-
-        // 1. Ease the ball to a stop over 0.5s (no abrupt freeze).
-        if let body = ball.physicsBody {
-            let v0 = body.velocity
-            let slow = SKAction.customAction(withDuration: 0.5) { _, elapsed in
-                let k = max(0, 1 - elapsed / 0.5)
-                body.velocity = CGVector(dx: v0.dx * k, dy: v0.dy * k)
-            }
-            ball.run(.sequence([slow, .run { body.velocity = .zero }]))
-        }
-
-        // 2. Paddle input is now ignored (isResolving checked in movePaddle).
-
-        // 3. Semi-transparent dark overlay, fading in over 0.3s.
-        let overlay = SKSpriteNode(color: SKColor(white: 0.02, alpha: 1), size: size)
-        overlay.position = CGPoint(x: size.width / 2, y: size.height / 2)
-        overlay.alpha = 0
-        overlay.zPosition = 100
-        overlay.name = "resultOverlay"
-        addChild(overlay)
-        overlay.run(.fadeAlpha(to: 0.72, duration: 0.3))
-
-        // 4. Centered, subtly pulsing "Your result is ready".
-        let label = SKLabelNode(fontNamed: "Georgia")
-        label.text = "Your result is ready"
-        label.fontSize = 22
-        label.fontColor = textPrimary
-        label.verticalAlignmentMode = .center
-        label.position = CGPoint(x: size.width / 2, y: size.height / 2)
-        label.alpha = 0
-        label.zPosition = 101
-        addChild(label)
-        label.run(.fadeIn(withDuration: 0.3))
-        let pulse = SKAction.sequence([
-            .scale(to: 1.06, duration: 0.6),
-            .scale(to: 0.97, duration: 0.6),
-        ])
-        pulse.timingMode = .easeInEaseOut
-        label.run(.repeatForever(pulse))
-
-        // 5. After 0.8s, hand off to the hosting SwiftUI view (Phase 7 consumes this).
-        run(.sequence([
-            .wait(forDuration: 0.8),
-            .run {
-                NotificationCenter.default.post(
-                    name: Notification.Name("ScanGameReadyToTransition"),
-                    object: nil
-                )
-            },
-        ]))
     }
 
     // MARK: - Texture helpers

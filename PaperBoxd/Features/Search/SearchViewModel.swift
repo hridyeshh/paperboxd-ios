@@ -177,32 +177,19 @@ final class SearchViewModel: ObservableObject {
         isLoadingWall = true
         defer { isLoadingWall = false }
 
-        // Backend `latest` is deterministic. Randomize page + cache-bust query param
-        // so every refresh fetches a different slice. Local shuffle for in-page variety.
-        let randomPage = Int.random(in: 1...8)
-        let cacheBust = Int(Date().timeIntervalSince1970)
-        let path = "\(Endpoints.latestBooks)?page=\(randomPage)&page_size=24&_=\(cacheBust)"
+        // `/books/random` returns a fresh `ORDER BY RANDOM()` slice server-side,
+        // so every pull-to-refresh yields a genuinely different wall.
         let resp: BookListResponse? = try? await APIClient.shared.request(
-            path: path,
+            path: Endpoints.randomBooks + "?page_size=24",
             method: .get,
             requiresAuth: false
         )
-        var items = resp?.items ?? []
-
-        if items.isEmpty && randomPage != 1 {
-            let fallbackPath = "\(Endpoints.latestBooks)?page=1&page_size=24&_=\(cacheBust)"
-            let fallback: BookListResponse? = try? await APIClient.shared.request(
-                path: fallbackPath,
-                method: .get,
-                requiresAuth: false
-            )
-            items = fallback?.items ?? []
-        }
-
+        let items = resp?.items ?? []
         if !items.isEmpty {
-            wallBooks = items.shuffled()
+            wallBooks = items
             wallPage = 1
-            wallHasMore = items.count == 24
+            // Random feed isn't paginated; stop infinite-scroll from re-fetching `latest`.
+            wallHasMore = false
         }
     }
 

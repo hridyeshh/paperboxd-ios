@@ -120,7 +120,7 @@ import SwiftUI
             onFollow: {},
             onMessage: {},
             onEdit: {},
-            onShare: {},
+            onSettings: {},
             onFollowers: {},
             onFollowing: {}
         )

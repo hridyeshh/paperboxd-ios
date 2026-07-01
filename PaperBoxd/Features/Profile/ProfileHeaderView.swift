@@ -9,7 +9,7 @@ struct ProfileHeaderView: View {
     let onFollow: () -> Void
     let onMessage: () -> Void
     let onEdit: () -> Void
-    let onShare: () -> Void
+    let onSettings: () -> Void
     let onFollowers: () -> Void
     let onFollowing: () -> Void
     var onEditBanner: (() -> Void)? = nil
@@ -75,20 +75,30 @@ struct ProfileHeaderView: View {
                 )
             }
             .clipped()
-            .overlay(alignment: .topTrailing) {
-            if let onEditBanner {
-                Button(action: onEditBanner) {
-                    Image(systemName: "camera.fill")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .frame(width: 32, height: 32)
-                        .background(.black.opacity(0.45), in: Circle())
+            // Editorial "edit cover" chip, anchored to the cover's own corner and
+            // riding the banner's bottom gradient scrim (legible without a hard
+            // black circle). Mono label + outline icon match the app's vocabulary.
+            .overlay(alignment: .bottomTrailing) {
+                if let onEditBanner {
+                    Button(action: onEditBanner) {
+                        HStack(spacing: 5) {
+                            Image(systemName: "camera")
+                                .font(.system(size: 11, weight: .semibold))
+                            Text("Edit cover")
+                                .font(PB.mono(9.5, .medium))
+                                .tracking(1.2)
+                        }
+                        .foregroundStyle(.white.opacity(0.95))
+                        .padding(.horizontal, 11)
+                        .padding(.vertical, 6)
+                        .background(.black.opacity(0.30), in: Capsule())
+                        .overlay(Capsule().strokeBorder(.white.opacity(0.22), lineWidth: 0.5))
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.trailing, 14)
+                    .padding(.bottom, 14)
                 }
-                .buttonStyle(.plain)
-                .padding(.top, 52)
-                .padding(.trailing, 14)
             }
-        }
     }
 
     private var spineStrip: some View {
@@ -213,7 +223,7 @@ struct ProfileHeaderView: View {
         HStack(spacing: 8) {
             if isOwnProfile {
                 PillButton(title: "Edit profile", style: .primary, action: onEdit)
-                PillButton(title: "Share profile", style: .ghost, action: onShare)
+                PillButton(title: "Settings", systemImage: "gearshape", style: .ghost, action: onSettings)
             } else {
                 let following = profile.isFollowing ?? false
                 PillButton(

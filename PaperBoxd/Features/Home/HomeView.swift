@@ -127,9 +127,9 @@ struct HomeView: View {
                         }
                         .buttonStyle(.plain)
 
-                        Button {
-                            // Log pages flow — Phase 4
-                        } label: {
+                        // Opens the book detail, where PageProgressView lets the
+                        // user log today's pages.
+                        NavigationLink(value: lb.bookID) {
                             HStack(spacing: 6) {
                                 Text("Log today's pages")
                                     .font(.system(size: 14, weight: .semibold))

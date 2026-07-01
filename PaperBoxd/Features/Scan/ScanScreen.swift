@@ -8,8 +8,9 @@ struct ScanScreen: View {
     let onScanIt: (String, String?) -> Void
     let onClose: () -> Void
 
-    private enum FallbackKind { case denied, unavailable }
+    private enum FallbackKind { case denied, unavailable, offline }
 
+    @ObservedObject private var net = NetworkMonitor.shared
     @State private var scannedISBN: String?
     @State private var status: BarcodeScannerView.Status = .scanning
     @State private var sweep = false
@@ -24,8 +25,12 @@ struct ScanScreen: View {
         ZStack {
             Color.black.ignoresSafeArea()
 
-            BarcodeScannerView(onCode: handleCode, onStatus: { status = $0 }, torchOn: torchOn)
-                .ignoresSafeArea()
+            // Offline: never start the camera — the analyze call would fail anyway.
+            // Show the offline fallback card instead (see below).
+            if net.isOnline {
+                BarcodeScannerView(onCode: handleCode, onStatus: { status = $0 }, torchOn: torchOn)
+                    .ignoresSafeArea()
+            }
 
             // Top + bottom washes for legibility over the live feed.
             VStack {
@@ -47,7 +52,9 @@ struct ScanScreen: View {
 
             VStack(spacing: 14) {
                 Spacer()
-                if let isbn = scannedISBN {
+                if !net.isOnline {
+                    fallbackCard(.offline)
+                } else if let isbn = scannedISBN {
                     isbnCard(isbn).transition(.move(edge: .bottom).combined(with: .opacity))
                 } else if status == .denied {
                     fallbackCard(.denied)
@@ -201,15 +208,13 @@ struct ScanScreen: View {
 
     private func fallbackCard(_ kind: FallbackKind) -> some View {
         VStack(spacing: 10) {
-            Image(systemName: kind == .denied ? "lock.fill" : "camera.fill")
+            Image(systemName: fallbackIcon(kind))
                 .font(.system(size: 20))
                 .foregroundStyle(Color("Accent"))
-            Text(kind == .denied ? "Camera access needed" : "Camera unavailable")
+            Text(fallbackTitle(kind))
                 .font(PB.serif(16))
                 .foregroundStyle(Color("TextPrimary"))
-            Text(kind == .denied
-                 ? "Enable camera access to scan a book's barcode."
-                 : "This device has no camera — try on your phone.")
+            Text(fallbackBody(kind))
                 .font(.system(size: 12))
                 .foregroundStyle(Color("TextSecondary"))
                 .multilineTextAlignment(.center)
@@ -233,6 +238,30 @@ struct ScanScreen: View {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .strokeBorder(Color("Border"), lineWidth: 1)
         )
+    }
+
+    private func fallbackIcon(_ kind: FallbackKind) -> String {
+        switch kind {
+        case .denied:      return "lock.fill"
+        case .unavailable: return "camera.fill"
+        case .offline:     return "wifi.slash"
+        }
+    }
+
+    private func fallbackTitle(_ kind: FallbackKind) -> String {
+        switch kind {
+        case .denied:      return "Camera access needed"
+        case .unavailable: return "Camera unavailable"
+        case .offline:     return "No internet connection"
+        }
+    }
+
+    private func fallbackBody(_ kind: FallbackKind) -> String {
+        switch kind {
+        case .denied:      return "Enable camera access to scan a book's barcode."
+        case .unavailable: return "This device has no camera — try on your phone."
+        case .offline:     return "Scanning needs a connection to score your book. Reconnect and try again."
+        }
     }
 
     private func openSettings() {

@@ -7,8 +7,10 @@ struct ProfileView: View {
     @State private var shareItem: ShareItem?
     @State private var showEdit = false
     @State private var showBannerPicker = false
+    @State private var showSettings = false
     @State private var bannerCropTarget: CropTarget?
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var appState: AppState
 
     init(username: String, viewer: User) {
         _vm = StateObject(wrappedValue: ProfileViewModel(username: username, viewer: viewer))
@@ -62,6 +64,14 @@ struct ProfileView: View {
                 }
             }
         }
+        .sheet(isPresented: $showSettings) {
+            if let profile = vm.profile {
+                SettingsView(profile: profile) {
+                    showSettings = false
+                    appState.signOut()
+                }
+            }
+        }
         .sheet(isPresented: $showBannerPicker) {
             // Pick the raw image (no square crop), then crop wide in Mantis.
             ImagePicker(source: .photoLibrary, allowsEditing: false) { image in
@@ -96,8 +106,13 @@ struct ProfileView: View {
                 .foregroundStyle(.white.opacity(0.95))
                 .shadow(color: .black.opacity(0.4), radius: 6, y: 1)
             Spacer()
-            // right side intentionally empty (settings + ellipsis removed)
-            Color.clear.frame(width: 36, height: 36)
+            // Share lives with the nav chrome (matches the back chevron);
+            // settings moved down to the action row. Own profile only.
+            if vm.isOwnProfile {
+                circleButton(systemName: "square.and.arrow.up") { shareProfile() }
+            } else {
+                Color.clear.frame(width: 36, height: 36)
+            }
         }
         .padding(.horizontal, 12)
         .padding(.top, 8)
@@ -135,7 +150,7 @@ struct ProfileView: View {
                         onFollow: { Task { await vm.toggleFollow() } },
                         onMessage: { },
                         onEdit: { showEdit = true },
-                        onShare: shareProfile,
+                        onSettings: { showSettings = true },
                         onFollowers: { showFollowers = true },
                         onFollowing: { showFollowing = true },
                         onEditBanner: vm.isOwnProfile ? { showBannerPicker = true } : nil

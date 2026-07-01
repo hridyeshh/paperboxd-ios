@@ -14,6 +14,8 @@ struct ScanFlowView: View {
     @State private var pendingTitle: String?
     @State private var result: ScanResult?
     @State private var loadError: String?
+    /// The scan endpoint's only 403 is `scans_exhausted`; drives the exhausted layout.
+    @State private var loadErrorExhausted = false
 
     var body: some View {
         ZStack {
@@ -25,8 +27,10 @@ struct ScanFlowView: View {
                     .transition(.opacity)
             case .analyzing:
                 AnalyzingScreen(book: result, pendingTitle: pendingTitle, error: loadError,
+                                exhausted: loadErrorExhausted,
                                 onReveal: { go(.reveal) },
                                 onRetry: { startScan(isbn, title: pendingTitle) },
+                                onBack: { go(.scan) },
                                 onClose: { dismiss() })
                     .transition(.opacity)
             case .reveal:
@@ -50,20 +54,25 @@ struct ScanFlowView: View {
         pendingTitle = title
         result = nil
         loadError = nil
+        loadErrorExhausted = false
         go(.analyzing)
         Task {
             do {
                 let r = try await ScanService.analyze(isbn: code)
                 await MainActor.run { withAnimation { result = r } }
             } catch {
-                await MainActor.run { loadError = friendlyMessage(error) }
+                await MainActor.run {
+                    loadError = friendlyMessage(error)
+                    // The scan endpoint returns 403 only when free scans are used up.
+                    if case .forbidden = error as? APIError { loadErrorExhausted = true }
+                }
             }
         }
     }
 
     private func friendlyMessage(_ error: Error) -> String {
         if case .decoding = error as? APIError { return "Couldn't read the score. Try again." }
-        if case .transport = error as? APIError { return "Network hiccup. Check your connection." }
+        if case .transport = error as? APIError { return "No internet connection" }
         return (error as? APIError)?.errorDescription ?? "Something went wrong. Try again."
     }
 

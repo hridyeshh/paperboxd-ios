@@ -16,6 +16,7 @@ enum Endpoints {
 
     // Authenticated mobile user endpoints
     static let mobileUpdateMe  = "/api/mobile/users/me"
+    static let deleteMe        = "/api/v1/users/me"   // DELETE — soft-deletes account
 
     // Onboarding (web v1 routes — accept the mobile bearer token)
     static let saveOnboarding     = "/api/v1/users/me/onboarding"
@@ -68,6 +69,7 @@ enum Endpoints {
     // Books — trending wall feed (already exists; surfacing in iOS)
     static let publicBooks = "/api/v1/books/public"
     static let latestBooks = "/api/v1/books/latest"
+    static let randomBooks = "/api/v1/books/random"
 
     // Activities
     static let followingActivities = "/api/v1/activities/following"

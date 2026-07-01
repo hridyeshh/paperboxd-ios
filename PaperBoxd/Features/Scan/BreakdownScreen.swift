@@ -22,6 +22,9 @@ struct BreakdownScreen: View {
                 whySection
                 sourcesCaption
                 actions
+                notForMe
+                ScansRemainingFooter()
+                    .frame(maxWidth: .infinity)
             }
             .padding(.horizontal, 26)
             .padding(.top, 16)
@@ -173,6 +176,21 @@ struct BreakdownScreen: View {
             }
             .buttonStyle(.plain)
         }
+    }
+
+    /// Ghost dismiss — closes the result and returns to the scan entry state.
+    /// No negative signal logged, no API call (same dismiss path as the ✕ button).
+    private var notForMe: some View {
+        Button {
+            onClose()
+        } label: {
+            Text("Not for me")
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+        }
+        .buttonStyle(.plain)
     }
 
     /// Text shared from the breakdown — book, personal match, and app attribution.

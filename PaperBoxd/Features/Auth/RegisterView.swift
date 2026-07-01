@@ -25,12 +25,10 @@ struct RegisterView: View {
             Task { await viewModel.loginWithGoogle() }
         } label: {
             HStack(spacing: 10) {
-                ZStack {
-                    Circle().fill(.white).frame(width: 18, height: 18)
-                    Text("G")
-                        .font(.system(size: 12, weight: .bold))
-                        .foregroundStyle(Color(red: 0.26, green: 0.52, blue: 0.96))
-                }
+                Image("GoogleLogo")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 18, height: 18)
                 Text("Continue with Google")
                     .font(.system(size: 14.5, weight: .semibold))
                     .foregroundStyle(.white)

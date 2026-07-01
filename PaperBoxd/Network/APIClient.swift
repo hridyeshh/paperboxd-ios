@@ -156,7 +156,8 @@ actor APIClient {
         let typed = APIError.fromBackend(
             status: http.statusCode,
             code: envelope.code,
-            message: envelope.error
+            errorCode: envelope.error,
+            message: envelope.message
         )
 
         if http.statusCode == 401 {

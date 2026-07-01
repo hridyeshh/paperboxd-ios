@@ -238,12 +238,10 @@ struct LoginView: View {
     }
 
     private var googleLogo: some View {
-        ZStack {
-            Circle().fill(.white).frame(width: 18, height: 18)
-            Text("G")
-                .font(.system(size: 12, weight: .bold))
-                .foregroundStyle(Color(red: 0.26, green: 0.52, blue: 0.96))
-        }
+        Image("GoogleLogo")
+            .resizable()
+            .scaledToFit()
+            .frame(width: 18, height: 18)
     }
 
     private var registerLink: some View {
@@ -279,5 +277,45 @@ struct ScaleButtonStyle: ButtonStyle {
         configuration.label
             .scaleEffect(configuration.isPressed ? 0.97 : 1)
             .animation(.easeInOut(duration: 0.11), value: configuration.isPressed)
+    }
+}
+
+/// The official four-colour Google "G", drawn as a stroked ring split into
+/// red / yellow / green / blue arcs plus the blue horizontal bar. Full-colour
+/// on any background (Google permits the colour mark on dark surfaces), so no
+/// white chip is needed. Trim fractions start at 3 o'clock and run clockwise.
+struct GoogleGLogo: View {
+    var size: CGFloat = 18
+
+    private let blue   = Color(red: 0.259, green: 0.522, blue: 0.957)
+    private let red    = Color(red: 0.918, green: 0.263, blue: 0.208)
+    private let yellow = Color(red: 0.984, green: 0.737, blue: 0.020)
+    private let green  = Color(red: 0.204, green: 0.659, blue: 0.325)
+
+    var body: some View {
+        let lw = size * 0.26
+        ZStack {
+            // Ring: blue wraps the 3 o'clock seam (where the bar exits),
+            // green bottom, yellow left, red over the top.
+            segment(0.833, 1.0, blue, lw)
+            segment(0.0, 0.166, blue, lw)
+            segment(0.166, 0.333, green, lw)
+            segment(0.333, 0.583, yellow, lw)
+            segment(0.583, 0.833, red, lw)
+
+            // Blue crossbar: from centre out to the right edge, on the midline.
+            Rectangle()
+                .fill(blue)
+                .frame(width: size * 0.40, height: lw)
+                .offset(x: size * 0.15)
+        }
+        .frame(width: size, height: size)
+    }
+
+    private func segment(_ from: CGFloat, _ to: CGFloat, _ color: Color, _ lw: CGFloat) -> some View {
+        Circle()
+            .trim(from: from, to: to)
+            .stroke(color, style: StrokeStyle(lineWidth: lw, lineCap: .butt))
+            .padding(lw / 2)
     }
 }
