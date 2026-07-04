@@ -17,14 +17,14 @@ struct NotificationsView: View {
                     emptyState
                 } else {
                     ScrollView {
-                        LazyVStack(spacing: 0) {
+                        LazyVStack(spacing: 14) {
                             ForEach(activities) { activity in
                                 row(activity)
-                                Rectangle().fill(Color("Border").opacity(0.5)).frame(height: 1)
-                                    .padding(.leading, 64)
                             }
                         }
-                        .padding(.top, 4)
+                        .padding(.horizontal, 20)
+                        .padding(.top, 14)
+                        .padding(.bottom, 24)
                     }
                 }
             }
@@ -40,6 +40,8 @@ struct NotificationsView: View {
                 BookDetailView(bookId: bookId, user: user)
             }
         }
+        .environment(\.colorScheme, .light)
+        .preferredColorScheme(.light)
     }
 
     @ViewBuilder
@@ -47,10 +49,10 @@ struct NotificationsView: View {
         Button {
             if let bookId = a.bookID { path.append(bookId) }
         } label: {
-            HStack(alignment: .top, spacing: 12) {
+            HStack(alignment: .top, spacing: 11) {
                 AvatarView(url: a.avatarURL, size: 38)
 
-                VStack(alignment: .leading, spacing: 3) {
+                VStack(alignment: .leading, spacing: 6) {
                     (
                         Text("@\(a.username) ").font(.system(size: 13, weight: .semibold)).foregroundStyle(Color("TextPrimary"))
                         + Text(a.verbPhrase).font(.system(size: 13)).foregroundStyle(Color("TextSecondary"))
@@ -59,14 +61,34 @@ struct NotificationsView: View {
                     .lineLimit(3)
                     .multilineTextAlignment(.leading)
 
-                    Text(a.relativeTime)
+                    Text(a.relativeTime.uppercased())
                         .font(PB.mono(10))
+                        .tracking(0.8)
                         .foregroundStyle(Color("TextSecondary"))
                 }
-                Spacer(minLength: 0)
+
+                Spacer(minLength: 6)
+
+                Circle()
+                    .fill(Color("Accent"))
+                    .frame(width: 7, height: 7)
+                    .padding(.top, 5)
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
+            .padding(13)
+            // Moderate brutalism: card surface, thin ink border, small hard
+            // offset shadow (not the heavy 5–6px the design mockup uses).
+            .background(Color("Surface"))
+            .overlay(
+                RoundedRectangle(cornerRadius: 3)
+                    .strokeBorder(Color("TextPrimary"), lineWidth: 1.5)
+            )
+            .background(
+                RoundedRectangle(cornerRadius: 3)
+                    .fill(Color("TextPrimary"))
+                    .offset(x: 3, y: 3)
+            )
+            .padding(.trailing, 3)
+            .padding(.bottom, 3)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

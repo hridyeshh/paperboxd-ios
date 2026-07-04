@@ -1,18 +1,17 @@
 import SwiftUI
 
-/// Share options for a book — renders a story/square card and routes it to
-/// Instagram Stories, the system share sheet, the photo library, or the clipboard.
+/// Share options for a book — renders the web-style story/square card and routes
+/// it to Instagram Stories, the system share sheet, the photo library, or the clipboard.
 struct BookShareSheet: View {
     let book: Book
     let user: User?
     var status: ShareStatus = .reading
+    var userRating: Int? = nil
 
     @Environment(\.dismiss) private var dismiss
 
     @State private var coverImage: UIImage?
-    @State private var accent: Color = PB.terracotta
     @State private var format: BookShareCardView.Format = .story
-    @State private var theme: ColorScheme = .dark
     @State private var rendered: UIImage?
     @State private var isPreparing = true
     @State private var showSystemShare = false
@@ -84,16 +83,8 @@ struct BookShareSheet: View {
     private var preview: some View {
         Group {
             if let rendered {
-                // Color.clear fixes the container size; background = blurred fill
-                // (so no empty bars), overlay = crisp card scaled to fully fit.
+                // Color.clear fixes the container size; the card scales to fit.
                 Color.clear
-                    .background(
-                        Image(uiImage: rendered)
-                            .resizable()
-                            .scaledToFill()
-                            .blur(radius: 30)
-                            .opacity(0.6)
-                    )
                     .overlay(
                         Image(uiImage: rendered)
                             .resizable()
@@ -120,39 +111,13 @@ struct BookShareSheet: View {
     }
 
     private var controlsRow: some View {
-        HStack(spacing: 10) {
-            HStack(spacing: 6) {
-                formatPill("Story", .story)
-                formatPill("Square", .square)
-            }
-            .padding(4)
-            .background(Color("Surface"), in: Capsule())
-
-            HStack(spacing: 6) {
-                themePill("Dark", .dark)
-                themePill("Light", .light)
-            }
-            .padding(4)
-            .background(Color("Surface"), in: Capsule())
+        HStack(spacing: 6) {
+            formatPill("Story", .story)
+            formatPill("Square", .square)
         }
+        .padding(4)
+        .background(Color("Surface"), in: Capsule())
         .padding(.top, 6)
-    }
-
-    private func themePill(_ label: String, _ t: ColorScheme) -> some View {
-        Button {
-            guard theme != t else { return }
-            theme = t
-            rerender()
-        } label: {
-            Text(label)
-                .font(.system(size: 13, weight: theme == t ? .semibold : .medium))
-                .foregroundStyle(theme == t ? Color("Background") : Color("TextSecondary"))
-                .padding(.horizontal, 18).padding(.vertical, 8)
-                .background(
-                    Capsule().fill(theme == t ? Color("TextPrimary") : Color.clear)
-                )
-        }
-        .buttonStyle(.plain)
     }
 
     private func formatPill(_ label: String, _ f: BookShareCardView.Format) -> some View {
@@ -301,9 +266,6 @@ struct BookShareSheet: View {
            let (data, _) = try? await URLSession.shared.data(from: url),
            let img = UIImage(data: data) {
             coverImage = img
-            if let avg = img.averageColor {
-                accent = cardAccent(from: avg)
-            }
         }
         rerender()
         isPreparing = false
@@ -314,25 +276,12 @@ struct BookShareSheet: View {
         let composition = ShareComposition(
             title: book.title,
             author: book.authorLine,
-            year: book.publishedYear,
-            rating: book.averageRating,
-            note: nil,
             coverImage: coverImage,
-            accent: accent,
             handle: handle,
-            status: status,
-            theme: theme,
+            rating: userRating,
             format: format
         )
-        rendered = ShareService.render(composition, baseSize: format.frameSize, scale: format.renderScale)
-    }
-
-    /// Darkens/saturates the cover's average color so light covers still read
-    /// as a rich backdrop rather than washing out the top of the card.
-    private func cardAccent(from c: UIColor) -> Color {
-        var h: CGFloat = 0, s: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
-        c.getHue(&h, saturation: &s, brightness: &b, alpha: &a)
-        return Color(hue: Double(h), saturation: Double(min(s * 1.15, 1)), brightness: Double(min(b, 0.5)))
+        rendered = ShareService.render(composition, baseSize: format.baseSize, scale: format.renderScale)
     }
 }
 

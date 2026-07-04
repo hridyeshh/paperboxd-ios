@@ -52,7 +52,6 @@ struct ShelfGridView: View {
     let books: [BookWithStatus]
     let isLoading: Bool
     var onAppearItem: (BookWithStatus) async -> Void
-    var onTapBook: (String) -> Void
 
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 8), count: 3)
 
@@ -62,9 +61,11 @@ struct ShelfGridView: View {
         } else {
             LazyVGrid(columns: columns, spacing: 8) {
                 ForEach(books) { item in
-                    GridCoverCell(url: item.coverURL)
-                        .onTapGesture { onTapBook(item.id) }
-                        .onAppear { Task { await onAppearItem(item) } }
+                    NavigationLink(value: item.id) {
+                        GridCoverCell(url: item.coverURL)
+                    }
+                    .buttonStyle(.plain)
+                    .onAppear { Task { await onAppearItem(item) } }
                 }
                 if isLoading {
                     ForEach(0..<6, id: \.self) { _ in

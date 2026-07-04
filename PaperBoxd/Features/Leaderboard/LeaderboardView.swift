@@ -4,6 +4,18 @@ struct LeaderboardView: View {
     @StateObject private var vm: LeaderboardViewModel
     @State private var path = NavigationPath()
 
+    // Leaderboard is light-mode only (app window is globally forced dark and the
+    // asset colors are single-appearance dark). Fixed light values — same approach
+    // as home / search / book page. Mirrors "Leaderboard - Brutalist Mobile.html".
+    private let lbBg     = Color(red: 0.949, green: 0.929, blue: 0.882) // paper  #f2ede1
+    private let lbCard   = Color(red: 0.992, green: 0.984, blue: 0.965) // card   #fdfbf6
+    private let lbSoft   = Color(red: 0.914, green: 0.886, blue: 0.820) // soft   #e9e2d1
+    private let lbInk    = Color(red: 0.082, green: 0.082, blue: 0.075) // ink    #151513
+    private let lbMuted  = Color(red: 0.416, green: 0.392, blue: 0.337) // muted  #6a6456
+    private let lbFaint  = Color(red: 0.702, green: 0.671, blue: 0.600) // faint  #b3ab99
+    private let lbLine   = Color(red: 0.902, green: 0.874, blue: 0.816) // line   #e6dfd0
+    private let lbAccent = Color(red: 0.824, green: 0.231, blue: 0.149) // accent #d23b26
+
     init(viewer: User) {
         _vm = StateObject(wrappedValue: LeaderboardViewModel(viewer: viewer))
     }
@@ -17,7 +29,7 @@ struct LeaderboardView: View {
     var body: some View {
         NavigationStack(path: $path) {
             ZStack(alignment: .top) {
-                Color("Background").ignoresSafeArea()
+                lbBg.ignoresSafeArea()
 
                 VStack(spacing: 0) {
                     header
@@ -37,6 +49,8 @@ struct LeaderboardView: View {
                 ProfileView(username: dest.username, viewer: vm.viewer)
             }
         }
+        .environment(\.colorScheme, .light)   // leaderboard is light-mode only
+        .preferredColorScheme(.light)
     }
 
     // MARK: - Header
@@ -46,7 +60,7 @@ struct LeaderboardView: View {
             Eyebrow(text: "Ranked by devotion")
             Text("The Reading Order")
                 .font(PB.serif(30, .bold))
-                .foregroundStyle(Color("TextPrimary"))
+                .foregroundStyle(lbInk)
                 .lineLimit(2)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -58,25 +72,28 @@ struct LeaderboardView: View {
     // MARK: - Tab bar
 
     private var tabBar: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 6) {
-                ForEach(LeaderboardTab.allCases) { t in
-                    Button { vm.tab = t } label: {
-                        Text(t.label)
-                            .font(.system(size: 13, weight: vm.tab == t ? .semibold : .medium))
-                            .foregroundStyle(vm.tab == t ? Color("Background") : Color("TextSecondary"))
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 8)
-                            .background(
-                                Capsule().fill(vm.tab == t ? Color("TextPrimary") : Color("Surface"))
-                            )
-                    }
-                    .buttonStyle(.plain)
+        HStack(spacing: 6) {
+            ForEach(LeaderboardTab.allCases) { t in
+                let on = vm.tab == t
+                Button { vm.tab = t } label: {
+                    Text(t.label)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(on ? lbInk : lbMuted)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                        .background(
+                            Capsule().fill(on ? lbCard : Color.clear)
+                                .shadow(color: on ? .black.opacity(0.10) : .clear, radius: 3, y: 2)
+                        )
                 }
+                .buttonStyle(.plain)
             }
-            .padding(.horizontal, 18)
         }
-        .padding(.bottom, 12)
+        .padding(6)
+        .background(Capsule().fill(lbSoft))
+        .padding(.horizontal, 18)
+        .padding(.top, 6)
+        .padding(.bottom, 16)
     }
 
     // MARK: - Content
@@ -84,13 +101,13 @@ struct LeaderboardView: View {
     @ViewBuilder
     private var content: some View {
         if vm.isLoading && vm.entries.isEmpty {
-            ProgressView().tint(Color("Accent")).frame(maxHeight: .infinity)
+            ProgressView().tint(lbAccent).frame(maxHeight: .infinity)
         } else if let err = vm.errorMessage, vm.entries.isEmpty {
             errorView(err)
         } else if vm.entries.isEmpty {
             emptyView
         } else {
-            ScrollView {
+            BrutalistRefreshable(onRefresh: { await vm.refresh() }) {
                 VStack(spacing: 18) {
                     if top3.count == 3 {
                         podium
@@ -101,7 +118,6 @@ struct LeaderboardView: View {
                 .padding(.top, 4)
                 .padding(.bottom, 180)
             }
-            .refreshable { await vm.refresh() }
         }
     }
 
@@ -122,49 +138,50 @@ struct LeaderboardView: View {
     }
 
     private func podiumCard(_ entry: LeaderboardEntry, rank: Int) -> some View {
-        let medal = LBMedal.color(rank)
+        let isFirst = rank == 1
+        let shadowColor = isFirst ? lbAccent : lbInk
+        let shadowOffset: CGFloat = isFirst ? 6 : 5
         return Button {
             path.append(LBUserDestination(username: entry.username))
         } label: {
             VStack(spacing: 0) {
+                // hard square medal — ink (accent for #1)
                 Text("\(rank)")
-                    .font(PB.serif(13, .bold))
-                    .foregroundStyle(medal)
-                    .frame(width: rank == 1 ? 28 : 24, height: rank == 1 ? 28 : 24)
-                    .overlay(Circle().strokeBorder(medal, lineWidth: 2))
-                    .padding(.bottom, 9)
+                    .font(.system(size: isFirst ? 14 : 12, weight: .heavy))
+                    .foregroundStyle(lbCard)
+                    .frame(width: isFirst ? 26 : 22, height: isFirst ? 26 : 22)
+                    .background(isFirst ? lbAccent : lbInk)
+                    .padding(.bottom, 10)
 
-                LBAvatar(username: entry.username, size: rank == 1 ? 52 : 42)
+                LBAvatar(username: entry.username, size: isFirst ? 50 : 40)
 
                 Text(entry.username.split(separator: " ").first.map(String.init) ?? entry.username)
                     .font(.system(size: 12.5, weight: .bold))
-                    .foregroundStyle(Color("TextPrimary"))
+                    .foregroundStyle(lbInk)
                     .lineLimit(1)
                     .padding(.top, 8)
 
                 Text(formatValue(vm.tab.value(entry)))
-                    .font(PB.mono(14, .semibold))
-                    .foregroundStyle(Color("TextPrimary"))
-                    .padding(.top, 4)
+                    .font(PB.mono(15, .bold))
+                    .foregroundStyle(lbInk)
+                    .padding(.top, 3)
 
                 Text(vm.tab.unit.uppercased())
-                    .font(.system(size: 8.5, weight: .semibold))
-                    .tracking(1)
-                    .foregroundStyle(Color("TextSecondary"))
-                    .padding(.top, 1)
+                    .font(PB.mono(8))
+                    .tracking(0.8)
+                    .foregroundStyle(lbMuted)
+                    .padding(.top, 2)
             }
             .frame(maxWidth: .infinity)
-            .padding(.top, rank == 1 ? 16 : 14)
-            .padding(.bottom, 13)
+            .padding(.top, isFirst ? 18 : 12)
+            .padding(.bottom, 11)
             .padding(.horizontal, 8)
-            .background(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(rank == 1 ? medal.opacity(0.10) : Color("Surface"))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .strokeBorder(rank == 1 ? medal.opacity(0.35) : Color("Border"), lineWidth: 1)
-            )
+            .background(lbCard)
+            .overlay(Rectangle().strokeBorder(lbInk, lineWidth: 1.5))
+            .background(alignment: .topLeading) {
+                Rectangle().fill(shadowColor).offset(x: shadowOffset, y: shadowOffset)
+            }
+            .padding(.trailing, shadowOffset).padding(.bottom, shadowOffset)
         }
         .buttonStyle(.plain)
     }
@@ -174,19 +191,16 @@ struct LeaderboardView: View {
     private var rankedList: some View {
         VStack(spacing: 0) {
             ForEach(Array(rest.enumerated()), id: \.element.id) { idx, entry in
+                let isMe = entry.userID == vm.myStats?.userID
+                let nextIsMe = idx + 1 < rest.count && rest[idx + 1].userID == vm.myStats?.userID
                 rankRow(entry, rank: idx + 4)
-                if entry.id != rest.last?.id {
-                    Rectangle().fill(Color("Border")).frame(height: 1)
+                // hairline between plain rows; skip around the bordered "me" card
+                if entry.id != rest.last?.id && !isMe && !nextIsMe {
+                    Rectangle().fill(lbLine).frame(height: 1)
                         .padding(.leading, 59)
                 }
             }
         }
-        .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color("Surface"))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Color("Border"), lineWidth: 1)
-        )
     }
 
     private func rankRow(_ entry: LeaderboardEntry, rank: Int) -> some View {
@@ -197,7 +211,7 @@ struct LeaderboardView: View {
             HStack(spacing: 11) {
                 Text("\(rank)")
                     .font(PB.mono(14, .semibold))
-                    .foregroundStyle(Color("TextSecondary"))
+                    .foregroundStyle(lbMuted)
                     .frame(width: 26)
 
                 LBAvatar(username: entry.username, size: 38)
@@ -206,22 +220,22 @@ struct LeaderboardView: View {
                     HStack(spacing: 6) {
                         Text(entry.username)
                             .font(.system(size: 13.5, weight: .semibold))
-                            .foregroundStyle(Color("TextPrimary"))
+                            .foregroundStyle(lbInk)
                             .lineLimit(1)
                         if isMe {
                             Text("YOU")
-                                .font(.system(size: 8.5, weight: .bold))
+                                .font(PB.mono(8, .semibold))
                                 .tracking(0.6)
-                                .foregroundStyle(Color("Background"))
-                                .padding(.horizontal, 5).padding(.vertical, 1)
-                                .background(Color("TextPrimary"), in: RoundedRectangle(cornerRadius: 4))
+                                .foregroundStyle(lbCard)
+                                .padding(.horizontal, 5).padding(.vertical, 2)
+                                .background(lbAccent)
                         }
                     }
                     HStack(spacing: 5) {
                         Text(entry.levelName)
                             .font(.system(size: 11))
-                            .foregroundStyle(Color("TextSecondary"))
-                        Text("·").foregroundStyle(Color("TextSecondary").opacity(0.5))
+                            .foregroundStyle(lbMuted)
+                        Text("·").foregroundStyle(lbMuted.opacity(0.5))
                         HStack(spacing: 2) {
                             Image(systemName: "flame.fill").font(.system(size: 9))
                             Text("\(entry.currentStreak)d").font(PB.mono(11, .semibold))
@@ -234,14 +248,26 @@ struct LeaderboardView: View {
 
                 (
                     Text(formatValue(vm.tab.value(entry)))
-                        .font(PB.mono(14, .semibold)).foregroundStyle(Color("TextPrimary"))
+                        .font(PB.mono(14, .semibold)).foregroundStyle(lbInk)
                     + Text(vm.tab == .global ? " xp" : "")
-                        .font(PB.mono(9)).foregroundStyle(Color("TextSecondary"))
+                        .font(PB.mono(9)).foregroundStyle(lbMuted)
                 )
             }
-            .padding(.horizontal, 14)
+            .padding(.horizontal, isMe ? 12 : 14)
             .padding(.vertical, 11)
-            .background(isMe ? PB.terracotta.opacity(0.08) : Color.clear)
+            .background(isMe ? lbCard : Color.clear)
+            .overlay {
+                if isMe {
+                    Rectangle().strokeBorder(lbInk, lineWidth: 1.5)
+                }
+            }
+            // brutalist offset shadow only on the "you" row
+            .background(alignment: .topLeading) {
+                if isMe {
+                    Rectangle().fill(lbInk).offset(x: 4, y: 4)
+                }
+            }
+            .padding(isMe ? 6 : 0)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -259,23 +285,23 @@ struct LeaderboardView: View {
                     VStack(spacing: 1) {
                         Text("RANK")
                             .font(.system(size: 8.5, weight: .semibold)).tracking(1)
-                            .foregroundStyle(Color("Background").opacity(0.6))
+                            .foregroundStyle(lbBg.opacity(0.6))
                         Text(vm.myRank.map { "\($0)" } ?? "—")
                             .font(PB.serif(24, .bold))
-                            .foregroundStyle(Color("Background"))
+                            .foregroundStyle(lbBg)
                     }
                     .frame(minWidth: 38)
 
-                    Rectangle().fill(Color("Background").opacity(0.18)).frame(width: 1, height: 32)
+                    Rectangle().fill(lbBg.opacity(0.18)).frame(width: 1, height: 32)
 
                     VStack(alignment: .leading, spacing: 1) {
                         Text(me.username)
                             .font(.system(size: 13, weight: .bold))
-                            .foregroundStyle(Color("Background"))
+                            .foregroundStyle(lbBg)
                             .lineLimit(1)
                         Text("\(me.levelName) · \(formatValue(me.totalXP)) XP")
                             .font(.system(size: 11))
-                            .foregroundStyle(Color("Background").opacity(0.62))
+                            .foregroundStyle(lbBg.opacity(0.62))
                             .lineLimit(1)
                     }
                     Spacer(minLength: 4)
@@ -284,16 +310,19 @@ struct LeaderboardView: View {
                         Image(systemName: "bolt.fill").font(.system(size: 11))
                         Text("Profile").font(.system(size: 12, weight: .semibold))
                     }
-                    .foregroundStyle(Color("Background"))
+                    .foregroundStyle(lbBg)
                     .padding(.horizontal, 12).padding(.vertical, 8)
-                    .background(Color("Background").opacity(0.14), in: Capsule())
+                    .background(lbBg.opacity(0.14), in: Capsule())
                 }
                 .padding(.horizontal, 14)
-                .padding(.vertical, 11)
-                .background(
-                    RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color("TextPrimary"))
-                )
-                .shadow(color: .black.opacity(0.18), radius: 14, y: 6)
+                .padding(.vertical, 12)
+                .background(lbInk)
+                .overlay(Rectangle().strokeBorder(lbInk, lineWidth: 1.5))
+                // hard offset accent shadow — brutalist signature
+                .background(alignment: .topLeading) {
+                    Rectangle().fill(lbAccent).offset(x: 5, y: 5)
+                }
+                .padding(.trailing, 5).padding(.bottom, 5)
             }
             .buttonStyle(.plain)
         }
@@ -305,11 +334,11 @@ struct LeaderboardView: View {
         VStack(spacing: 10) {
             Image(systemName: "trophy")
                 .font(.system(size: 34, weight: .light))
-                .foregroundStyle(Color("TextSecondary").opacity(0.5))
+                .foregroundStyle(lbMuted.opacity(0.5))
             Text(vm.tab == .friends ? "No friends on the board yet" : "No data yet")
-                .font(PB.serif(17)).foregroundStyle(Color("TextPrimary"))
+                .font(PB.serif(17)).foregroundStyle(lbInk)
             Text(vm.tab == .friends ? "Follow some readers to see how you stack up." : "Start reading to claim your spot.")
-                .font(.system(size: 13)).foregroundStyle(Color("TextSecondary"))
+                .font(.system(size: 13)).foregroundStyle(lbMuted)
                 .multilineTextAlignment(.center).padding(.horizontal, 40)
         }
         .frame(maxHeight: .infinity)
@@ -318,10 +347,10 @@ struct LeaderboardView: View {
     private func errorView(_ msg: String) -> some View {
         VStack(spacing: 14) {
             Text(msg)
-                .font(PB.serifItalic(14)).foregroundStyle(Color("TextSecondary"))
+                .font(PB.serifItalic(14)).foregroundStyle(lbMuted)
                 .multilineTextAlignment(.center).padding(.horizontal, 40)
             Button("Retry") { Task { await vm.loadEntries() } }
-                .foregroundStyle(Color("Accent"))
+                .foregroundStyle(lbAccent)
         }
         .frame(maxHeight: .infinity)
     }
@@ -388,6 +417,6 @@ struct LBAvatar: View {
         }
         .frame(width: size, height: size)
         .clipShape(Circle())
-        .overlay(Circle().strokeBorder(Color("Border"), lineWidth: 1))
+        .overlay(Circle().strokeBorder(Color(red: 0.902, green: 0.874, blue: 0.816), lineWidth: 1))
     }
 }

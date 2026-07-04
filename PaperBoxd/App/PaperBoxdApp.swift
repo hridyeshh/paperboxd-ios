@@ -43,29 +43,3 @@ struct PaperBoxdApp: App {
         }
     }
 }
-
-/// Phase 1 placeholder. Real tab bar lands in Phase 2.
-struct MainPlaceholderView: View {
-    let user: User
-    @EnvironmentObject private var appState: AppState
-
-    var body: some View {
-        ZStack {
-            Color("Background").ignoresSafeArea()
-            VStack(spacing: 24) {
-                Text("PaperBoxd")
-                    .font(.system(.largeTitle, design: .serif, weight: .bold))
-                    .foregroundStyle(Color("Accent"))
-                Text("Welcome, \(user.username ?? user.email).")
-                    .font(.body)
-                    .foregroundStyle(Color("TextSecondary"))
-                Button("Sign out") {
-                    appState.signOut()
-                }
-                .foregroundStyle(Color("TextPrimary"))
-                .padding(.top, 32)
-            }
-            .padding()
-        }
-    }
-}

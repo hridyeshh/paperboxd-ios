@@ -8,6 +8,7 @@ struct WriteView: View {
     @State private var showBookSearch = false
     @State private var showDatePicker = false
     @State private var showRating = false
+    @FocusState private var searchFocused: Bool
 
     init(username: String, preselectedBook: Book? = nil) {
         _vm = StateObject(wrappedValue: WriteViewModel(preselectedBook: preselectedBook, username: username))
@@ -49,6 +50,8 @@ struct WriteView: View {
         } message: {
             Text("Your entry will not be saved.")
         }
+        .environment(\.colorScheme, .light)
+        .preferredColorScheme(.light)
     }
 
     // MARK: - Nav bar
@@ -63,7 +66,7 @@ struct WriteView: View {
 
             Text("PaperBoxd")
                 .font(PB.wordmark(20))
-                .foregroundStyle(Color("Accent"))
+                .foregroundStyle(Color("TextPrimary"))
 
             Spacer()
 
@@ -83,6 +86,13 @@ struct WriteView: View {
                             vm.canSubmit ? Color("TextPrimary") : Color("TextSecondary").opacity(0.2),
                             in: Capsule()
                         )
+                        // active Post gets the mockup's hard accent offset shadow
+                        .background(
+                            Capsule()
+                                .fill(Color("Accent"))
+                                .offset(x: 3, y: 3)
+                                .opacity(vm.canSubmit ? 1 : 0)
+                        )
                 }
             }
             .buttonStyle(.plain)
@@ -97,47 +107,103 @@ struct WriteView: View {
     private var bookRow: some View {
         Group {
             if let book = vm.selectedBook {
-                HStack(spacing: 10) {
-                    BookCoverView(url: book.coverURL, width: 32, cornerRadius: 3)
-                    Text(book.title)
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(Color("TextPrimary"))
-                        .lineLimit(1)
-                    Spacer()
+                // The one brutalist signature of the compose sheet: hard-edged
+                // book card with a small offset shadow. Everything else stays quiet.
+                HStack(alignment: .top, spacing: 13) {
+                    BookCoverView(url: book.coverURL, width: 50, cornerRadius: 2)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(book.title)
+                            .font(PB.serif(17, .bold))
+                            .foregroundStyle(Color("TextPrimary"))
+                            .lineLimit(2)
+                        if !book.authorLine.isEmpty {
+                            Text(book.authorLine)
+                                .font(.system(size: 12))
+                                .foregroundStyle(Color("TextSecondary"))
+                                .lineLimit(1)
+                        }
+                        HStack(spacing: 3) {
+                            ForEach(1..<6) { i in
+                                Button { vm.rating = i } label: {
+                                    Image(systemName: (vm.rating ?? 0) >= i ? "star.fill" : "star")
+                                        .font(.system(size: 15))
+                                        .foregroundStyle(Color("TextPrimary"))
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                        .padding(.top, 8)
+                    }
+
+                    Spacer(minLength: 0)
+                }
+                .padding(14)
+                .background(Color("Surface"))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 3)
+                        .strokeBorder(Color("TextPrimary"), lineWidth: 1.5)
+                )
+                .background(
+                    RoundedRectangle(cornerRadius: 3)
+                        .fill(Color("TextPrimary"))
+                        .offset(x: 4, y: 4)
+                )
+                .overlay(alignment: .topTrailing) {
                     Button {
                         vm.selectedBook = nil
                         vm.bookSearchQuery = ""
                         vm.bookSearchResults = []
                     } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 16))
-                            .foregroundStyle(Color("TextSecondary").opacity(0.6))
+                        Image(systemName: "xmark")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundStyle(Color("Background"))
+                            .frame(width: 24, height: 24)
+                            .background(Circle().fill(Color("TextPrimary")))
+                            .overlay(Circle().strokeBorder(Color("Background"), lineWidth: 1.5))
                     }
                     .buttonStyle(.plain)
+                    .offset(x: 8, y: -8)
                 }
                 .padding(.horizontal, 18)
-                .padding(.vertical, 10)
-                .background(Color("Surface"))
+                .padding(.top, 16)
+                .padding(.trailing, 4)
+                .padding(.bottom, 8)
             } else {
                 Button {
                     withAnimation(.easeInOut(duration: 0.18)) { showBookSearch.toggle() }
                 } label: {
-                    HStack(spacing: 8) {
-                        Image(systemName: "plus.circle")
-                            .font(.system(size: 14))
-                        Text("Attach a book")
-                            .font(.system(size: 13, weight: .medium))
+                    HStack(spacing: 10) {
+                        Image(systemName: showBookSearch ? "xmark" : "plus")
+                            .font(.system(size: 14, weight: .bold))
+                        Text(showBookSearch ? "Close search" : "Attach a book")
+                            .font(.system(size: 14, weight: .semibold))
                         Spacer()
+                        Image(systemName: "book.closed")
+                            .font(.system(size: 14))
                     }
-                    .foregroundStyle(Color("TextSecondary"))
-                    .padding(.horizontal, 18)
-                    .padding(.vertical, 10)
+                    .foregroundStyle(Color("TextPrimary"))
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 12)
+                    // Brutalist attach button: card surface, ink border, small offset shadow.
                     .background(Color("Surface"))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 3)
+                            .strokeBorder(Color("TextPrimary"), lineWidth: 1.5)
+                    )
+                    .background(
+                        RoundedRectangle(cornerRadius: 3)
+                            .fill(Color("TextPrimary"))
+                            .offset(x: 3, y: 3)
+                    )
+                    .padding(.horizontal, 18)
+                    .padding(.top, 14)
+                    .padding(.trailing, 3)
+                    .padding(.bottom, 10)
                 }
                 .buttonStyle(.plain)
             }
         }
-        .overlay(alignment: .bottom) { Rectangle().fill(Color("Border")).frame(height: 1) }
     }
 
     // MARK: - Book search panel
@@ -153,6 +219,8 @@ struct WriteView: View {
                     .font(.system(size: 14))
                     .foregroundStyle(Color("TextPrimary"))
                     .autocorrectionDisabled()
+                    .focused($searchFocused)
+                    .submitLabel(.search)
                     .onChange(of: vm.bookSearchQuery) { vm.onSearchChange() }
                 if vm.isSearchingBooks {
                     ProgressView().scaleEffect(0.7).tint(Color("TextSecondary"))
@@ -207,6 +275,7 @@ struct WriteView: View {
         .background(Color("Background"))
         .overlay(alignment: .bottom) { Rectangle().fill(Color("Border")).frame(height: 1) }
         .transition(.opacity)
+        .onAppear { searchFocused = true }
     }
 
     // MARK: - Editor

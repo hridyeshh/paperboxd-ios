@@ -7,11 +7,16 @@ struct BookDetailView: View {
     @StateObject private var viewModel: BookDetailViewModel
     @Environment(\.dismiss) private var dismiss
     @State private var descriptionExpanded = false
-    @State private var selectedTab = 0
     @State private var showShare = false
     @State private var showWrite = false
+    @State private var showLibrarySheet = false
+    @State private var activePanel: InlinePanel?
+    @State private var likePulse = 0
 
-    private let tabs = ["Overview", "Reviews", "Highlights", "Lists"]
+    /// Inline drop-down panels below the action row.
+    private enum InlinePanel { case rate, review }
+
+    private let line = BK.ink
 
     private var shareStatus: ShareStatus {
         if viewModel.bookState.isLiked { return .favourite }
@@ -36,7 +41,7 @@ struct BookDetailView: View {
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            Color("Background").ignoresSafeArea()
+            BK.paper.ignoresSafeArea()
 
             VStack(spacing: 0) {
                 miniHeader
@@ -51,16 +56,18 @@ struct BookDetailView: View {
             }
 
             if viewModel.book != nil {
-                bottomBar
+                bottomDock
             }
         }
+        .environment(\.colorScheme, .light)   // book page is light-mode only
+        .preferredColorScheme(.light)
         .navigationBarHidden(true)
         .overlay(toastOverlay, alignment: .bottom)
         .hidesBottomDock()
         .toolbar(.hidden, for: .tabBar)
         .sheet(isPresented: $showShare) {
             if let book = viewModel.book {
-                BookShareSheet(book: book, user: user, status: shareStatus)
+                BookShareSheet(book: book, user: user, status: shareStatus, userRating: viewModel.myReview?.rating)
                     .presentationDetents([.large])
                     .presentationDragIndicator(.hidden)
             }
@@ -70,45 +77,47 @@ struct BookDetailView: View {
                 WriteView(username: user.username ?? "", preselectedBook: book)
             }
         }
+        .sheet(isPresented: $showLibrarySheet) {
+            AddToLibrarySheet(current: viewModel.currentShelf) { target in
+                showLibrarySheet = false
+                Task { await viewModel.selectShelf(target) }
+            }
+            .presentationDetents([.height(340)])
+            .presentationDragIndicator(.hidden)
+            .environment(\.colorScheme, .light)
+        }
     }
 
-    // MARK: - Mini header
+    // MARK: - Mini header (brutalist)
 
     private var miniHeader: some View {
         HStack {
-            Button { dismiss() } label: {
-                Image(systemName: "chevron.left")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(Color("TextPrimary"))
-                    .frame(width: 30, height: 30)
-                    .background(Color("Surface"), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-            }
-            .buttonStyle(.plain)
-
+            squareIcon("chevron.left") { dismiss() }
             Spacer()
-
             if let book = viewModel.book, !book.categories.isEmpty {
-                Text(book.categories.prefix(2).joined(separator: " · "))
-                    .font(.system(size: 11.5))
-                    .foregroundStyle(Color("TextSecondary"))
+                Text(book.categories.prefix(2).joined(separator: " · ").uppercased())
+                    .font(PB.mono(9)).tracking(1.5)
+                    .foregroundStyle(BK.muted)
                     .lineLimit(1)
             }
-
             Spacer()
-
-            Button { showWrite = true } label: {
-                Image(systemName: "square.and.pencil")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(Color("TextPrimary"))
-                    .frame(width: 30, height: 30)
-                    .background(Color("Surface"), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-            }
-            .buttonStyle(.plain)
+            squareIcon("square.and.pencil") { showWrite = true }
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 8)
-        .background(Color("Background"))
-        .overlay(alignment: .bottom) { Rectangle().fill(Color("Border")).frame(height: 1) }
+        .background(BK.paper)
+        .overlay(alignment: .bottom) { Rectangle().fill(line).frame(height: 2) }
+    }
+
+    private func squareIcon(_ system: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: system)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(BK.ink)
+                .frame(width: 36, height: 36)
+                .overlay(Rectangle().strokeBorder(line, lineWidth: 2))
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: - Scroll content
@@ -116,152 +125,55 @@ struct BookDetailView: View {
     private func content(_ book: Book) -> some View {
         ScrollView {
             VStack(spacing: 0) {
-                heroSection(book)
-                friendsReadingRow
-                progressCard
-                tabBar
-                tabContent(book)
+                coverBlock(book)
+                titleBlock(book)
+                statStrip(book)
+
+                VStack(spacing: 16) {
+                    progressCard
+                    actionRow
+                    inlinePanel
+                    descriptionSection(book)
+                    similarSection
+                    friendsSaySection
+                    reviewsSection
+                }
+                .padding(.horizontal, 16)
+                .padding(.top, 18)
             }
-            .padding(.bottom, 100)
+            .padding(.bottom, 120)
         }
     }
 
-    // MARK: - Hero
+    // MARK: - Cover + friends
 
-    private func heroSection(_ book: Book) -> some View {
-        VStack(spacing: 0) {
-            // Cover + title + author over gradient halo
-            ZStack(alignment: .top) {
-                LinearGradient(
-                    colors: [PB.terracotta.opacity(0.12), Color("Background").opacity(0)],
-                    startPoint: .top, endPoint: .bottom
-                )
-                .frame(height: 320)
-
-                VStack(spacing: 0) {
-                    BookCoverView(url: book.coverURL, width: 140, cornerRadius: 8)
-                        .shadow(color: .black.opacity(0.32), radius: 22, y: 12)
-                        .padding(.top, 22)
-                        .padding(.bottom, 16)
-
-                    Text(book.title)
-                        .font(.system(size: 26, weight: .heavy, design: .serif))
-                        .tracking(-0.4)
-                        .foregroundStyle(Color("TextPrimary"))
-                        .multilineTextAlignment(.center)
-                        .lineSpacing(2)
-                        .padding(.horizontal, 24)
-
-                    if let tagline = bookTagline(book) {
-                        Text(tagline)
-                            .font(PB.serifItalic(14))
-                            .foregroundStyle(Color("TextSecondary"))
-                            .multilineTextAlignment(.center)
-                            .lineLimit(2)
-                            .padding(.top, 6)
-                            .padding(.horizontal, 36)
-                    }
-
-                    if !book.authorLine.isEmpty {
-                        (Text("by ").foregroundStyle(Color("TextSecondary"))
-                         + Text(book.authorLine).fontWeight(.semibold).foregroundStyle(Color("TextPrimary")))
-                            .font(.system(size: 12))
-                            .padding(.top, 10)
-                    }
-                }
+    private func coverBlock(_ book: Book) -> some View {
+        VStack(spacing: 14) {
+            ZStack(alignment: .topLeading) {
+                Rectangle().fill(line)
+                    .frame(width: 150, height: 225)
+                    .offset(x: 8, y: 8)
+                BookCoverView(url: book.coverURL, width: 150, cornerRadius: 0)
+                    .overlay(Rectangle().strokeBorder(line, lineWidth: 2.5))
             }
+            .padding(.trailing, 8).padding(.bottom, 8)
 
-            // 3-stat strip — Rating · Time to read · Pages
-            HStack(spacing: 0) {
-                statCell(
-                    value: book.averageRating.map { String(format: "%.1f", $0) } ?? "—",
-                    label: "★ Rating"
-                )
-                Divider().frame(height: 28).opacity(0.4)
-                statCell(
-                    value: readingTime(book),
-                    label: "Time to read"
-                )
-                Divider().frame(height: 28).opacity(0.4)
-                statCell(
-                    value: book.pageCount.map { "\($0)" } ?? "—",
-                    label: "Pages"
-                )
-            }
-            .padding(.vertical, 14)
-            .overlay(alignment: .top) { Rectangle().fill(Color("Border")).frame(height: 1) }
-            .overlay(alignment: .bottom) { Rectangle().fill(Color("Border")).frame(height: 1) }
-
-            // Genre pills (kept — they were good)
-            if !book.categories.isEmpty {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 6) {
-                        ForEach(Array(book.categories.prefix(5).enumerated()), id: \.offset) { _, cat in
-                            Text(cat)
-                                .font(.system(size: 11, weight: .medium))
-                                .foregroundStyle(Color("TextSecondary"))
-                                .padding(.horizontal, 10).padding(.vertical, 5)
-                                .background(Color("Surface"), in: Capsule())
+            if !viewModel.friendsOnBook.isEmpty {
+                HStack(spacing: 8) {
+                    HStack(spacing: -7) {
+                        ForEach(viewModel.friendsOnBook.prefix(3)) { friend in
+                            avatarBadge(friend)
                         }
                     }
-                    .padding(.horizontal, 16)
+                    Text(friendsReadingCopy.uppercased())
+                        .font(PB.mono(9)).tracking(1)
+                        .foregroundStyle(BK.ink)
                 }
-                .padding(.vertical, 12)
+                .padding(.horizontal, 11).padding(.vertical, 6)
+                .overlay(Rectangle().strokeBorder(line, lineWidth: 2))
             }
         }
-    }
-
-    private func bookTagline(_ book: Book) -> String? {
-        guard let desc = book.description else { return nil }
-        // Use first sentence as tagline if short enough
-        let firstSentence = desc.split(whereSeparator: { ".!?".contains($0) }).first.map(String.init) ?? desc
-        let trimmed = firstSentence.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard trimmed.count > 20, trimmed.count < 140 else { return nil }
-        return trimmed + "."
-    }
-
-    /// Estimated time to read, derived from page count at ~40 pages/hour —
-    /// matches the web book page's readTime calculation.
-    private func readingTime(_ book: Book) -> String {
-        guard let pages = book.pageCount, pages > 0 else { return "—" }
-        let totalMin = Int((Double(pages) / 40.0 * 60.0).rounded())
-        let h = totalMin / 60
-        let m = totalMin % 60
-        return h > 0 ? "\(h)h \(m)m" : "\(m)m"
-    }
-
-    private func statCell(value: String, label: String) -> some View {
-        VStack(spacing: 4) {
-            Text(value)
-                .font(.system(size: 18, weight: .heavy, design: .serif))
-                .foregroundStyle(Color("TextPrimary"))
-            Text(label.uppercased())
-                .font(.system(size: 9, weight: .semibold))
-                .tracking(1.0)
-                .foregroundStyle(Color("TextSecondary"))
-        }
-        .frame(maxWidth: .infinity)
-    }
-
-    // MARK: - Friends-reading row
-
-    @ViewBuilder
-    private var friendsReadingRow: some View {
-        if !viewModel.friendsOnBook.isEmpty {
-            HStack(spacing: 9) {
-                HStack(spacing: -6) {
-                    ForEach(viewModel.friendsOnBook.prefix(4)) { friend in
-                        avatarBadge(friend)
-                    }
-                }
-                Text(friendsReadingCopy)
-                    .font(.system(size: 12))
-                    .foregroundStyle(Color("TextSecondary"))
-                Spacer(minLength: 0)
-            }
-            .padding(.horizontal, 16)
-            .padding(.top, 14)
-        }
+        .padding(.top, 16)
     }
 
     private func avatarBadge(_ friend: FriendOnBook) -> some View {
@@ -277,205 +189,282 @@ struct BookDetailView: View {
             } else {
                 PB.avatarGradient
                 Text(friend.displayName.prefix(1).uppercased())
-                    .font(.system(size: 9, weight: .bold))
+                    .font(.system(size: 8, weight: .bold))
                     .foregroundStyle(.white)
             }
         }
-        .frame(width: 24, height: 24)
-        .clipShape(Circle())
-        .overlay(Circle().strokeBorder(Color("Background"), lineWidth: 2))
+        .frame(width: 20, height: 20)
+        .overlay(Rectangle().strokeBorder(BK.paper, lineWidth: 1.5))
     }
 
     private var friendsReadingCopy: String {
         let activeCount = viewModel.friendsReadingCount
         if activeCount > 0 {
-            return "\(activeCount) friend\(activeCount == 1 ? "" : "s") reading now"
+            return "\(activeCount) friend\(activeCount == 1 ? "" : "s") reading"
         }
         let n = viewModel.friendsOnBook.count
         return "\(n) of your friends"
+    }
+
+    // MARK: - Title block
+
+    private func titleBlock(_ book: Book) -> some View {
+        VStack(spacing: 8) {
+            Text(book.title.uppercased())
+                .font(.system(size: 30, weight: .black))
+                .tracking(-1)
+                .foregroundStyle(BK.ink)
+                .multilineTextAlignment(.center)
+                .lineSpacing(0)
+                .padding(.horizontal, 20)
+
+            if let tagline = bookTagline(book) {
+                Text(tagline)
+                    .font(PB.serifItalic(15))
+                    .foregroundStyle(BK.ink.opacity(0.85))
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+                    .padding(.horizontal, 30)
+            }
+
+            if !book.authorLine.isEmpty {
+                Text(book.authorLine.uppercased())
+                    .font(PB.mono(10)).tracking(1.5)
+                    .foregroundStyle(BK.muted)
+                    .multilineTextAlignment(.center)
+            }
+        }
+        .padding(.top, 16).padding(.bottom, 18)
+    }
+
+    // MARK: - Stat strip (brutalist)
+
+    private func statStrip(_ book: Book) -> some View {
+        HStack(spacing: 0) {
+            statCell(book.averageRating.map { String(format: "%.1f", $0) } ?? "—", "Rating")
+            Rectangle().fill(line).frame(width: 2)
+            statCell(readingTime(book), "Time to read")
+            Rectangle().fill(line).frame(width: 2)
+            statCell(book.pageCount.map { "\($0)" } ?? "—", "Pages")
+        }
+        .frame(height: 62)
+        .overlay(alignment: .top) { Rectangle().fill(line).frame(height: 2) }
+        .overlay(alignment: .bottom) { Rectangle().fill(line).frame(height: 2) }
+    }
+
+    private func statCell(_ value: String, _ label: String) -> some View {
+        VStack(spacing: 4) {
+            Text(value)
+                .font(.system(size: 20, weight: .black))
+                .tracking(-0.5)
+                .foregroundStyle(BK.ink)
+            Text(label.uppercased())
+                .font(PB.mono(8)).tracking(1.2)
+                .foregroundStyle(BK.muted)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private func bookTagline(_ book: Book) -> String? {
+        guard let desc = book.description else { return nil }
+        let firstSentence = desc.split(whereSeparator: { ".!?".contains($0) }).first.map(String.init) ?? desc
+        let trimmed = firstSentence.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.count > 20, trimmed.count < 140 else { return nil }
+        return trimmed + "."
+    }
+
+    private func readingTime(_ book: Book) -> String {
+        guard let pages = book.pageCount, pages > 0 else { return "—" }
+        let totalMin = Int((Double(pages) / 40.0 * 60.0).rounded())
+        let h = totalMin / 60
+        let m = totalMin % 60
+        return h > 0 ? "\(h)h \(m)m" : "\(m)m"
     }
 
     // MARK: - Progress card
 
     @ViewBuilder
     private var progressCard: some View {
-        if let book = viewModel.book {
-            VStack(spacing: 12) {
-                if book.pageCount != nil || (viewModel.progress?.onShelf ?? false) {
-                    PageProgressView(
-                        progress: viewModel.progress,
-                        bookPageCount: book.pageCount,
-                        isSaving: viewModel.isSavingProgress,
-                        onUpdate: { cp, tp in await viewModel.updateProgress(currentPage: cp, totalPages: tp) }
-                    )
-                }
-                writeAboutButton
+        if let book = viewModel.book,
+           book.pageCount != nil || (viewModel.progress?.onShelf ?? false) {
+            PageProgressView(
+                progress: viewModel.progress,
+                bookPageCount: book.pageCount,
+                isSaving: viewModel.isSavingProgress,
+                onUpdate: { cp, tp in await viewModel.updateProgress(currentPage: cp, totalPages: tp) }
+            )
+        }
+    }
+
+    // MARK: - Action row (Review / Rate / Share)
+
+    private var actionRow: some View {
+        HStack(spacing: 8) {
+            actionTile(icon: "square.and.pencil", label: "Review", active: activePanel == .review) {
+                togglePanel(.review)
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 14)
+            let rated = (viewModel.myReview?.rating ?? 0) > 0
+            actionTile(
+                icon: "star",
+                label: rated ? "\(viewModel.myReview!.rating!)/5" : "Rate",
+                active: activePanel == .rate || rated
+            ) { togglePanel(.rate) }
+            actionTile(icon: "square.and.arrow.up", label: "Share", active: false) { showShare = true }
         }
     }
 
-    private var writeAboutButton: some View {
-        Button { showWrite = true } label: {
-            HStack(spacing: 7) {
-                Image(systemName: "square.and.pencil")
-                    .font(.system(size: 14, weight: .semibold))
-                Text("Write about it")
-                    .font(.system(size: 14, weight: .semibold))
+    private func togglePanel(_ panel: InlinePanel) {
+        withAnimation(.snappy(duration: 0.24, extraBounce: 0.08)) {
+            activePanel = (activePanel == panel) ? nil : panel
+        }
+    }
+
+    private func actionTile(icon: String, label: String, active: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(spacing: 6) {
+                Image(systemName: icon).font(.system(size: 18, weight: .medium))
+                Text(label.uppercased())
+                    .font(PB.mono(9, .semibold)).tracking(1)
             }
-            .foregroundStyle(Color("Background"))
-            .frame(maxWidth: .infinity).frame(height: 46)
-            .background(Color("TextPrimary"), in: RoundedRectangle(cornerRadius: 11, style: .continuous))
-            .shadow(color: .black.opacity(0.18), radius: 10, y: 4)
+            .foregroundStyle(active ? BK.paper : BK.ink)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 13)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(BrutalButtonStyle(
+            fill: active ? BK.accent : BK.paper,
+            shadowColor: .clear, borderWidth: 2, offset: 3
+        ))
     }
 
-    // MARK: - Tab bar
+    // MARK: - Inline rate / review panels
 
-    private var tabBar: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 0) {
-                ForEach(tabs.indices, id: \.self) { i in
-                    Button {
-                        selectedTab = i
-                    } label: {
-                        VStack(spacing: 0) {
-                            HStack(spacing: 5) {
-                                Text(tabs[i])
-                                    .font(.system(size: 13, weight: selectedTab == i ? .semibold : .medium))
-                                    .foregroundStyle(selectedTab == i ? Color("TextPrimary") : Color("TextSecondary"))
-                                if let cnt = tabCount(for: i) {
-                                    Text(cnt)
-                                        .font(.system(size: 10, weight: .semibold))
-                                        .foregroundStyle(Color("TextSecondary"))
-                                        .padding(.horizontal, 6).padding(.vertical, 1)
-                                        .background(Color("Surface"), in: Capsule())
-                                }
-                            }
-                            .padding(.horizontal, 14).padding(.vertical, 11)
-                            Rectangle()
-                                .fill(selectedTab == i ? Color("TextPrimary") : Color.clear)
-                                .frame(height: 2)
-                        }
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-        }
-        .overlay(alignment: .bottom) { Rectangle().fill(Color("Border")).frame(height: 1) }
+    private var hasReviewOrRating: Bool {
+        let r = viewModel.myReview
+        return (r?.rating ?? 0) > 0 || !(r?.review ?? "").isEmpty
     }
 
-    private func tabCount(for index: Int) -> String? {
-        switch index {
-        case 1:
-            let n = viewModel.friendReviews.count
-            return n > 0 ? "\(n)" : nil
-        default:
-            return nil
+    private func deleteMyReview() {
+        Task {
+            let ok = await viewModel.deleteReview()
+            if ok { withAnimation(.snappy(duration: 0.22)) { activePanel = nil } }
         }
     }
-
-    // MARK: - Tab content
 
     @ViewBuilder
-    private func tabContent(_ book: Book) -> some View {
-        switch selectedTab {
-        case 0: overviewTab(book)
-        default:
-            VStack(spacing: 8) {
-                Image(systemName: "hourglass")
-                    .font(.system(size: 28)).foregroundStyle(Color("TextSecondary").opacity(0.5))
-                Text("Coming soon")
-                    .font(PB.serifItalic(14)).foregroundStyle(Color("TextSecondary"))
-            }
-            .frame(maxWidth: .infinity).padding(.top, 60)
+    private var inlinePanel: some View {
+        switch activePanel {
+        case .rate:
+            RatePanel(
+                initial: viewModel.myReview?.rating ?? 0,
+                isSubmitting: viewModel.isSubmittingReview,
+                canDelete: hasReviewOrRating,
+                onSubmit: { rating in
+                    Task {
+                        let ok = await viewModel.submitReview(rating: rating, review: viewModel.myReview?.review)
+                        if ok { withAnimation(.snappy(duration: 0.22)) { activePanel = nil } }
+                    }
+                },
+                onDelete: deleteMyReview,
+                onClose: { togglePanel(.rate) }
+            )
+            .transition(.brutalReveal)
+        case .review:
+            ReviewPanel(
+                initial: viewModel.myReview?.review ?? "",
+                isSubmitting: viewModel.isSubmittingReview,
+                canDelete: hasReviewOrRating,
+                onPost: { text in
+                    Task {
+                        let ok = await viewModel.submitReview(rating: viewModel.myReview?.rating ?? 0, review: text)
+                        if ok { withAnimation(.snappy(duration: 0.22)) { activePanel = nil } }
+                    }
+                },
+                onDelete: deleteMyReview,
+                onClose: { togglePanel(.review) }
+            )
+            .transition(.brutalReveal)
+        case .none:
+            EmptyView()
         }
     }
 
-    private func overviewTab(_ book: Book) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            if let desc = book.description {
-                VStack(alignment: .leading, spacing: 10) {
-                    Text(desc)
-                        .font(.system(size: 15, design: .serif))
-                        .foregroundStyle(Color("TextPrimary").opacity(0.88))
-                        .lineSpacing(5)
-                        .lineLimit(descriptionExpanded ? nil : 6)
+    // MARK: - Sections
 
-                    if desc.count > 280 {
-                        Button(descriptionExpanded ? "Show less" : "Read full description →") {
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                descriptionExpanded.toggle()
-                            }
-                        }
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(Color("Accent"))
-                    }
-                }
-                .padding(16)
+    private func brutalSectionHeader(_ num: String, _ title: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Text(num).font(PB.mono(10)).foregroundStyle(BK.muted)
+            Text(title.uppercased())
+                .font(.system(size: 13, weight: .black)).tracking(0.5)
+                .foregroundStyle(BK.ink)
+            Spacer()
+        }
+        .padding(.bottom, 6)
+        .overlay(alignment: .bottom) { Rectangle().fill(line).frame(height: 2) }
+    }
 
-                Rectangle().fill(Color("Border")).frame(height: 1).padding(.horizontal, 16)
-            }
-
-            if !viewModel.similarBooks.isEmpty {
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("Readers also enjoyed")
-                        .font(.system(size: 17, weight: .bold, design: .serif))
-                        .tracking(-0.2)
-                        .foregroundStyle(Color("TextPrimary"))
-                        .padding(.horizontal, 16)
-
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 10) {
-                            ForEach(viewModel.similarBooks) { item in
-                                NavigationLink(value: item.id) {
-                                    VStack(alignment: .leading, spacing: 5) {
-                                        BookCoverView(url: item.coverURL, width: 88, cornerRadius: 6)
-                                        Text(item.title)
-                                            .font(.system(size: 11, weight: .medium))
-                                            .foregroundStyle(Color("TextPrimary"))
-                                            .lineLimit(2).frame(width: 88, alignment: .leading)
-                                        if !item.authors.isEmpty {
-                                            Text(item.authorLine)
-                                                .font(.system(size: 10))
-                                                .foregroundStyle(Color("TextSecondary"))
-                                                .lineLimit(1).frame(width: 88, alignment: .leading)
-                                        }
-                                    }
-                                }
-                                .buttonStyle(.plain)
-                            }
-                        }
-                        .padding(.horizontal, 16)
-                    }
-                }
-                .padding(.vertical, 16)
-
-                Rectangle().fill(Color("Border")).frame(height: 1).padding(.horizontal, 16)
-            }
-
-            // "What friends say" — real friend reviews
+    @ViewBuilder
+    private func descriptionSection(_ book: Book) -> some View {
+        if let desc = book.description, !desc.isEmpty {
             VStack(alignment: .leading, spacing: 12) {
-                Text("What friends say")
-                    .font(.system(size: 17, weight: .bold, design: .serif))
-                    .tracking(-0.2)
-                    .foregroundStyle(Color("TextPrimary"))
+                brutalSectionHeader("01", "About this book")
+                Text(desc)
+                    .font(.system(size: 15, design: .serif))
+                    .foregroundStyle(BK.ink.opacity(0.9))
+                    .lineSpacing(5)
+                    .lineLimit(descriptionExpanded ? nil : 6)
+                if desc.count > 280 {
+                    Button(descriptionExpanded ? "SHOW LESS" : "READ MORE") {
+                        withAnimation(.easeInOut(duration: 0.2)) { descriptionExpanded.toggle() }
+                    }
+                    .font(PB.mono(10, .semibold)).tracking(1)
+                    .foregroundStyle(BK.accent)
+                }
+            }
+        }
+    }
 
-                if viewModel.friendReviews.isEmpty {
-                    Text("No reviews from people you follow yet.")
-                        .font(PB.serifItalic(13))
-                        .foregroundStyle(Color("TextSecondary"))
-                } else {
-                    VStack(spacing: 14) {
-                        ForEach(viewModel.friendReviews.prefix(5)) { review in
-                            friendReviewRow(review)
+    @ViewBuilder
+    private var similarSection: some View {
+        if !viewModel.similarBooks.isEmpty {
+            VStack(alignment: .leading, spacing: 12) {
+                brutalSectionHeader("02", "Readers also enjoyed")
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 12) {
+                        ForEach(viewModel.similarBooks) { item in
+                            NavigationLink(value: item.id) {
+                                VStack(alignment: .leading, spacing: 5) {
+                                    BookCoverView(url: item.coverURL, width: 84, cornerRadius: 0)
+                                        .overlay(Rectangle().strokeBorder(line, lineWidth: 1.5))
+                                    Text(item.title)
+                                        .font(.system(size: 11, weight: .semibold))
+                                        .foregroundStyle(BK.ink)
+                                        .lineLimit(2).frame(width: 84, alignment: .leading)
+                                }
+                            }
+                            .buttonStyle(.plain)
                         }
+                    }
+                    .padding(.vertical, 2)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var friendsSaySection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            brutalSectionHeader("03", "What friends say")
+            if viewModel.friendReviews.isEmpty {
+                Text("No reviews from people you follow yet.")
+                    .font(PB.serifItalic(13))
+                    .foregroundStyle(BK.muted)
+            } else {
+                VStack(spacing: 14) {
+                    ForEach(viewModel.friendReviews.prefix(5)) { review in
+                        friendReviewRow(review)
                     }
                 }
             }
-            .padding(16)
         }
     }
 
@@ -498,25 +487,41 @@ struct BookDetailView: View {
                 }
             }
             .frame(width: 34, height: 34)
-            .clipShape(Circle())
+            .overlay(Rectangle().strokeBorder(line, lineWidth: 2))
 
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 7) {
                     Text(review.displayName)
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(Color("TextPrimary"))
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(BK.ink)
+                    Spacer(minLength: 4)
                     if let rating = review.rating, rating > 0 {
                         Text(starsString(rating))
                             .font(.system(size: 11))
-                            .foregroundStyle(PB.terracotta)
+                            .foregroundStyle(BK.accent)
                     }
                 }
                 if let text = review.review {
                     Text(text)
                         .font(.system(size: 13.5, design: .serif))
-                        .foregroundStyle(Color("TextPrimary").opacity(0.88))
+                        .foregroundStyle(BK.ink.opacity(0.88))
                         .lineSpacing(3)
                         .lineLimit(5)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var reviewsSection: some View {
+        if !viewModel.reviews.isEmpty {
+            VStack(alignment: .leading, spacing: 4) {
+                brutalSectionHeader("04", "All reviews")
+                ForEach(Array(viewModel.reviews.enumerated()), id: \.element.id) { idx, review in
+                    BookReviewRow(review: review)
+                        .overlay(alignment: .top) {
+                            if idx > 0 { Rectangle().fill(line.opacity(0.3)).frame(height: 1) }
+                        }
                 }
             }
         }
@@ -527,99 +532,71 @@ struct BookDetailView: View {
         return String(repeating: "★", count: n) + String(repeating: "☆", count: 5 - n)
     }
 
-    // MARK: - Bottom action bar
+    // MARK: - Bottom dock (brutalist)
 
-    private var bottomBar: some View {
-        HStack(spacing: 8) {
-            // Like — no border
-            Button { Task { await viewModel.toggleLike() } } label: {
-                Image(systemName: viewModel.bookState.isLiked ? "heart.fill" : "heart")
-                    .font(.system(size: 17))
-                    .foregroundStyle(viewModel.bookState.isLiked ? PB.likeRed : Color("TextPrimary"))
-                    .frame(width: 44, height: 44)
-                    .background(Color("Surface"), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-            }
-            .buttonStyle(.plain)
-
-            // Mark as Reading — reduced, hugs its content
-            Button {
-                Task { await viewModel.toggleRead() }
-            } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: viewModel.bookState.isRead ? "checkmark" : "plus")
-                        .font(.system(size: 13, weight: .bold))
-                    Text(primaryLabel)
-                        .font(.system(size: 13, weight: .bold))
+    private var bottomDock: some View {
+        HStack(spacing: 10) {
+            Button { showLibrarySheet = true } label: {
+                HStack(spacing: 9) {
+                    Image(systemName: viewModel.currentShelf == nil ? "plus" : "checkmark")
+                        .font(.system(size: 15, weight: .bold))
+                    Text(dockLabel.uppercased())
+                        .font(.system(size: 15, weight: .black)).tracking(0.5)
                         .lineLimit(1)
                 }
-                .foregroundStyle(Color("Background"))
-                .padding(.horizontal, 16).frame(maxWidth: .infinity).frame(height: 44)
-                .background(Color("TextPrimary"), in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+                .foregroundStyle(BK.paper)
+                .frame(maxWidth: .infinity).frame(height: 52)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(BrutalButtonStyle(
+                fill: viewModel.currentShelf == nil ? BK.ink : BK.accent,
+                shadowColor: BK.accent, offset: 4
+            ))
 
-            // TBR — labeled
-            Button { Task { await viewModel.toggleTBR() } } label: {
-                HStack(spacing: 5) {
-                    Image(systemName: viewModel.bookState.isTBR ? "bookmark.fill" : "bookmark")
-                        .font(.system(size: 14))
-                    Text("TBR").font(.system(size: 13, weight: .semibold))
-                }
-                .foregroundStyle(viewModel.bookState.isTBR ? Color("Accent") : Color("TextPrimary"))
-                .padding(.horizontal, 12).frame(height: 44)
-                .background(Color("Surface"), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .strokeBorder(viewModel.bookState.isTBR ? Color("Accent") : Color("Border"), lineWidth: 1)
-                )
+            Button {
+                if !viewModel.bookState.isLiked { likePulse &+= 1 }
+                Task { await viewModel.toggleLike() }
+            } label: {
+                Image(systemName: viewModel.bookState.isLiked ? "heart.fill" : "heart")
+                    .font(.system(size: 20))
+                    .foregroundStyle(viewModel.bookState.isLiked ? PB.likeRed : BK.ink)
+                    .popEffect(trigger: likePulse)
+                    .frame(width: 56, height: 52)
             }
-            .buttonStyle(.plain)
-
-            // Share
-            actionIcon(icon: "square.and.arrow.up", active: false) { showShare = true }
+            .buttonStyle(BrutalButtonStyle(
+                fill: BK.paper,
+                shadowColor: line, offset: 4
+            ))
         }
         .padding(.horizontal, 14)
-        .padding(.top, 10)
+        .padding(.top, 12)
         .padding(.bottom, 26)
-        .background(Color("Background").opacity(0.97))
-        .overlay(alignment: .top) { Rectangle().fill(Color("Border")).frame(height: 1) }
+        .background(BK.paper)
+        .overlay(alignment: .top) { Rectangle().fill(line).frame(height: 3) }
     }
 
-    private func actionIcon(icon: String, active: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: icon)
-                .font(.system(size: 17))
-                .foregroundStyle(active ? Color("Accent") : Color("TextPrimary"))
-                .frame(width: 44, height: 44)
-                .background(Color("Surface"), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .strokeBorder(active ? Color("Accent") : Color("Border"), lineWidth: 1)
-                )
+    private var dockLabel: String {
+        switch viewModel.currentShelf {
+        case .bookshelf: return "On Bookshelf"
+        case .tbr:       return "On TBR"
+        case .read:      return "Read"
+        case nil:        return "Add to Library"
         }
-        .buttonStyle(.plain)
-    }
-
-    private var primaryLabel: String {
-        if viewModel.bookState.isRead { return "Read ✓" }
-        if viewModel.bookState.isTBR { return "Want to Read" }
-        return "Mark as Reading"
     }
 
     // MARK: - Loading / Error
 
     private var loadingView: some View {
-        VStack { Spacer(); ProgressView().tint(Color("Accent")); Spacer() }
+        VStack { Spacer(); ProgressView().tint(BK.accent); Spacer() }
             .frame(maxWidth: .infinity)
     }
 
     private func errorView(_ message: String) -> some View {
         VStack(spacing: 16) {
             Spacer()
-            Text(message).font(.system(size: 14)).foregroundStyle(Color("TextSecondary"))
+            Text(message).font(.system(size: 14)).foregroundStyle(BK.muted)
                 .multilineTextAlignment(.center).padding(.horizontal, 40)
             Button("Retry") { Task { await viewModel.retry() } }
-                .font(.system(size: 14, weight: .semibold)).foregroundStyle(Color("Accent"))
+                .font(.system(size: 14, weight: .semibold)).foregroundStyle(BK.accent)
             Spacer()
         }
         .frame(maxWidth: .infinity)
@@ -630,11 +607,12 @@ struct BookDetailView: View {
     @ViewBuilder
     private var toastOverlay: some View {
         if let msg = viewModel.toastMessage {
-            Text(msg)
-                .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(.white)
-                .padding(.horizontal, 16).padding(.vertical, 10)
-                .background(Color(white: 0.15), in: Capsule())
+            Text(msg.uppercased())
+                .font(PB.mono(10, .semibold)).tracking(1)
+                .foregroundStyle(BK.paper)
+                .padding(.horizontal, 15).padding(.vertical, 9)
+                .background(BK.ink)
+                .overlay(Rectangle().strokeBorder(BK.accent, lineWidth: 2))
                 .padding(.bottom, 100)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
                 .onAppear {
@@ -644,5 +622,353 @@ struct BookDetailView: View {
                     }
                 }
         }
+    }
+}
+
+// MARK: - Add to Library sheet (3 shelves)
+
+private struct AddToLibrarySheet: View {
+    let current: BookDetailViewModel.LibraryShelf?
+    let onSelect: (BookDetailViewModel.LibraryShelf?) -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    private let line = BK.ink
+
+    private struct Option {
+        let shelf: BookDetailViewModel.LibraryShelf
+        let icon: String
+        let title: String
+        let sub: String
+    }
+
+    private let options: [Option] = [
+        .init(shelf: .bookshelf, icon: "books.vertical", title: "Add to Bookshelf",
+              sub: "Books you own — lands on your bookshelf"),
+        .init(shelf: .tbr, icon: "clock", title: "Add to TBR",
+              sub: "To-be-read — your want-to-read queue"),
+        .init(shelf: .read, icon: "checkmark.circle", title: "Mark as Read",
+              sub: "Finished — 100% progress on your bookshelf"),
+    ]
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Text("ADD TO LIBRARY")
+                    .font(.system(size: 15, weight: .black)).tracking(0.5)
+                    .foregroundStyle(BK.ink)
+                Spacer()
+                Button { dismiss() } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(BK.ink)
+                        .frame(width: 30, height: 30)
+                        .overlay(Rectangle().strokeBorder(line, lineWidth: 2))
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 16).padding(.vertical, 14)
+            .overlay(alignment: .bottom) { Rectangle().fill(line).frame(height: 2) }
+
+            ForEach(options, id: \.shelf) { opt in
+                let on = current == opt.shelf
+                Button { onSelect(on ? nil : opt.shelf) } label: {
+                    HStack(spacing: 13) {
+                        Image(systemName: opt.icon)
+                            .font(.system(size: 18, weight: .medium))
+                            .frame(width: 36, height: 36)
+                            .overlay(Rectangle().strokeBorder(on ? BK.paper : line, lineWidth: 2))
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(opt.title.uppercased())
+                                .font(.system(size: 15, weight: .bold)).tracking(0.3)
+                            Text(opt.sub)
+                                .font(PB.mono(9))
+                                .foregroundStyle(on ? BK.paper.opacity(0.85) : BK.muted)
+                        }
+                        Spacer()
+                        if on {
+                            Image(systemName: "checkmark").font(.system(size: 15, weight: .black))
+                        }
+                    }
+                    .foregroundStyle(on ? BK.paper : BK.ink)
+                    .padding(.horizontal, 16).padding(.vertical, 14)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(on ? BK.accent : BK.paper)
+                    .overlay(alignment: .bottom) { Rectangle().fill(line).frame(height: 2) }
+                }
+                .buttonStyle(.plain)
+            }
+            Spacer(minLength: 0)
+        }
+        .background(BK.paper)
+    }
+}
+
+extension BookDetailViewModel.LibraryShelf: Hashable {}
+
+// MARK: - Rate panel (inline, animated)
+
+private struct RatePanel: View {
+    let isSubmitting: Bool
+    let canDelete: Bool
+    let onSubmit: (Int) -> Void
+    let onDelete: () -> Void
+    let onClose: () -> Void
+
+    @State private var pending: Int
+    @State private var starPulse: [Int]   // per-star pop trigger
+
+    private let line = BK.ink
+
+    init(initial: Int, isSubmitting: Bool, canDelete: Bool,
+         onSubmit: @escaping (Int) -> Void, onDelete: @escaping () -> Void, onClose: @escaping () -> Void) {
+        self.isSubmitting = isSubmitting
+        self.canDelete = canDelete
+        self.onSubmit = onSubmit
+        self.onDelete = onDelete
+        self.onClose = onClose
+        _pending = State(initialValue: initial)
+        _starPulse = State(initialValue: Array(repeating: 0, count: 6))
+    }
+
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            Rectangle().fill(line).offset(x: 6, y: 6)
+
+            VStack(spacing: 0) {
+                Text("TAP TO SET YOUR RATING")
+                    .font(PB.mono(9, .medium)).tracking(2)
+                    .foregroundStyle(BK.muted)
+                    .padding(.top, 12).padding(.bottom, 8)
+
+                HStack(spacing: 8) {
+                    ForEach(1...5, id: \.self) { n in
+                        Button {
+                            pending = n
+                            starPulse[n] &+= 1
+                        } label: {
+                            Image(systemName: n <= pending ? "star.fill" : "star")
+                                .font(.system(size: 30))
+                                .foregroundStyle(n <= pending ? BK.accent : BK.muted.opacity(0.4))
+                                .popEffect(trigger: starPulse[n])
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.bottom, 10)
+
+                Text(pending > 0 ? "\(pending).0 / 5" : "—")
+                    .font(.system(size: 15, weight: .black))
+                    .foregroundStyle(BK.ink)
+                    .padding(.bottom, canDelete ? 8 : 12)
+
+                if canDelete {
+                    Button(action: onDelete) {
+                        Text("REMOVE RATING & REVIEW")
+                            .font(PB.mono(9, .semibold)).tracking(1.2)
+                            .foregroundStyle(BK.accent)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(isSubmitting)
+                    .padding(.bottom, 12)
+                }
+
+                Rectangle().fill(line).frame(height: 2)
+
+                HStack(spacing: 0) {
+                    Button { onSubmit(pending) } label: {
+                        Group {
+                            if isSubmitting {
+                                ProgressView().tint(BK.paper).scaleEffect(0.8)
+                            } else {
+                                Text("SUBMIT RATING")
+                                    .font(PB.mono(11, .semibold)).tracking(1.5)
+                                    .foregroundStyle(BK.paper)
+                            }
+                        }
+                        .frame(maxWidth: .infinity).frame(height: 46)
+                        .background(pending > 0 ? BK.ink : BK.ink.opacity(0.4))
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(pending == 0 || isSubmitting)
+
+                    Rectangle().fill(line).frame(width: 2)
+                    closeButton
+                }
+            }
+            .background(BK.paper2)
+            .overlay(Rectangle().strokeBorder(line, lineWidth: 2.5))
+        }
+        .padding(.trailing, 6).padding(.bottom, 6)
+    }
+
+    private var closeButton: some View {
+        Button(action: onClose) {
+            Image(systemName: "xmark")
+                .font(.system(size: 14, weight: .bold))
+                .foregroundStyle(BK.ink)
+                .frame(width: 50, height: 46)
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+// MARK: - Review panel (inline, animated)
+
+private struct ReviewPanel: View {
+    let isSubmitting: Bool
+    let canDelete: Bool
+    let onPost: (String) -> Void
+    let onDelete: () -> Void
+    let onClose: () -> Void
+
+    @State private var text: String
+    @FocusState private var focused: Bool
+
+    private let line = BK.ink
+
+    init(initial: String, isSubmitting: Bool, canDelete: Bool,
+         onPost: @escaping (String) -> Void, onDelete: @escaping () -> Void, onClose: @escaping () -> Void) {
+        self.isSubmitting = isSubmitting
+        self.canDelete = canDelete
+        self.onPost = onPost
+        self.onDelete = onDelete
+        self.onClose = onClose
+        _text = State(initialValue: initial)
+    }
+
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            Rectangle().fill(line).offset(x: 6, y: 6)
+
+            VStack(alignment: .leading, spacing: 0) {
+                Text("WRITE A REVIEW")
+                    .font(PB.mono(9, .medium)).tracking(2)
+                    .foregroundStyle(BK.muted)
+                    .padding(.horizontal, 14).padding(.top, 12).padding(.bottom, 4)
+
+                ZStack(alignment: .topLeading) {
+                    if text.isEmpty {
+                        Text("What stayed with you? Half-formed thoughts welcome…")
+                            .font(PB.serifItalic(15))
+                            .foregroundStyle(BK.muted)
+                            .padding(.horizontal, 14).padding(.top, 8)
+                    }
+                    TextEditor(text: $text)
+                        .font(.system(size: 15, design: .serif))
+                        .foregroundStyle(BK.ink)
+                        .scrollContentBackground(.hidden)
+                        .frame(minHeight: 84)
+                        .padding(.horizontal, 10)
+                        .focused($focused)
+                }
+
+                if canDelete {
+                    Rectangle().fill(line).frame(height: 2)
+                    Button(action: onDelete) {
+                        Text("REMOVE RATING & REVIEW")
+                            .font(PB.mono(9, .semibold)).tracking(1.2)
+                            .foregroundStyle(BK.accent)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 10)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(isSubmitting)
+                }
+
+                Rectangle().fill(line).frame(height: 2)
+
+                HStack(spacing: 0) {
+                    Button { onPost(text) } label: {
+                        Group {
+                            if isSubmitting {
+                                ProgressView().tint(BK.paper).scaleEffect(0.8)
+                            } else {
+                                Text("POST REVIEW")
+                                    .font(PB.mono(11, .semibold)).tracking(1.5)
+                                    .foregroundStyle(BK.paper)
+                            }
+                        }
+                        .frame(maxWidth: .infinity).frame(height: 46)
+                        .background(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                                    ? BK.ink.opacity(0.4) : BK.ink)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isSubmitting)
+
+                    Rectangle().fill(line).frame(width: 2)
+                    Button(action: onClose) {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundStyle(BK.ink)
+                            .frame(width: 50, height: 46)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .background(BK.paper2)
+            .overlay(Rectangle().strokeBorder(line, lineWidth: 2.5))
+        }
+        .padding(.trailing, 6).padding(.bottom, 6)
+        .onAppear { focused = true }
+    }
+}
+
+// MARK: - Review row (All reviews)
+
+private struct BookReviewRow: View {
+    let review: BookReview
+    @State private var expanded = false
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 11) {
+            AvatarView(url: review.avatarURL?.replacingOccurrences(of: "http://", with: "https://"), size: 34)
+
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 7) {
+                    Text(review.username)
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(BK.ink)
+                    if let rating = review.rating, rating > 0 {
+                        Text(stars(rating))
+                            .font(.system(size: 11))
+                            .foregroundStyle(BK.accent)
+                    }
+                    Spacer(minLength: 8)
+                    Text(relativeDate(review.reviewedAt))
+                        .font(PB.mono(9)).tracking(1)
+                        .foregroundStyle(BK.muted)
+                }
+                if let text = review.review, !text.isEmpty {
+                    Text(text)
+                        .font(.system(size: 13.5, design: .serif))
+                        .foregroundStyle(BK.ink.opacity(0.88))
+                        .lineSpacing(3)
+                        .lineLimit(expanded ? nil : 3)
+                        .onTapGesture {
+                            withAnimation(.easeInOut(duration: 0.2)) { expanded.toggle() }
+                        }
+                }
+            }
+        }
+        .padding(.vertical, 14)
+    }
+
+    private func stars(_ rating: Int) -> String {
+        let n = max(0, min(rating, 5))
+        return String(repeating: "★", count: n) + String(repeating: "☆", count: 5 - n)
+    }
+
+    private func relativeDate(_ s: String?) -> String {
+        guard let s else { return "" }
+        let df = ISO8601DateFormatter()
+        df.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let date = df.date(from: s) ?? {
+            df.formatOptions = [.withInternetDateTime]
+            return df.date(from: s)
+        }()
+        guard let d = date else { return "" }
+        let out = DateFormatter()
+        out.dateFormat = "MMM d"
+        return out.string(from: d).uppercased()
     }
 }

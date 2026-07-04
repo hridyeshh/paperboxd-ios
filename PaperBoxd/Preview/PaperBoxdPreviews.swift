@@ -74,14 +74,9 @@ import SwiftUI
     ShareComposition(
         title: "Norwegian Wood",
         author: "Haruki Murakami",
-        year: "1987",
-        rating: 4.5,
-        note: "Loved the rain scene. A whole evening lost — happily.",
         coverImage: nil,
-        accent: Color(red: 0.30, green: 0.20, blue: 0.42),
         handle: "@hridyesh",
-        status: .finished,
-        theme: .dark,
+        rating: 4,
         format: .story
     )
     .scaleEffect(0.36)
@@ -91,14 +86,9 @@ import SwiftUI
     ShareComposition(
         title: "Piranesi",
         author: "Susanna Clarke",
-        year: "2020",
-        rating: 4,
-        note: "The Beauty of the House is immeasurable, its Kindness infinite.",
         coverImage: nil,
-        accent: Color(red: 0.20, green: 0.30, blue: 0.34),
         handle: "@hridyesh",
-        status: .favourite,
-        theme: .light,
+        rating: 5,
         format: .square
     )
     .scaleEffect(0.46)
@@ -118,7 +108,6 @@ import SwiftUI
             streak: 12,
             bannerCovers: [],
             onFollow: {},
-            onMessage: {},
             onEdit: {},
             onSettings: {},
             onFollowers: {},

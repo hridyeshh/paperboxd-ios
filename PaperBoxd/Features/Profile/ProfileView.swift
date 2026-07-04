@@ -4,7 +4,9 @@ struct ProfileView: View {
     @StateObject private var vm: ProfileViewModel
     @State private var showFollowers = false
     @State private var showFollowing = false
+    @State private var followPath = NavigationPath()
     @State private var shareItem: ShareItem?
+    @State private var showShareProfile = false
     @State private var showEdit = false
     @State private var showBannerPicker = false
     @State private var showSettings = false
@@ -43,19 +45,20 @@ struct ProfileView: View {
                     }
             }
         }
-        .sheet(isPresented: $showFollowers) {
-            NavigationStack {
-                FollowListView(username: vm.profileUsername, mode: .followers) { _ in }
-            }
+        .sheet(isPresented: $showFollowers, onDismiss: { followPath = NavigationPath() }) {
+            followListSheet(mode: .followers)
         }
-        .sheet(isPresented: $showFollowing) {
-            NavigationStack {
-                FollowListView(username: vm.profileUsername, mode: .following) { _ in }
-            }
+        .sheet(isPresented: $showFollowing, onDismiss: { followPath = NavigationPath() }) {
+            followListSheet(mode: .following)
         }
         .sheet(item: $shareItem) { item in
             ShareSheet(items: [item.url])
                 .presentationDetents([.medium, .large])
+        }
+        .sheet(isPresented: $showShareProfile) {
+            if let profile = vm.profile {
+                ShareProfileSheet(username: profile.username, displayName: profile.displayName)
+            }
         }
         .sheet(isPresented: $showEdit) {
             if let profile = vm.profile {
@@ -84,11 +87,26 @@ struct ProfileView: View {
                 Task { await vm.uploadBanner(data) }
             }
         }
+        .environment(\.colorScheme, .light)   // profile page is light-mode only
+        .preferredColorScheme(.light)
     }
 
     private func shareProfile() {
-        guard let url = URL(string: "https://paperboxd.app/u/\(vm.profileUsername)") else { return }
-        shareItem = ShareItem(url: url)
+        showShareProfile = true
+    }
+
+    // Tapping a follower/following row pushes that user's profile within the sheet.
+    @ViewBuilder
+    private func followListSheet(mode: FollowListMode) -> some View {
+        NavigationStack(path: $followPath) {
+            FollowListView(username: vm.profileUsername, mode: mode) { username in
+                followPath.append(username)
+            }
+            .navigationDestination(for: String.self) { username in
+                ProfileView(username: username, viewer: vm.viewerUser)
+                    .environmentObject(appState)
+            }
+        }
     }
 
     // MARK: - Top floating bar (wordmark + actions)
@@ -103,13 +121,12 @@ struct ProfileView: View {
             Spacer()
             Text("PaperBoxd")
                 .font(PB.wordmark(22))
-                .foregroundStyle(.white.opacity(0.95))
-                .shadow(color: .black.opacity(0.4), radius: 6, y: 1)
+                .foregroundStyle(Color("TextPrimary"))
             Spacer()
-            // Share lives with the nav chrome (matches the back chevron);
-            // settings moved down to the action row. Own profile only.
+            // Settings (hamburger) lives with the nav chrome; Share moved down to
+            // the action row. Own profile only.
             if vm.isOwnProfile {
-                circleButton(systemName: "square.and.arrow.up") { shareProfile() }
+                circleButton(systemName: "line.3.horizontal") { showSettings = true }
             } else {
                 Color.clear.frame(width: 36, height: 36)
             }
@@ -122,9 +139,9 @@ struct ProfileView: View {
         Button(action: action) {
             Image(systemName: systemName)
                 .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(.white)
+                .foregroundStyle(Color("TextPrimary"))
                 .frame(width: 36, height: 36)
-                .background(.black.opacity(0.55))
+                .background(Color("TextPrimary").opacity(0.08))
                 .clipShape(Circle())
         }
         .buttonStyle(.plain)
@@ -139,28 +156,40 @@ struct ProfileView: View {
         } else if let err = vm.errorMessage, vm.profile == nil {
             errorView(err)
         } else if let profile = vm.profile {
-            ScrollView {
+            BrutalistRefreshable(onRefresh: { await vm.fetchAll() }, topInset: 56) {
                 VStack(spacing: 0) {
                     ProfileHeaderView(
                         profile: profile,
+                        booksCount: vm.shelfTotal,
                         isOwnProfile: vm.isOwnProfile,
                         isFollowLoading: vm.isFollowLoading,
                         streak: vm.streak,
                         bannerCovers: bannerCoverURLs,
                         onFollow: { Task { await vm.toggleFollow() } },
-                        onMessage: { },
                         onEdit: { showEdit = true },
                         onSettings: { showSettings = true },
                         onFollowers: { showFollowers = true },
                         onFollowing: { showFollowing = true },
+                        onShare: { shareProfile() },
                         onEditBanner: vm.isOwnProfile ? { showBannerPicker = true } : nil
                     )
 
-                    if vm.lastLoggedBook != nil || vm.isOwnProfile {
+                    if let activity = vm.activity {
+                        ReadingHeatmapView(
+                            activity: activity,
+                            selectedYear: vm.activityYear,
+                            onSelectYear: { vm.selectActivityYear($0) }
+                        )
+                        .padding(.horizontal, 20)
+                        .padding(.top, 28)
+                    }
+
+                    let readingBook = vm.lastLoggedBook ?? vm.currentlyReadingFallback
+                    if readingBook != nil || vm.isOwnProfile {
                         VStack(alignment: .leading, spacing: 10) {
                             Eyebrow(text: vm.isOwnProfile ? "Currently reading" : "\(firstName(of: profile)) is reading")
                                 .padding(.horizontal, 20)
-                            if let lb = vm.lastLoggedBook {
+                            if let lb = readingBook {
                                 NavigationLink(value: lb.bookID) {
                                     LastLoggedBookCard(book: lb)
                                         .padding(.horizontal, 20)
@@ -196,7 +225,6 @@ struct ProfileView: View {
                         .padding(.bottom, 24)
                 }
             }
-            .refreshable { await vm.fetchAll() }
         }
     }
 
@@ -211,10 +239,10 @@ struct ProfileView: View {
     private func tabCount(_ tab: ProfileTab) -> Int? {
         guard let p = vm.profile else { return nil }
         switch tab {
-        case .bookshelf: return p.booksReadCount
+        case .bookshelf: return vm.shelfTotal ?? p.booksReadCount
         case .diary:     return p.diaryEntriesCount
         case .lists:     return p.listsCount
-        case .dnf:       return vm.dnfItems.isEmpty ? nil : vm.dnfItems.count
+        case .tbr:       return vm.tbrItems.isEmpty ? nil : vm.tbrItems.count
         case .authors:   return vm.authors.isEmpty ? nil : vm.authors.count
         }
     }
@@ -226,8 +254,7 @@ struct ProfileView: View {
             ShelfGridView(
                 books: vm.shelfBooks,
                 isLoading: vm.isLoadingShelf,
-                onAppearItem: { await vm.fetchShelfIfNeeded(item: $0) },
-                onTapBook: { _ in }
+                onAppearItem: { await vm.fetchShelfIfNeeded(item: $0) }
             )
         case .diary:
             DiaryListView(
@@ -237,11 +264,11 @@ struct ProfileView: View {
             )
         case .lists:
             ListsTabView(ownLists: vm.ownLists, savedLists: vm.savedLists)
-        case .dnf:
+        case .tbr:
             TBRListView(
-                items: vm.dnfItems,
-                isLoading: vm.isLoadingDNF,
-                emptyMessage: "No unfinished books"
+                items: vm.tbrItems,
+                isLoading: vm.isLoadingTBR,
+                emptyMessage: "Nothing on the TBR list yet"
             )
         case .authors:
             AuthorsListView(authors: vm.authors, isLoading: vm.isLoadingAuthors)

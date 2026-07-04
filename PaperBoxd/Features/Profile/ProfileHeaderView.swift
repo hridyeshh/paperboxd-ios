@@ -2,38 +2,43 @@ import SwiftUI
 
 struct ProfileHeaderView: View {
     let profile: UserProfile
+    var booksCount: Int? = nil
     let isOwnProfile: Bool
     let isFollowLoading: Bool
     let streak: Int?
     let bannerCovers: [String]
     let onFollow: () -> Void
-    let onMessage: () -> Void
     let onEdit: () -> Void
     let onSettings: () -> Void
     let onFollowers: () -> Void
     let onFollowing: () -> Void
+    var onShare: () -> Void = {}
     var onEditBanner: (() -> Void)? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            banner
-                .overlay(alignment: .bottomLeading) { avatar.padding(.leading, 20).offset(y: 44) }
+            HStack(alignment: .center, spacing: 16) {
+                avatar
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(profile.displayName)
+                        .font(PB.serif(28))
+                        .foregroundStyle(Color("TextPrimary"))
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    handleRow
+                }
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 64) // clears the floating PaperBoxd wordmark / top bar
 
             VStack(alignment: .leading, spacing: 0) {
-                Color.clear.frame(height: 52) // clears the overlapping avatar
-
-                Text(profile.displayName)
-                    .font(PB.serif(30))
-                    .foregroundStyle(Color("TextPrimary"))
-
-                handleRow.padding(.top, 8)
-
                 if let bio = profile.bio, !bio.isEmpty {
                     Text(bio)
                         .font(PB.serifItalic(15))
                         .foregroundStyle(Color("TextPrimary").opacity(0.78))
                         .lineSpacing(2)
-                        .padding(.top, 12)
+                        .padding(.top, 16)
                 }
 
                 statStrip.padding(.top, 20)
@@ -42,91 +47,6 @@ struct ProfileHeaderView: View {
             }
             .padding(.horizontal, 20)
         }
-    }
-
-    // MARK: - Banner
-
-    private var banner: some View {
-        // A clear Rectangle owns the layout size (screen width × 168). The image
-        // lives in an .overlay, which is laid out *within* the host's bounds and
-        // never contributes to layout size — so an oversized uploaded banner can
-        // no longer push the whole profile wider than the screen.
-        Rectangle()
-            .fill(Color.clear)
-            .frame(maxWidth: .infinity)
-            .frame(height: 168)
-            .overlay {
-                if let urlStr = profile.bannerURL, let url = URL(string: urlStr) {
-                    AsyncImage(url: url) { img in
-                        img.resizable().scaledToFill()
-                    } placeholder: { spineStrip }
-                } else {
-                    spineStrip
-                }
-            }
-            .overlay {
-                LinearGradient(
-                    stops: [
-                        .init(color: Color("Background").opacity(0.05), location: 0),
-                        .init(color: Color("Background").opacity(0.65), location: 0.6),
-                        .init(color: Color("Background"), location: 1),
-                    ],
-                    startPoint: .top, endPoint: .bottom
-                )
-            }
-            .clipped()
-            // Editorial "edit cover" chip, anchored to the cover's own corner and
-            // riding the banner's bottom gradient scrim (legible without a hard
-            // black circle). Mono label + outline icon match the app's vocabulary.
-            .overlay(alignment: .bottomTrailing) {
-                if let onEditBanner {
-                    Button(action: onEditBanner) {
-                        HStack(spacing: 5) {
-                            Image(systemName: "camera")
-                                .font(.system(size: 11, weight: .semibold))
-                            Text("Edit cover")
-                                .font(PB.mono(9.5, .medium))
-                                .tracking(1.2)
-                        }
-                        .foregroundStyle(.white.opacity(0.95))
-                        .padding(.horizontal, 11)
-                        .padding(.vertical, 6)
-                        .background(.black.opacity(0.30), in: Capsule())
-                        .overlay(Capsule().strokeBorder(.white.opacity(0.22), lineWidth: 0.5))
-                    }
-                    .buttonStyle(.plain)
-                    .padding(.trailing, 14)
-                    .padding(.bottom, 14)
-                }
-            }
-    }
-
-    private var spineStrip: some View {
-        HStack(spacing: 3) {
-            ForEach(0..<12, id: \.self) { i in
-                spineColor(i)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .cornerRadius(2)
-            }
-        }
-        .blur(radius: 1.2)
-        .saturation(0.7)
-        .opacity(0.85)
-        .scaleEffect(1.08)
-    }
-
-    private func spineColor(_ i: Int) -> Color {
-        let palette: [Color] = [
-            Color(red: 0.42, green: 0.16, blue: 0.22),
-            Color(red: 0.22, green: 0.29, blue: 0.16),
-            Color(red: 0.35, green: 0.22, blue: 0.42),
-            Color(red: 0.16, green: 0.42, blue: 0.35),
-            Color(red: 0.23, green: 0.29, blue: 0.42),
-            Color(red: 0.42, green: 0.35, blue: 0.16),
-            Color(red: 0.16, green: 0.35, blue: 0.42),
-            Color(red: 0.42, green: 0.22, blue: 0.30),
-        ]
-        return palette[i % palette.count]
     }
 
     // MARK: - Avatar
@@ -162,13 +82,6 @@ struct ProfileHeaderView: View {
                     .font(.system(size: 12))
                     .foregroundStyle(Color("TextSecondary"))
             }
-            if let since = readingSince {
-                dot
-                Text(since)
-                    .font(PB.mono(10))
-                    .tracking(1)
-                    .foregroundStyle(Color("TextSecondary"))
-            }
         }
     }
 
@@ -176,17 +89,11 @@ struct ProfileHeaderView: View {
         Text("·").foregroundStyle(Color("TextSecondary").opacity(0.6))
     }
 
-    private var readingSince: String? {
-        let year = String(profile.createdAt.prefix(4))
-        guard year.count == 4, Int(year) != nil else { return nil }
-        return "Reading since \(year)"
-    }
-
     // MARK: - Stat strip
 
     private var statStrip: some View {
         HStack(spacing: 6) {
-            statCell(value: profile.booksReadCount, label: "Books", action: nil)
+            statCell(value: booksCount ?? profile.booksReadCount, label: "Books", action: nil)
             statCell(value: streak ?? 0, label: "Streak", action: nil)
             statCell(value: profile.followersCount, label: "Friends", action: onFollowers)
             statCell(value: profile.diaryEntriesCount, label: "Reviews", action: nil)
@@ -222,8 +129,8 @@ struct ProfileHeaderView: View {
     private var actionRow: some View {
         HStack(spacing: 8) {
             if isOwnProfile {
-                PillButton(title: "Edit profile", style: .primary, action: onEdit)
-                PillButton(title: "Settings", systemImage: "gearshape", style: .ghost, action: onSettings)
+                PillButton(title: "Edit profile", style: .brutalPrimary, action: onEdit)
+                PillButton(title: "Share profile", style: .brutalGhost, action: onShare)
             } else {
                 let following = profile.isFollowing ?? false
                 PillButton(
@@ -233,7 +140,6 @@ struct ProfileHeaderView: View {
                     loading: isFollowLoading,
                     action: onFollow
                 )
-                PillButton(title: "Message", style: .ghost, action: onMessage)
             }
         }
     }

@@ -31,6 +31,8 @@ struct DiaryView: View {
                 BookDetailView(bookId: bookId, user: vm.user)
             }
         }
+        .environment(\.colorScheme, .light)
+        .preferredColorScheme(.light)
         .onReceive(NotificationCenter.default.publisher(for: .diaryEntryCreated)) { note in
             if let entry = note.object as? DiaryEntry {
                 vm.handleNewEntry(entry)
@@ -76,7 +78,7 @@ struct DiaryView: View {
     // MARK: - List
 
     private var entryList: some View {
-        ScrollView {
+        BrutalistRefreshable(onRefresh: { await vm.refresh() }) {
             LazyVStack(spacing: 0) {
                 ForEach(Array(vm.entries.enumerated()), id: \.element.id) { idx, entry in
                     entryRow(entry, isFirst: idx == 0)
@@ -86,7 +88,6 @@ struct DiaryView: View {
             .padding(.horizontal, 18)
             .padding(.bottom, 100)
         }
-        .refreshable { await vm.refresh() }
     }
 
     @ViewBuilder

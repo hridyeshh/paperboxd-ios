@@ -61,6 +61,31 @@ struct FriendReviewsResponse: Decodable {
     let reviews: [FriendBookReview]
 }
 
+/// One public review on the current book, from any reader.
+/// Source: GET /api/v1/books/{id}/reviews
+struct BookReview: Codable, Identifiable {
+    let userID: String
+    let username: String
+    let avatarURL: String?
+    let rating: Int?
+    let review: String?
+    let reviewedAt: String?
+    let edited: Bool
+
+    var id: String { userID }
+
+    enum CodingKeys: String, CodingKey {
+        case username, rating, review, edited
+        case userID = "user_id"
+        case avatarURL = "avatar_url"
+        case reviewedAt = "reviewed_at"
+    }
+}
+
+struct BookReviewsResponse: Decodable {
+    let reviews: [BookReview]
+}
+
 /// Reading progress on a specific book for the authenticated user.
 /// Source: GET /api/v1/users/{username}/bookshelf/{bookId}/progress
 struct ReadingProgress: Decodable {

@@ -101,6 +101,8 @@ struct MainTabView: View {
                 NavigationStack {
                     ProfileView(username: user.username ?? "", viewer: user)
                 }
+                .environment(\.colorScheme, .light)   // profile tab is light-mode only
+                .preferredColorScheme(.light)
             } label: {
                 profileImage ?? Image(systemName: "person")
             }
@@ -176,6 +178,8 @@ struct MainTabView: View {
             NavigationStack {
                 ProfileView(username: user.username ?? "", viewer: user)
             }
+            .environment(\.colorScheme, .light)   // profile tab is light-mode only
+            .preferredColorScheme(.light)
         }
     }
 

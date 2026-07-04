@@ -53,15 +53,17 @@ struct Eyebrow: View {
 struct SectionHeader<Trailing: View>: View {
     let eyebrow: String
     let title: String
+    var titleColor: Color = Color("TextPrimary")
+    var eyebrowColor: Color = Color("TextSecondary")
     @ViewBuilder var trailing: Trailing
 
     var body: some View {
         HStack(alignment: .firstTextBaseline) {
             VStack(alignment: .leading, spacing: 3) {
-                Eyebrow(text: eyebrow)
+                Eyebrow(text: eyebrow, color: eyebrowColor)
                 Text(title)
                     .font(PB.serif(19))
-                    .foregroundStyle(Color("TextPrimary"))
+                    .foregroundStyle(titleColor)
                     .lineLimit(2)
             }
             Spacer(minLength: 8)
@@ -71,9 +73,11 @@ struct SectionHeader<Trailing: View>: View {
 }
 
 extension SectionHeader where Trailing == EmptyView {
-    init(eyebrow: String, title: String) {
+    init(eyebrow: String, title: String, titleColor: Color = Color("TextPrimary"), eyebrowColor: Color = Color("TextSecondary")) {
         self.eyebrow = eyebrow
         self.title = title
+        self.titleColor = titleColor
+        self.eyebrowColor = eyebrowColor
         self.trailing = EmptyView()
     }
 }
@@ -96,40 +100,66 @@ struct SeeAllButton: View {
 // MARK: - Pill button (Follow / Edit / Message)
 
 struct PillButton: View {
-    enum Style { case primary, ghost }
+    enum Style { case primary, ghost, brutalPrimary, brutalGhost }
     let title: String
     var systemImage: String? = nil
     var style: Style = .primary
     var loading: Bool = false
     let action: () -> Void
 
+    private var ink: Color { Color("TextPrimary") }
+    private var isBrutal: Bool { style == .brutalPrimary || style == .brutalGhost }
+    private var isFilled: Bool { style == .primary || style == .brutalPrimary }
+    private var fg: Color { isFilled ? Color("Background") : ink }
+    private var bg: Color {
+        if isFilled { return ink }
+        return isBrutal ? Color("Background") : Color.clear
+    }
+
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 6) {
-                if loading {
-                    ProgressView()
-                        .tint(style == .primary ? Color("Background") : Color("TextPrimary"))
-                        .scaleEffect(0.8)
-                } else {
-                    Text(title)
-                        .font(.system(size: 13, weight: .semibold))
-                    if let icon = systemImage {
-                        Image(systemName: icon).font(.system(size: 11, weight: .bold))
-                    }
+            if isBrutal { brutalLabel } else { pillLabel }
+        }
+        .buttonStyle(.plain)
+        .disabled(loading)
+    }
+
+    private var labelContent: some View {
+        HStack(spacing: 6) {
+            if loading {
+                ProgressView().tint(fg).scaleEffect(0.8)
+            } else {
+                Text(title).font(.system(size: 13, weight: .semibold))
+                if let icon = systemImage {
+                    Image(systemName: icon).font(.system(size: 11, weight: .bold))
                 }
             }
-            .frame(maxWidth: .infinity, minHeight: 38)
-            .foregroundStyle(style == .primary ? Color("Background") : Color("TextPrimary"))
-            .background(style == .primary ? Color("TextPrimary") : Color.clear)
+        }
+        .frame(maxWidth: .infinity, minHeight: 38)
+        .foregroundStyle(fg)
+    }
+
+    private var pillLabel: some View {
+        labelContent
+            .background(bg)
             .clipShape(Capsule())
             .overlay {
                 if style == .ghost {
                     Capsule().strokeBorder(Color("Border"), lineWidth: 1)
                 }
             }
-        }
-        .buttonStyle(.plain)
-        .disabled(loading)
+    }
+
+    // Hard-edged, ink border + offset drop-shadow — matches the brutalist
+    // heatmap / currently-reading cards. Trailing/bottom padding reserves room
+    // for the shadow so it doesn't clip against neighbours.
+    private var brutalLabel: some View {
+        labelContent
+            .background(bg)
+            .overlay(Rectangle().strokeBorder(ink, lineWidth: 2))
+            .background(Rectangle().fill(ink).offset(x: 3, y: 3))
+            .padding(.trailing, 3)
+            .padding(.bottom, 3)
     }
 }
 

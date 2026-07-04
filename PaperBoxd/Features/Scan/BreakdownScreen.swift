@@ -21,16 +21,15 @@ struct BreakdownScreen: View {
                 breaksDown
                 whySection
                 sourcesCaption
-                actions
-                notForMe
                 ScansRemainingFooter()
                     .frame(maxWidth: .infinity)
             }
             .padding(.horizontal, 26)
             .padding(.top, 16)
-            .padding(.bottom, 44)
+            .padding(.bottom, 24)
         }
         .background(SK.bgSofter.ignoresSafeArea())
+        .safeAreaInset(edge: .bottom) { bottomBar }
         .overlay(alignment: .topTrailing) {
             Button(action: onClose) {
                 Image(systemName: "xmark").font(.system(size: 13, weight: .bold)).foregroundStyle(SK.sub)
@@ -145,7 +144,9 @@ struct BreakdownScreen: View {
         }
     }
 
-    private var actions: some View {
+    /// Sticky action bar pinned to the bottom of the screen: Add to TBR (fills),
+    /// a cross button ("not for me" ghost dismiss), and share.
+    private var bottomBar: some View {
         HStack(spacing: 10) {
             Button {
                 Task { await addToTBR() }
@@ -169,6 +170,16 @@ struct BreakdownScreen: View {
             .buttonStyle(.plain)
             .disabled(tbrState == .loading || tbrState == .added)
 
+            // "Not for me" — ghost dismiss, no negative signal logged, no API call.
+            Button {
+                onClose()
+            } label: {
+                Image(systemName: "xmark").font(.system(size: 16, weight: .semibold)).foregroundStyle(SK.ink)
+                    .frame(width: 50, height: 48)
+                    .overlay(Capsule().strokeBorder(SK.border, lineWidth: 1))
+            }
+            .buttonStyle(.plain)
+
             ShareLink(item: shareText) {
                 Image(systemName: "square.and.arrow.up").font(.system(size: 16)).foregroundStyle(SK.ink)
                     .frame(width: 50, height: 48)
@@ -176,21 +187,11 @@ struct BreakdownScreen: View {
             }
             .buttonStyle(.plain)
         }
-    }
-
-    /// Ghost dismiss — closes the result and returns to the scan entry state.
-    /// No negative signal logged, no API call (same dismiss path as the ✕ button).
-    private var notForMe: some View {
-        Button {
-            onClose()
-        } label: {
-            Text("Not for me")
-                .font(.subheadline)
-                .foregroundColor(.secondary)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 12)
-        }
-        .buttonStyle(.plain)
+        .padding(.horizontal, 26)
+        .padding(.top, 12)
+        .padding(.bottom, 8)
+        .background(SK.bgSofter)
+        .overlay(alignment: .top) { Rectangle().fill(SK.border).frame(height: 1) }
     }
 
     /// Text shared from the breakdown — book, personal match, and app attribution.

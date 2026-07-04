@@ -271,7 +271,7 @@ struct AnalyzingScreen: View {
                 .font(.system(size: 28)).foregroundStyle(SK.ink)
             Text(message).font(PB.serif(18)).foregroundStyle(SK.ink)
                 .multilineTextAlignment(.center).padding(.horizontal, 40)
-            Text("Unlimited scans coming soon")
+            Text("You've used your free scans. More scans coming soon.")
                 .font(.system(size: 13)).foregroundStyle(SK.sub)
                 .multilineTextAlignment(.center)
             BruButton(title: "Back", action: onBack).padding(.horizontal, 40).padding(.top, 6)

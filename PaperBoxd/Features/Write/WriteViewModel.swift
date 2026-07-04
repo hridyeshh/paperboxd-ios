@@ -46,13 +46,13 @@ final class WriteViewModel: ObservableObject {
         isSearchingBooks = true
         defer { isSearchingBooks = false }
         let encoded = q.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? q
-        let resp: BookSearchResponse? = try? await APIClient.shared.request(
+        let resp: BookListResponse? = try? await APIClient.shared.request(
             path: Endpoints.searchBooks + "?q=\(encoded)&page_size=8",
             method: .get,
             requiresAuth: false
         )
         guard !Task.isCancelled else { return }
-        bookSearchResults = resp?.books ?? []
+        bookSearchResults = resp?.items ?? []
     }
 
     func submit() async {
@@ -98,8 +98,4 @@ private struct DiaryCreateBody: Encodable {
         case content, rating
         case readingDate = "reading_date"
     }
-}
-
-private struct BookSearchResponse: Decodable {
-    let books: [Book]
 }

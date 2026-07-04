@@ -10,11 +10,11 @@ struct UserSearchResultRow: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text(user.displayName)
                     .font(PB.serif(14.5))
-                    .foregroundStyle(Color("TextPrimary"))
+                    .foregroundStyle(BK.ink)
                     .lineLimit(1)
                 Text("@\(user.username)")
                     .font(PB.mono(11))
-                    .foregroundStyle(Color("TextSecondary"))
+                    .foregroundStyle(BK.muted)
                     .lineLimit(1)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -23,11 +23,11 @@ struct UserSearchResultRow: View {
             VStack(alignment: .trailing, spacing: 1) {
                 Text("\(user.booksReadCount)")
                     .font(PB.mono(12, .medium))
-                    .foregroundStyle(Color("TextPrimary"))
+                    .foregroundStyle(BK.ink)
                 Text("BOOKS")
                     .font(PB.mono(8.5))
                     .tracking(1.6)
-                    .foregroundStyle(Color("TextSecondary"))
+                    .foregroundStyle(BK.muted)
             }
             .fixedSize()
         }

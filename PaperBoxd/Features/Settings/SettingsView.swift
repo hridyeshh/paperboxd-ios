@@ -14,6 +14,7 @@ struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @AppStorage("pb_scans_remaining") private var scansRemaining: Int = 7
     @State private var showDeleteConfirmation = false
+    @State private var showRateAlert = false
     @State private var isDeleting = false
     @State private var deleteError: String?
     @State private var shareItem: ShareItem?
@@ -100,11 +101,6 @@ struct SettingsView: View {
             } label: {
                 SettingsRow(icon: "square.and.arrow.down", label: "Import from Goodreads")
             }
-            NavigationLink {
-                ComingSoonView(feature: "Export My Data")
-            } label: {
-                SettingsRow(icon: "square.and.arrow.up", label: "Export My Data")
-            }
         } header: {
             Eyebrow(text: "Your Data")
         }
@@ -123,15 +119,16 @@ struct SettingsView: View {
                 SettingsRow(icon: "person.badge.plus", label: "Invite Friends")
             }
             Button {
-                // TODO: replace with real App Store ID before submission
-                // if let url = URL(string: "itms-apps://itunes.apple.com/app/idYOUR_ID?action=write-review") {
-                //   UIApplication.shared.open(url)
-                // }
+                // TODO: Replace with SKStoreReviewController after App Store submission
+                showRateAlert = true
             } label: {
                 SettingsRow(icon: "star.fill", label: "Rate PaperBoxd")
-                    .foregroundColor(.secondary)  // visually dimmed to signal not-yet-active
             }
-            .disabled(true)
+            .alert("Rate PaperBoxd", isPresented: $showRateAlert) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text("We'll enable ratings once we're live on the App Store. Thank you for your support!")
+            }
         } header: {
             Eyebrow(text: "Discover")
         }
@@ -403,27 +400,6 @@ struct LegalView: View {
         }
         .background(Color("Background").ignoresSafeArea())
         .navigationTitle(content.title)
-        .navigationBarTitleDisplayMode(.inline)
-    }
-}
-
-// MARK: - Coming soon placeholder
-
-struct ComingSoonView: View {
-    let feature: String
-
-    var body: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "clock")
-                .font(.largeTitle)
-                .foregroundStyle(Color("TextSecondary"))
-            Text("\(feature) is coming soon")
-                .font(PB.serif(18))
-                .foregroundStyle(Color("TextSecondary"))
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color("Background").ignoresSafeArea())
-        .navigationTitle(feature)
         .navigationBarTitleDisplayMode(.inline)
     }
 }

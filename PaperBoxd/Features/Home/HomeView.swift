@@ -6,6 +6,17 @@ struct HomeView: View {
     @State private var showNotifications = false
     @State private var showWrite = false
 
+    // Home is light-mode only. The app window is globally forced dark
+    // (UIWindow.appearance().overrideUserInterfaceStyle = .dark) and the asset
+    // colors are single-appearance dark, so we use fixed light values here —
+    // same approach as the book page (BrutalKit.BK). Mirrors "Home - Brutalist
+    // Mobile.html" tokens.
+    private let hlBg    = Color(red: 0.949, green: 0.929, blue: 0.882) // paper  #f2ede1
+    private let hlCard  = Color(red: 0.992, green: 0.984, blue: 0.965) // card   #fdfbf6
+    private let hlInk   = Color(red: 0.082, green: 0.082, blue: 0.075) // ink    #151513
+    private let hlMuted = Color(red: 0.416, green: 0.392, blue: 0.337) // muted  #6a6456
+    private let hlAccent = Color(red: 0.824, green: 0.231, blue: 0.149) // accent #d23b26
+
     init(user: User) {
         self.user = user
         _viewModel = StateObject(wrappedValue: HomeViewModel(user: user))
@@ -21,7 +32,7 @@ struct HomeView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                Color("Background").ignoresSafeArea()
+                hlBg.ignoresSafeArea()
                 dotGrid.ignoresSafeArea()
 
                 VStack(spacing: 0) {
@@ -44,6 +55,8 @@ struct HomeView: View {
                     .onAppear { viewModel.markActivitiesViewed() }
             }
         }
+        .environment(\.colorScheme, .light)   // home page is light-mode only
+        .preferredColorScheme(.light)
     }
 
     // MARK: - Header (cursive wordmark + actions)
@@ -52,15 +65,15 @@ struct HomeView: View {
         HStack(alignment: .center) {
             Text("PaperBoxd")
                 .font(PB.wordmark(30))
-                .foregroundStyle(Color("TextPrimary"))
+                .foregroundStyle(hlInk)
             Spacer()
             HStack(spacing: 8) {
             Button { showWrite = true } label: {
                 Image(systemName: "square.and.pencil")
                     .font(.system(size: 19, weight: .medium))
-                    .foregroundStyle(Color("TextPrimary"))
+                    .foregroundStyle(hlInk)
                     .frame(width: 44, height: 44)
-                    .background(Color("Surface"))
+                    .background(hlCard)
                     .clipShape(Circle())
             }
             .buttonStyle(.plain)
@@ -68,15 +81,15 @@ struct HomeView: View {
                 ZStack(alignment: .topTrailing) {
                     Image(systemName: "bell")
                         .font(.system(size: 19, weight: .medium))
-                        .foregroundStyle(Color("TextPrimary"))
+                        .foregroundStyle(hlInk)
                         .frame(width: 44, height: 44)
-                        .background(Color("Surface"))
+                        .background(hlCard)
                         .clipShape(Circle())
                     if viewModel.hasNewActivities {
                         Circle()
                             .fill(PB.terracotta)
                             .frame(width: 9, height: 9)
-                            .overlay(Circle().strokeBorder(Color("Background"), lineWidth: 2))
+                            .overlay(Circle().strokeBorder(hlBg, lineWidth: 2))
                             .offset(x: -3, y: 3)
                     }
                 }
@@ -87,7 +100,7 @@ struct HomeView: View {
         .padding(.horizontal, 20)
         .padding(.top, 8)
         .padding(.bottom, 10)
-        .background(Color("Background").opacity(0.95))
+        .background(hlBg.opacity(0.95))
         .fullScreenCover(isPresented: $showWrite) {
             WriteView(username: user.username ?? "")
         }
@@ -103,7 +116,7 @@ struct HomeView: View {
                 var y: CGFloat = 0
                 while y < size.height {
                     ctx.fill(Path(ellipseIn: CGRect(x: x, y: y, width: dot, height: dot)),
-                             with: .color(.white.opacity(0.04)))
+                             with: .color(hlInk.opacity(0.05)))
                     y += spacing
                 }
                 x += spacing
@@ -115,35 +128,18 @@ struct HomeView: View {
     // MARK: - Feed scroll
 
     private var feedScroll: some View {
-        ScrollView {
+        BrutalistRefreshable(onRefresh: { await viewModel.refresh() }) {
             VStack(alignment: .leading, spacing: 28) {
                 greetingBlock.padding(.horizontal, 20).padding(.top, 12)
 
                 if let lb = viewModel.lastLoggedBook {
-                    VStack(spacing: 10) {
-                        NavigationLink(value: lb.bookID) {
-                            LastLoggedBookCard(book: lb)
-                                .padding(.horizontal, 20)
-                        }
-                        .buttonStyle(.plain)
-
-                        // Opens the book detail, where PageProgressView lets the
-                        // user log today's pages.
-                        NavigationLink(value: lb.bookID) {
-                            HStack(spacing: 6) {
-                                Text("Log today's pages")
-                                    .font(.system(size: 14, weight: .semibold))
-                                Image(systemName: "arrow.right")
-                                    .font(.system(size: 12, weight: .semibold))
-                            }
-                            .foregroundStyle(Color("Background"))
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 42)
-                            .background(Color("TextPrimary"), in: Capsule())
-                        }
-                        .buttonStyle(.plain)
-                        .padding(.horizontal, 20)
+                    // Brutalist currently-reading hero. The whole card opens the
+                    // book detail, where PageProgressView logs today's pages.
+                    NavigationLink(value: lb.bookID) {
+                        BrutalReadingHero(book: lb)
+                            .padding(.horizontal, 20)
                     }
+                    .buttonStyle(.plain)
                 }
 
                 if !viewModel.friendsActivities.isEmpty {
@@ -169,7 +165,6 @@ struct HomeView: View {
             }
             .padding(.bottom, 16)
         }
-        .refreshable { await viewModel.refresh() }
     }
 
     // MARK: - Friends rail
@@ -179,7 +174,7 @@ struct HomeView: View {
             VStack(alignment: .leading, spacing: 3) {
                 Eyebrow(text: "Your friends").padding(.horizontal, 20)
                 Text("Between covers.")
-                    .font(PB.serif(18)).foregroundStyle(Color("TextPrimary"))
+                    .font(PB.serif(18)).foregroundStyle(hlInk)
                     .padding(.horizontal, 20)
             }
 
@@ -194,8 +189,10 @@ struct HomeView: View {
         }
     }
 
+    // Brutalist friend card — always light, ink border + hard offset shadow.
     private func friendCard(_ a: FriendActivity) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+        let card = Color(red: 0.992, green: 0.984, blue: 0.965)
+        return VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
                 ZStack {
                     if let urlStr = a.avatarURL, let url = URL(string: urlStr) {
@@ -209,39 +206,40 @@ struct HomeView: View {
                     }
                 }
                 .frame(width: 24, height: 24)
-                .clipShape(Circle())
+                .clipShape(Rectangle())
+                .overlay(Rectangle().strokeBorder(BK.ink, lineWidth: 1))
 
                 Text(a.displayName)
                     .font(.system(size: 11.5, weight: .semibold))
-                    .foregroundStyle(Color("TextPrimary"))
+                    .foregroundStyle(BK.ink)
                     .lineLimit(1)
 
                 Spacer(minLength: 0)
-
-                RoundedRectangle(cornerRadius: 2)
-                    .fill(Color("Surface"))
-                    .frame(width: 14, height: 21)
             }
 
             Group {
                 Text(a.verbPhrase + " ")
                     .font(.system(size: 11.5))
-                    .foregroundStyle(Color("TextSecondary"))
+                    .foregroundStyle(BK.muted)
                 +
                 Text(a.objectTitle ?? "")
                     .font(.system(size: 11.5, design: .serif).italic())
-                    .foregroundStyle(Color("TextPrimary"))
+                    .foregroundStyle(BK.ink)
             }
             .lineLimit(2)
 
             Text(a.relativeTime)
                 .font(PB.mono(9.5)).tracking(0.5)
-                .foregroundStyle(Color("TextSecondary"))
+                .foregroundStyle(BK.muted)
         }
         .padding(12)
         .frame(width: 162)
-        .background(Color("Surface"), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Color("Border"), lineWidth: 1))
+        .background(card)
+        .overlay(Rectangle().strokeBorder(BK.ink, lineWidth: 1.5))
+        .background(alignment: .topLeading) {
+            Rectangle().fill(BK.ink).offset(x: 4, y: 4)
+        }
+        .padding(.trailing, 4).padding(.bottom, 4) // room for the offset shadow
     }
 
     // MARK: - Greeting
@@ -250,10 +248,10 @@ struct HomeView: View {
         VStack(alignment: .leading, spacing: 4) {
             Text("Hello, \(user.username ?? "reader")")
                 .font(PB.serif(26))
-                .foregroundStyle(Color("TextPrimary"))
+                .foregroundStyle(hlInk)
             Text("what are you reading?")
                 .font(PB.serifItalic(22, .regular))
-                .foregroundStyle(Color("TextSecondary"))
+                .foregroundStyle(hlMuted)
         }
     }
 
@@ -261,7 +259,7 @@ struct HomeView: View {
 
     private func carouselSection(eyebrow: String, title: String, items: [RecommendationItem]) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            SectionHeader(eyebrow: eyebrow, title: title)
+            SectionHeader(eyebrow: eyebrow, title: title, titleColor: hlInk, eyebrowColor: hlMuted)
                 .padding(.horizontal, 20)
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 10) {
@@ -283,14 +281,14 @@ struct HomeView: View {
         ScrollView {
             VStack(spacing: 20) {
                 RoundedRectangle(cornerRadius: 18)
-                    .fill(Color("Surface"))
+                    .fill(hlCard)
                     .frame(height: 120).pbShimmer()
                     .padding(.horizontal, 20)
                     .padding(.top, 12)
                 let cols = Array(repeating: GridItem(.flexible(), spacing: 8), count: 3)
                 LazyVGrid(columns: cols, spacing: 8) {
                     ForEach(0..<9, id: \.self) { _ in
-                        RoundedRectangle(cornerRadius: 6).fill(Color("Surface"))
+                        RoundedRectangle(cornerRadius: 6).fill(hlCard)
                             .aspectRatio(2/3, contentMode: .fit).pbShimmer()
                     }
                 }
@@ -304,12 +302,12 @@ struct HomeView: View {
             Spacer()
             Text(message)
                 .font(PB.serifItalic(14))
-                .foregroundStyle(Color("TextSecondary"))
+                .foregroundStyle(hlMuted)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 40)
             Button("Retry") { Task { await viewModel.load() } }
                 .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(Color("Accent"))
+                .foregroundStyle(hlAccent)
             Spacer()
         }
     }
@@ -327,12 +325,12 @@ private struct CarouselCoverCard: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(item.title)
                     .font(PB.serif(13))
-                    .foregroundStyle(Color("TextPrimary"))
+                    .foregroundStyle(BK.ink)
                     .lineLimit(2)
                 if !item.authors.isEmpty {
                     Text(item.authorLine)
                         .font(.system(size: 11))
-                        .foregroundStyle(Color("TextSecondary"))
+                        .foregroundStyle(BK.muted)
                         .lineLimit(1)
                 }
             }
@@ -346,13 +344,13 @@ private struct ShimmerCardView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(Color("Surface"))
+                .fill(BK.paper2)
                 .aspectRatio(2.0/3.0, contentMode: .fit)
                 .frame(maxWidth: .infinity)
             RoundedRectangle(cornerRadius: 4, style: .continuous)
-                .fill(Color("Surface")).frame(maxWidth: .infinity, minHeight: 12, maxHeight: 12)
+                .fill(BK.paper2).frame(maxWidth: .infinity, minHeight: 12, maxHeight: 12)
             RoundedRectangle(cornerRadius: 4, style: .continuous)
-                .fill(Color("Surface")).frame(width: 80, height: 10)
+                .fill(BK.paper2).frame(width: 80, height: 10)
         }
         .opacity(opacity)
         .onAppear {

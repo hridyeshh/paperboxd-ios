@@ -13,6 +13,7 @@ struct UserBookState {
     var isRead: Bool = false
     var isLiked: Bool = false
     var isTBR: Bool = false
+    var isOnShelf: Bool = false
     var isLoading: Bool = false
 }
 
@@ -21,4 +22,5 @@ struct BookStatusResponse: Decodable {
     let isRead: Bool
     let isLiked: Bool
     let isTBR: Bool
+    let isOnShelf: Bool
 }

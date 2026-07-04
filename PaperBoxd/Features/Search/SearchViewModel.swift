@@ -145,52 +145,46 @@ final class SearchViewModel: ObservableObject {
         guard wallBooks.isEmpty, !isLoadingWall else { return }
         isLoadingWall = true
         defer { isLoadingWall = false }
-        let resp: BookListResponse? = try? await APIClient.shared.request(
-            path: Endpoints.latestBooks + "?page=1&page_size=24",
-            method: .get,
-            requiresAuth: false
-        )
-        let items = resp?.items ?? []
+        let items = await fetchRandomWall()
         wallBooks = items
-        wallPage = 1
-        wallHasMore = items.count == 24
+        wallHasMore = !items.isEmpty
     }
 
     func loadMoreWall() async {
         guard wallHasMore, !isLoadingMoreWall, !isLoadingWall else { return }
         isLoadingMoreWall = true
         defer { isLoadingMoreWall = false }
-        let nextPage = wallPage + 1
-        let resp: BookListResponse? = try? await APIClient.shared.request(
-            path: Endpoints.latestBooks + "?page=\(nextPage)&page_size=24",
-            method: .get,
-            requiresAuth: false
-        )
-        let items = resp?.items ?? []
-        wallBooks.append(contentsOf: items)
-        wallPage = nextPage
-        wallHasMore = items.count == 24
+        let items = await fetchRandomWall()
+        // Random slices can repeat books, so append only ones we don't have yet.
+        var seen = Set(wallBooks.map { $0.id })
+        let fresh = items.filter { seen.insert($0.id).inserted }
+        wallBooks.append(contentsOf: fresh)
+        // Keep the feed unlimited as long as the endpoint keeps returning books.
+        wallHasMore = !items.isEmpty
     }
 
     func shuffleWall() async {
         guard !isLoadingWall else { return }
         isLoadingWall = true
         defer { isLoadingWall = false }
+        let items = await fetchRandomWall()
+        if !items.isEmpty {
+            wallBooks = items
+            wallHasMore = true
+        }
+    }
 
-        // `/books/random` returns a fresh `ORDER BY RANDOM()` slice server-side,
-        // so every pull-to-refresh yields a genuinely different wall.
+    /// `/books/random` returns a fresh `ORDER BY RANDOM()` slice server-side.
+    /// The `_` cache-buster stops URLSession from replaying a cached response,
+    /// so every refresh / page actually varies.
+    private func fetchRandomWall() async -> [Book] {
+        let bust = Int(Date().timeIntervalSince1970 * 1000)
         let resp: BookListResponse? = try? await APIClient.shared.request(
-            path: Endpoints.randomBooks + "?page_size=24",
+            path: Endpoints.randomBooks + "?page_size=24&_=\(bust)",
             method: .get,
             requiresAuth: false
         )
-        let items = resp?.items ?? []
-        if !items.isEmpty {
-            wallBooks = items
-            wallPage = 1
-            // Random feed isn't paginated; stop infinite-scroll from re-fetching `latest`.
-            wallHasMore = false
-        }
+        return resp?.items ?? []
     }
 
     func loadSuggestedReaders() async {

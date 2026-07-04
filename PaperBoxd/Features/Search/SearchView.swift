@@ -6,6 +6,17 @@ struct SearchView: View {
     @FocusState private var searchFocused: Bool
     @State private var searchPath = NavigationPath()
 
+    // Search page is light-mode only. The app window is globally forced dark and
+    // the asset colors are single-appearance dark, so we use fixed light values
+    // here (same approach as the home page / book page BK). Mirrors the tokens in
+    // "Search - Brutalist Mobile.html".
+    private let slBg    = Color(red: 0.949, green: 0.929, blue: 0.882) // paper  #f2ede1
+    private let slCard  = Color(red: 0.992, green: 0.984, blue: 0.965) // card   #fdfbf6
+    private let slInk   = Color(red: 0.082, green: 0.082, blue: 0.075) // ink    #151513
+    private let slMuted = Color(red: 0.416, green: 0.392, blue: 0.337) // muted  #6a6456
+    private let slLine  = Color(red: 0.902, green: 0.874, blue: 0.816) // line   #e6dfd0
+    private let slAccent = Color(red: 0.824, green: 0.231, blue: 0.149) // accent #d23b26
+
     init(viewer: User) {
         self.viewer = viewer
         _vm = StateObject(wrappedValue: SearchViewModel())
@@ -21,7 +32,7 @@ struct SearchView: View {
     var body: some View {
         NavigationStack(path: $searchPath) {
             ZStack(alignment: .top) {
-                Color("Background").ignoresSafeArea()
+                slBg.ignoresSafeArea()
 
                 VStack(spacing: 0) {
                     searchHeader
@@ -36,6 +47,8 @@ struct SearchView: View {
                 ProfileView(username: dest.username, viewer: viewer)
             }
         }
+        .environment(\.colorScheme, .light)   // search page is light-mode only
+        .preferredColorScheme(.light)
     }
 
     // MARK: - Search header
@@ -53,7 +66,7 @@ struct SearchView: View {
                     } label: {
                         Image(systemName: "arrow.left")
                             .font(.system(size: 16, weight: .medium))
-                            .foregroundStyle(Color("TextPrimary"))
+                            .foregroundStyle(slInk)
                             .frame(width: 32, height: 32)
                     }
                     .buttonStyle(.plain)
@@ -76,23 +89,30 @@ struct SearchView: View {
                     .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
-        .background(Color("Background").opacity(0.96))
+        .background(slBg.opacity(0.96))
         .overlay(alignment: .bottom) {
-            Rectangle().fill(Color("Border")).frame(height: 1)
+            Rectangle().fill(slLine).frame(height: 1)
         }
         .animation(.easeInOut(duration: 0.2), value: searchFocused)
     }
 
+    // Brutalist search bar. Idle: hard 5px offset ink shadow behind the face.
+    // Focused: the face presses into its own shadow (translate +offset, shadow
+    // collapses to 0) — the same instant, no-easing motion as BrutalButtonStyle
+    // on the book page.
     private var searchBarField: some View {
-        HStack(spacing: 10) {
+        let offset: CGFloat = 5
+        let pressed = searchFocused
+        return HStack(spacing: 10) {
             Image(systemName: vm.searchType == .vibe ? "sparkles" : "magnifyingglass")
-                .font(.system(size: 14))
-                .foregroundStyle(vm.searchType == .vibe ? Color.orange.opacity(0.7) : Color("TextSecondary"))
+                .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(vm.searchType == .vibe ? slAccent : slInk)
 
             TextField(placeholder, text: $vm.query)
                 .focused($searchFocused)
                 .font(.system(size: 15))
-                .foregroundStyle(Color("TextPrimary"))
+                .foregroundStyle(slInk)
+                .tint(slAccent)
                 .autocorrectionDisabled()
                 .submitLabel(.search)
                 .onChange(of: vm.query) { _, _ in vm.onQueryChanged() }
@@ -105,17 +125,27 @@ struct SearchView: View {
                     vm.vibeBooks = []
                 } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 14))
-                        .foregroundStyle(Color("TextSecondary"))
+                        .font(.system(size: 15))
+                        .foregroundStyle(slMuted)
                 }
                 .buttonStyle(.plain)
             }
         }
         .padding(.horizontal, 14)
-        .padding(.vertical, 14)
-        .background(Color("Surface"))
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .padding(.vertical, 13)
+        .background(slCard)
+        .overlay(Rectangle().strokeBorder(slInk, lineWidth: 1.5))
+        // hard offset shadow sits behind the face; collapses on focus
+        .background(alignment: .topLeading) {
+            Rectangle()
+                .fill(slInk)
+                .offset(x: pressed ? 0 : offset, y: pressed ? 0 : offset)
+        }
+        // face pushes into its own shadow when focused
+        .offset(x: pressed ? offset : 0, y: pressed ? offset : 0)
+        .animation(nil, value: pressed) // instant, brutalist
+        .padding(.trailing, offset)     // reserve room for the idle shadow
+        .contentShape(Rectangle())
         .onTapGesture { searchFocused = true }
     }
 
@@ -145,14 +175,14 @@ struct SearchView: View {
         } label: {
             Text(type.rawValue)
                 .font(.system(size: 12, weight: vm.searchType == type ? .semibold : .medium))
-                .foregroundStyle(vm.searchType == type ? Color("Background") : Color("TextSecondary"))
+                .foregroundStyle(vm.searchType == type ? slBg : slMuted)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 7)
-                .background(vm.searchType == type ? Color("TextPrimary") : Color.clear)
+                .background(vm.searchType == type ? slInk : Color.clear)
                 .clipShape(Capsule())
                 .overlay {
                     if vm.searchType != type {
-                        Capsule().strokeBorder(Color("Border"), lineWidth: 1)
+                        Capsule().strokeBorder(slLine, lineWidth: 1)
                     }
                 }
         }
@@ -199,17 +229,17 @@ struct SearchView: View {
                 }
             }
         }
-        .background(Color("Background"))
+        .background(slBg)
     }
 
     private var noPriorSearchBanner: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text("search anything.")
                 .font(PB.serif(32))
-                .foregroundStyle(Color("TextPrimary"))
+                .foregroundStyle(slInk)
             Text("Books, readers, or a vibe.")
                 .font(PB.serifItalic(18, .regular))
-                .foregroundStyle(Color("TextSecondary"))
+                .foregroundStyle(slMuted)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 22)
@@ -223,7 +253,7 @@ struct SearchView: View {
                 Spacer()
                 Button("Clear") { vm.clearHistory() }
                     .font(PB.mono(10))
-                    .foregroundStyle(Color("TextSecondary"))
+                    .foregroundStyle(slMuted)
             }
             .padding(.horizontal, 20)
             .padding(.top, 20)
@@ -237,17 +267,17 @@ struct SearchView: View {
                     HStack(spacing: 12) {
                         Image(systemName: "clock")
                             .font(.system(size: 13))
-                            .foregroundStyle(Color("TextSecondary").opacity(0.6))
+                            .foregroundStyle(slMuted.opacity(0.6))
                         Text(term)
                             .font(.system(size: 14))
-                            .foregroundStyle(Color("TextPrimary"))
+                            .foregroundStyle(slInk)
                         Spacer()
                         Button {
                             vm.removeFromHistory(term)
                         } label: {
                             Image(systemName: "xmark")
                                 .font(.system(size: 11, weight: .medium))
-                                .foregroundStyle(Color("TextSecondary").opacity(0.5))
+                                .foregroundStyle(slMuted.opacity(0.5))
                         }
                         .buttonStyle(.plain)
                     }
@@ -256,7 +286,7 @@ struct SearchView: View {
                 }
                 .buttonStyle(.plain)
 
-                Rectangle().fill(Color("Border").opacity(0.4)).frame(height: 1)
+                Rectangle().fill(slLine.opacity(0.4)).frame(height: 1)
                     .padding(.leading, 52)
             }
         }
@@ -268,7 +298,7 @@ struct SearchView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 if vm.isSearching {
-                    ProgressView().tint(Color("Accent"))
+                    ProgressView().tint(slAccent)
                         .frame(maxWidth: .infinity)
                         .padding(.top, 60)
                 } else if vm.searchType == .readers {
@@ -280,7 +310,7 @@ struct SearchView: View {
             .padding(.top, 8)
             .padding(.bottom, 16)
         }
-        .background(Color("Background"))
+        .background(slBg)
     }
 
     private func bookResults(_ items: [Book]) -> some View {
@@ -294,7 +324,7 @@ struct SearchView: View {
                             BookSearchResultRow(book: book)
                         }
                         .buttonStyle(.plain)
-                        Rectangle().fill(Color("Border").opacity(0.5)).frame(height: 1)
+                        Rectangle().fill(slLine.opacity(0.5)).frame(height: 1)
                             .padding(.leading, 20)
                     }
                 }
@@ -315,7 +345,7 @@ struct SearchView: View {
                             UserSearchResultRow(user: user)
                         }
                         .buttonStyle(.plain)
-                        Rectangle().fill(Color("Border").opacity(0.5)).frame(height: 1)
+                        Rectangle().fill(slLine.opacity(0.5)).frame(height: 1)
                             .padding(.leading, 20)
                     }
                 }
@@ -327,10 +357,10 @@ struct SearchView: View {
         VStack(spacing: 12) {
             Image(systemName: "doc.text.magnifyingglass")
                 .font(.system(size: 34, weight: .light))
-                .foregroundStyle(Color("TextSecondary").opacity(0.6))
+                .foregroundStyle(slMuted.opacity(0.6))
             Text("Nothing found")
                 .font(PB.serifItalic(14))
-                .foregroundStyle(Color("TextSecondary"))
+                .foregroundStyle(slMuted)
         }
         .frame(maxWidth: .infinity)
         .padding(.top, 80)
@@ -339,14 +369,13 @@ struct SearchView: View {
     // MARK: - Wall
 
     private var wallScrollView: some View {
-        ScrollView {
+        BrutalistRefreshable(onRefresh: { await vm.shuffleWall() }) {
             VStack(alignment: .leading, spacing: 14) {
                 wallHeader.padding(.horizontal, 18).padding(.top, 16)
                 wallGrid
             }
             .padding(.bottom, 16)
         }
-        .refreshable { await vm.shuffleWall() }
         .task { await vm.loadWallIfNeeded() }
     }
 
@@ -355,7 +384,7 @@ struct SearchView: View {
             Eyebrow(text: "The wall")
             Text("What everyone is shelving.")
                 .font(PB.serif(17))
-                .foregroundStyle(Color("TextPrimary"))
+                .foregroundStyle(slInk)
         }
     }
 
@@ -365,7 +394,7 @@ struct SearchView: View {
         if vm.isLoadingWall && vm.wallBooks.isEmpty {
             LazyVGrid(columns: cols, spacing: 6) {
                 ForEach(0..<12, id: \.self) { _ in
-                    RoundedRectangle(cornerRadius: 6).fill(Color("Surface"))
+                    RoundedRectangle(cornerRadius: 6).fill(slCard)
                         .aspectRatio(2/3, contentMode: .fit).pbShimmer()
                 }
             }
@@ -375,10 +404,10 @@ struct SearchView: View {
             VStack(spacing: 14) {
                 Text("Couldn't load the wall.")
                     .font(PB.serifItalic(14))
-                    .foregroundStyle(Color("TextSecondary"))
+                    .foregroundStyle(slMuted)
                 Button("Try again") { Task { await vm.loadWallIfNeeded() } }
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(Color("Accent"))
+                    .foregroundStyle(slAccent)
             }
             .frame(maxWidth: .infinity)
             .padding(.top, 40)
@@ -404,7 +433,7 @@ struct SearchView: View {
             if vm.isLoadingMoreWall {
                 Text("··· loading more ···")
                     .font(PB.mono(10)).tracking(1.5)
-                    .foregroundStyle(Color("TextSecondary"))
+                    .foregroundStyle(slMuted)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 12)
             }

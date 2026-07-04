@@ -97,7 +97,7 @@ struct RevealScreen: View {
         .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(SK.ink, lineWidth: 1.5))
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(SK.accent).offset(x: 3, y: 3)
+                .fill(Color.white).offset(x: 3, y: 3)
         )
     }
 

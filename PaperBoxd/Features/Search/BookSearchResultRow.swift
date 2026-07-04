@@ -12,18 +12,18 @@ struct BookSearchResultRow: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(book.title)
                     .font(PB.serif(14.5))
-                    .foregroundStyle(Color("TextPrimary"))
+                    .foregroundStyle(BK.ink)
                     .lineLimit(2)
 
                 HStack(spacing: 8) {
                     Text(authorYearLine)
                         .font(.system(size: 12))
-                        .foregroundStyle(Color("TextSecondary"))
+                        .foregroundStyle(BK.muted)
                         .lineLimit(1)
                     if let rating = book.averageRating {
                         Text(String(format: "★ %.1f", rating))
                             .font(PB.mono(11))
-                            .foregroundStyle(Color("TextPrimary"))
+                            .foregroundStyle(BK.ink)
                     }
                 }
 
@@ -31,7 +31,7 @@ struct BookSearchResultRow: View {
                     Text(book.categories.prefix(2).joined(separator: " · "))
                         .font(PB.mono(9.5))
                         .tracking(1)
-                        .foregroundStyle(Color("Accent").opacity(0.85))
+                        .foregroundStyle(BK.accent.opacity(0.85))
                         .lineLimit(1)
                 }
             }
@@ -41,9 +41,9 @@ struct BookSearchResultRow: View {
             Button(action: onAdd) {
                 Image(systemName: "plus")
                     .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(Color("TextPrimary"))
+                    .foregroundStyle(BK.ink)
                     .frame(width: 32, height: 32)
-                    .overlay(Circle().strokeBorder(Color("Border"), lineWidth: 1))
+                    .overlay(Circle().strokeBorder(BK.paper2, lineWidth: 1))
             }
             .buttonStyle(.plain)
         }

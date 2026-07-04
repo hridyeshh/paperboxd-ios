@@ -37,6 +37,11 @@ enum Endpoints {
         "/api/v1/users/\(username)/bookshelf/\(bookId)/status"
     }
 
+    /// PATCH — sets rating (1–5, 0 clears) and/or review text on a shelved book.
+    static func updateBookshelfRating(username: String, bookId: String) -> String {
+        "/api/v1/users/\(username)/bookshelf/\(bookId)"
+    }
+
     // Books
     static func book(_ id: String) -> String { "/api/v1/books/\(id)" }
     static func likeBook(_ id: String) -> String { "/api/v1/books/\(id)/like" }
@@ -65,6 +70,7 @@ enum Endpoints {
     static func userReading(username: String) -> String { "/api/v1/users/\(username)/reading" }
     static func readingToday(username: String) -> String { "/api/v1/users/\(username)/reading/today" }
     static func lastLoggedBook(username: String) -> String { "/api/v1/users/\(username)/reading/last" }
+    static func readingActivity(username: String, year: Int) -> String { "/api/v1/users/\(username)/reading/activity?year=\(year)" }
 
     // Books — trending wall feed (already exists; surfacing in iOS)
     static let publicBooks = "/api/v1/books/public"
