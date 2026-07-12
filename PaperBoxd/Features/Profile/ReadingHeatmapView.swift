@@ -36,6 +36,9 @@ struct ReadingHeatmapView: View {
                     grid
                 }
             }
+            // The server caps the current year at today, so the grid's trailing
+            // edge is the current week — land there instead of on January.
+            .defaultScrollAnchor(.trailing)
             .padding(.top, 14)
 
             legendRow.padding(.top, 14)
@@ -194,11 +197,15 @@ struct ReadingHeatmapView: View {
         let months = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"]
         let startWeekday = cal.component(.weekday, from: startDate)
         let gridStart = cal.date(byAdding: .day, value: -(startWeekday - 1), to: startDate)!
+        // Walk the same padded range as `columns` so the header always has
+        // exactly one marker per week column.
+        let endWeekday = cal.component(.weekday, from: endDate)
+        let gridEnd = cal.date(byAdding: .day, value: 7 - endWeekday, to: endDate)!
 
         var markers: [String] = []
         var cur = gridStart
         var lastMonth = -1
-        while cur <= endDate {
+        while cur <= gridEnd {
             // month of the first in-year day of this column
             var repMonth = -1
             var probe = cur

@@ -156,8 +156,8 @@ struct HomeView: View {
 
                 if !viewModel.freshShelves.isEmpty {
                     carouselSection(
-                        eyebrow: "This week",
-                        title: "Newly published.",
+                        eyebrow: "Just added",
+                        title: "New on the shelves.",
                         items: viewModel.freshShelves
                     )
                 }

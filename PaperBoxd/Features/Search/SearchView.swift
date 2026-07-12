@@ -298,7 +298,7 @@ struct SearchView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 if vm.isSearching {
-                    ProgressView().tint(slAccent)
+                    PBSpinner()
                         .frame(maxWidth: .infinity)
                         .padding(.top, 60)
                 } else if vm.searchType == .readers {
@@ -371,12 +371,43 @@ struct SearchView: View {
     private var wallScrollView: some View {
         BrutalistRefreshable(onRefresh: { await vm.shuffleWall() }) {
             VStack(alignment: .leading, spacing: 14) {
-                wallHeader.padding(.horizontal, 18).padding(.top, 16)
+                if !vm.recommendations.isEmpty {
+                    recommendationsRail.padding(.top, 16)
+                }
+                wallHeader.padding(.horizontal, 18)
+                    .padding(.top, vm.recommendations.isEmpty ? 16 : 8)
                 wallGrid
             }
             .padding(.bottom, 16)
         }
         .task { await vm.loadWallIfNeeded() }
+        .task { await vm.loadRecommendationsIfNeeded() }
+    }
+
+    // MARK: - Picked for you rail
+
+    private var recommendationsRail: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 3) {
+                Eyebrow(text: "Picked for you")
+                Text("Based on your shelves.")
+                    .font(PB.serif(17))
+                    .foregroundStyle(slInk)
+            }
+            .padding(.horizontal, 18)
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(alignment: .top, spacing: 10) {
+                    ForEach(vm.recommendations) { item in
+                        NavigationLink(value: item.id) {
+                            RecsRailCard(item: item, ink: slInk, muted: slMuted)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal, 18)
+            }
+        }
     }
 
     private var wallHeader: some View {
@@ -443,4 +474,32 @@ struct SearchView: View {
 
 struct ProfileDestination: Hashable {
     let username: String
+}
+
+/// Cover + title card for the search page's "Picked for you" rail.
+private struct RecsRailCard: View {
+    let item: RecommendationItem
+    let ink: Color
+    let muted: Color
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            BookCoverView(url: item.coverURL, width: 96, cornerRadius: 6)
+                .shadow(color: .black.opacity(0.2), radius: 6, y: 3)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(item.title)
+                    .font(PB.serif(12.5))
+                    .foregroundStyle(ink)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+                if !item.authors.isEmpty {
+                    Text(item.authorLine)
+                        .font(.system(size: 10.5))
+                        .foregroundStyle(muted)
+                        .lineLimit(1)
+                }
+            }
+            .frame(width: 96, alignment: .leading)
+        }
+    }
 }

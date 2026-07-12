@@ -103,8 +103,12 @@ enum Endpoints {
         "/api/v1/users/\(username)/diary/\(entryId)/like"
     }
 
-    // Password reset (web v1 route — works for mobile too)
-    static let forgotPassword  = "/api/v1/auth/forgot-password"
+    // Password reset. The Go backend's /api/v1/auth/forgot-password only mints a
+    // token and returns it to the caller — it does NOT send the email. The email
+    // (via Resend) is sent by the Next.js web proxy, so hit that absolute URL
+    // instead. URL(string:relativeTo:) ignores the backend base for an absolute
+    // string, so this one endpoint bypasses Config.backendURL.
+    static let forgotPassword  = "https://paperboxd.in/api/auth/forgot-password"
 
     // Username availability (uses existing web v1 route — no mobile twin yet)
     static func checkUsername(_ username: String) -> String {

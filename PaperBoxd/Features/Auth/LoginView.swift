@@ -194,9 +194,14 @@ struct LoginView: View {
             .foregroundStyle(.black)
             .frame(maxWidth: .infinity)
             .frame(height: 52)
-            .background(Color(red: 0.96, green: 0.95, blue: 0.93))
+            // Shadow lives on the fill rect, not the label — otherwise the hard
+            // white offset shadow casts a ghost copy of "Sign in" onto the side.
+            .background(
+                Rectangle()
+                    .fill(Color(red: 0.96, green: 0.95, blue: 0.93))
+                    .shadow(color: .white.opacity(0.22), radius: 0, x: 4, y: 4)
+            )
             .overlay(Rectangle().stroke(.black.opacity(0.9), lineWidth: 2))
-            .shadow(color: .white.opacity(0.22), radius: 0, x: 4, y: 4)
             .opacity(enabled ? 1 : 0.45)
         }
         .buttonStyle(ScaleButtonStyle())

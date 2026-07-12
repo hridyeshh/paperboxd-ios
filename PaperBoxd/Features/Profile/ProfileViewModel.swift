@@ -117,6 +117,49 @@ final class ProfileViewModel: ObservableObject {
         if let act = await activityTask { activity = act }
         isLoading = false
         await refreshShelf()
+        await refreshActiveTab()
+    }
+
+    /// Re-fetches the currently selected secondary tab (page 1), replacing its
+    /// contents only on success. Without this, pull-to-refresh spins but the
+    /// diary/lists/tbr/authors lists never reload because their fetchers guard
+    /// on isEmpty/hasMore.
+    private func refreshActiveTab() async {
+        switch selectedTab {
+        case .bookshelf:
+            break // refreshShelf() already handled this
+        case .diary:
+            if let resp: DiaryEntriesResponse = try? await APIClient.shared.request(
+                path: Endpoints.userDiary(username: profileUsername) + "?page=1&page_size=20",
+                method: .get, requiresAuth: true
+            ) {
+                diaryEntries = resp.entries
+                diaryPage = 2
+                diaryHasMore = resp.entries.count == 20
+            }
+        case .lists:
+            if let resp: UserListsResponse = try? await APIClient.shared.request(
+                path: Endpoints.userLists(username: profileUsername),
+                method: .get, requiresAuth: true
+            ) {
+                ownLists = resp.ownLists
+                savedLists = resp.savedLists
+            }
+        case .tbr:
+            if let items: [TBRItem] = try? await APIClient.shared.request(
+                path: Endpoints.userTBR(username: profileUsername),
+                method: .get, requiresAuth: true
+            ) {
+                tbrItems = items
+            }
+        case .authors:
+            if let items: [AuthorSummary] = try? await APIClient.shared.request(
+                path: Endpoints.userAuthors(username: profileUsername),
+                method: .get, requiresAuth: true
+            ) {
+                authors = items
+            }
+        }
     }
 
     /// Re-fetches the shelf without clearing what's already shown, so a failed
@@ -296,6 +339,10 @@ final class ProfileViewModel: ObservableObject {
     func fetchDiaryIfNeeded(item: DiaryEntry) async {
         guard let last = diaryEntries.last, last.id == item.id else { return }
         await fetchDiary()
+    }
+
+    func handleDeletedEntry(_ id: String) {
+        diaryEntries.removeAll { $0.id == id }
     }
 
     // MARK: - Lists

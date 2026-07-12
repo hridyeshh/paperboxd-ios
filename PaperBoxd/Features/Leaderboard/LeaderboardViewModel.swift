@@ -97,6 +97,10 @@ final class LeaderboardViewModel: ObservableObject {
                 path: path, method: .get, requiresAuth: true
             )
             entries = resp.leaderboard
+        } catch is CancellationError {
+            // Refresh task was torn down (pull-to-refresh gesture ended). Keep the
+            // existing list and don't surface an error — avoids the swap-out loop
+            // where clearing entries destroys the ScrollView mid-refresh.
         } catch let e as APIError {
             errorMessage = e.errorDescription
             entries = []

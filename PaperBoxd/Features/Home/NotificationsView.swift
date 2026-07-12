@@ -9,16 +9,22 @@ struct NotificationsView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var path = NavigationPath()
 
+    /// This is a feed of people you follow — never surface your own actions
+    /// (e.g. liking your own diary entry).
+    private var visibleActivities: [FriendActivity] {
+        activities.filter { $0.userID != user.id }
+    }
+
     var body: some View {
         NavigationStack(path: $path) {
             ZStack {
                 Color("Background").ignoresSafeArea()
-                if activities.isEmpty {
+                if visibleActivities.isEmpty {
                     emptyState
                 } else {
                     ScrollView {
                         LazyVStack(spacing: 14) {
-                            ForEach(activities) { activity in
+                            ForEach(visibleActivities) { activity in
                                 row(activity)
                             }
                         }

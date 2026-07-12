@@ -1,7 +1,8 @@
 import SwiftUI
 
-struct DiaryNavItem: Hashable {
+struct DiaryNavItem: Hashable, Identifiable {
     let entry: DiaryEntry
+    var id: String { entry.id }
     static func == (lhs: DiaryNavItem, rhs: DiaryNavItem) -> Bool { lhs.entry.id == rhs.entry.id }
     func hash(into hasher: inout Hasher) { hasher.combine(entry.id) }
 }
@@ -30,46 +31,53 @@ struct DiaryEntryDetailView: View {
     }
 
     var body: some View {
-        ZStack {
-            Color("Background").ignoresSafeArea()
-            ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
-                    if let book = entry.book { bookHeader(book) }
-                    entryBody
-                    Spacer(minLength: 100)
+        NavigationStack {
+            ZStack {
+                Color("Background").ignoresSafeArea()
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 0) {
+                        if let book = entry.book { bookHeader(book) }
+                        entryBody
+                        Spacer(minLength: 100)
+                    }
                 }
+                VStack { Spacer(); bottomBar }
             }
-            VStack { Spacer(); bottomBar }
+            .navigationBarHidden(true)
+            .overlay(alignment: .topTrailing) { closeButton }
+            .navigationDestination(for: String.self) { bookId in
+                BookDetailView(bookId: bookId, user: viewer)
+            }
+            .alert("Delete entry?", isPresented: $showDeleteAlert) {
+                Button("Delete", role: .destructive) { Task { await deleteEntry() } }
+                Button("Cancel", role: .cancel) { }
+            } message: {
+                Text("This cannot be undone.")
+            }
+            .alert("Couldn't delete entry", isPresented: Binding(
+                get: { deleteError != nil },
+                set: { if !$0 { deleteError = nil } }
+            )) {
+                Button("OK", role: .cancel) { }
+            } message: {
+                Text(deleteError ?? "")
+            }
         }
-        .navigationBarHidden(true)
-        .overlay(alignment: .topLeading) { backButton }
-        .alert("Delete entry?", isPresented: $showDeleteAlert) {
-            Button("Delete", role: .destructive) { Task { await deleteEntry() } }
-            Button("Cancel", role: .cancel) { }
-        } message: {
-            Text("This cannot be undone.")
-        }
-        .alert("Couldn't delete entry", isPresented: Binding(
-            get: { deleteError != nil },
-            set: { if !$0 { deleteError = nil } }
-        )) {
-            Button("OK", role: .cancel) { }
-        } message: {
-            Text(deleteError ?? "")
-        }
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
     }
 
-    private var backButton: some View {
+    private var closeButton: some View {
         Button { dismiss() } label: {
-            Image(systemName: "chevron.left")
-                .font(.system(size: 14, weight: .semibold))
+            Image(systemName: "xmark")
+                .font(.system(size: 13, weight: .bold))
                 .foregroundStyle(Color("TextPrimary"))
                 .frame(width: 34, height: 34)
                 .background(Color("Surface"), in: RoundedRectangle(cornerRadius: 8))
                 .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color("Border"), lineWidth: 1))
         }
         .buttonStyle(.plain)
-        .padding(.leading, 16).padding(.top, 10)
+        .padding(.trailing, 16).padding(.top, 10)
     }
 
     private func bookHeader(_ book: Book) -> some View {
@@ -130,17 +138,20 @@ struct DiaryEntryDetailView: View {
 
     private var bottomBar: some View {
         HStack(spacing: 20) {
-            Button { Task { await toggleLike() } } label: {
+            Button {
+                guard !isLiking else { return }
+                Task { await toggleLike() }
+            } label: {
                 HStack(spacing: 5) {
-                    if isLiking {
-                        ProgressView().scaleEffect(0.7).tint(Color("TextPrimary"))
-                    } else {
-                        Image(systemName: isLiked ? "heart.fill" : "heart")
-                            .font(.system(size: 18))
-                            .foregroundStyle(isLiked ? PB.terracotta : Color("TextSecondary"))
-                    }
+                    Image(systemName: isLiked ? "heart.fill" : "heart")
+                        .font(.system(size: 18))
+                        .foregroundStyle(isLiked ? PB.terracotta : Color("TextSecondary"))
+                        .contentTransition(.symbolEffect(.replace))
+                        .symbolEffect(.bounce, value: isLiked)
                     if likesCount > 0 {
-                        Text("\(likesCount)").font(PB.mono(12)).foregroundStyle(Color("TextSecondary"))
+                        Text("\(likesCount)").font(PB.mono(12))
+                            .foregroundStyle(Color("TextSecondary"))
+                            .contentTransition(.numericText())
                     }
                 }
             }
@@ -164,14 +175,14 @@ struct DiaryEntryDetailView: View {
 
     private func toggleLike() async {
         let prev = isLiked
-        isLiked = !prev; likesCount += prev ? -1 : 1
+        withAnimation(.snappy(duration: 0.25)) { isLiked = !prev; likesCount += prev ? -1 : 1 }
         isLiking = true; defer { isLiking = false }
         do {
             let _: Empty = try await APIClient.shared.request(
                 path: Endpoints.diaryEntryLike(username: entry.username, entryId: entry.id),
                 method: prev ? .delete : .post, requiresAuth: true
             )
-        } catch { isLiked = prev; likesCount += prev ? 1 : -1 }
+        } catch { withAnimation(.snappy(duration: 0.25)) { isLiked = prev; likesCount += prev ? 1 : -1 } }
     }
 
     private func deleteEntry() async {

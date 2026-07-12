@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// Reading status for the share flow. Kept for BookDetailView's status mapping;
-/// the web-style card doesn't render it, but the label seeds future variants.
+/// Reading status for the share flow — drives the little pill badge at the top
+/// of the card ("JUST FINISHED", etc.).
 enum ShareStatus: String, CaseIterable {
     case finished, reading, want, favourite
 
@@ -15,16 +15,19 @@ enum ShareStatus: String, CaseIterable {
     }
 }
 
-/// The shareable book card, matching the web share card exactly
-/// (app/api/og/share/route.tsx): pure black canvas, a white rounded card with
-/// @username top-left, bold title + uppercase author on the left, the cover on
-/// the right, and a hairline "paperboxd.in" footer. Drawn at base point sizes
-/// (540×960 story, 540×540 square) so ImageRenderer rasterises at scale 2 → 1080px.
+/// The shareable book card, matching the PaperBoxd "Share Card" design system:
+/// a moody blurred-cover dark finish (the cover blown up + darkened) with the
+/// script wordmark and a status pill up top, the sharp cover centred, a star
+/// rating, a big serif title, author · year, a hairline, an italic note, and a
+/// signature footer pill (wordmark + @handle + an audio-waveform motif).
+/// A clean warm-paper light finish inverts the palette.
+///
+/// Drawn at base points (540×960 story, 540×540 square) so ImageRenderer
+/// rasterises at scale 2 → 1080px.
 struct BookShareCardView: View {
     enum Format {
         case story, square
 
-        /// Full share canvas in points (9:16 story for Instagram, 1:1 square).
         var baseSize: CGSize {
             switch self {
             case .story:  return CGSize(width: 540, height: 960)
@@ -36,141 +39,258 @@ struct BookShareCardView: View {
         var renderScale: CGFloat { 1080.0 / baseSize.width }
     }
 
+    enum Theme { case dark, light }
+
     let title: String
     let author: String
+    let year: String?
     let coverImage: UIImage?
-    let handle: String?     // rendered as-is, e.g. "@anais"
-    let rating: Int?        // viewer's own rating; web card shows none
+    let handle: String?          // rendered as-is, e.g. "@hridyesh"
+    let rating: Int?             // 0–5 whole stars
+    let note: String?            // the reader's line, shown in italics
+    let statusLabel: String      // e.g. "Just finished"
+    let theme: Theme
     let format: Format
 
-    // Web design tokens (px values from the OG route, halved to points)
-    private let cardPadding: CGFloat = 24        // p-48px
-    private let cardCorner: CGFloat = 25         // rounded-50px
-    private let cardHeight: CGFloat = 325        // 650px
-    private let coverSize = CGSize(width: 140, height: 210) // 280×420px
-    private let authorGray = Color(red: 0.42, green: 0.447, blue: 0.502)  // #6b7280
-    private let footerGray = Color(red: 0.82, green: 0.835, blue: 0.859)  // #d1d5db
-    private let hairline   = Color(red: 0.953, green: 0.957, blue: 0.965) // #f3f4f6
+    // MARK: Palette
+    private let cream = Color(red: 0.949, green: 0.929, blue: 0.882)   // #f2ede1
+    private let darkBackdrop = Color(red: 0.078, green: 0.063, blue: 0.043) // #141008
+    private let paperTop = Color(red: 0.949, green: 0.933, blue: 0.906) // #f2eee7
+    private let paperBottom = Color(red: 0.851, green: 0.788, blue: 0.678) // #d9c9ad
+
+    private var ink: Color { theme == .dark ? cream : Color(red: 0.10, green: 0.08, blue: 0.05) }
+    private var inkSoft: Color { ink.opacity(0.62) }
+    private var hairlineColor: Color { ink.opacity(0.18) }
 
     var body: some View {
         ZStack {
-            Color.black
-            card
-                .padding(.horizontal, 32) // p-64px canvas margin
+            canvasBackdrop
+            ZStack {
+                background
+                content
+                    .padding(format == .story ? 36 : 28)
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 40, style: .continuous))
+            .padding(.horizontal, format == .story ? 76 : 80)
+            .padding(.vertical, format == .story ? 210 : 80)
+            .shadow(color: .black.opacity(0.18), radius: 36, x: 0, y: 16)
         }
         .frame(width: format.baseSize.width, height: format.baseSize.height)
+        .clipped()
     }
 
-    private var card: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            // Top: @username
-            if let handle, !handle.isEmpty {
-                Text(handle)
-                    .font(.system(size: 18, weight: .black))
-                    .tracking(-0.36)
-                    .foregroundStyle(.black.opacity(0.5))
-            }
+    /// The area behind the floating card — always plain white (X-style share
+    /// image), so the card reads as a small object on a clean page.
+    private var canvasBackdrop: some View {
+        Color.white
+    }
 
-            // Middle: title/author left, cover right
-            HStack(alignment: .center, spacing: 20) {
-                VStack(alignment: .leading, spacing: 0) {
-                    Text(title)
-                        .font(.system(size: 30, weight: .black))
-                        .tracking(-0.6)
-                        .lineSpacing(1)
-                        .foregroundStyle(.black)
-                        .lineLimit(4)
-                        .minimumScaleFactor(0.7)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Text(author.uppercased())
-                        .font(.system(size: 18, weight: .semibold))
-                        .tracking(0.9)
-                        .foregroundStyle(authorGray)
-                        .lineLimit(2)
-                        .padding(.top, 12)
-                    if let rating, rating > 0 {
-                        starRow(rating)
-                            .padding(.top, 12)
-                    }
+    // MARK: - Background
+
+    @ViewBuilder
+    private var background: some View {
+        if theme == .dark {
+            ZStack {
+                darkBackdrop
+                if let coverImage {
+                    Image(uiImage: coverImage)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: format.baseSize.width, height: format.baseSize.height)
+                        .blur(radius: 60)
+                        .opacity(0.55)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-                coverFace
+                LinearGradient(
+                    colors: [.black.opacity(0.15), .black.opacity(0.35), .black.opacity(0.85)],
+                    startPoint: .top, endPoint: .bottom
+                )
             }
-            .frame(maxHeight: .infinity)
-            .padding(.vertical, 16)
-
-            // Footer: paperboxd.in over a hairline
-            VStack(alignment: .leading, spacing: 0) {
-                Rectangle().fill(hairline).frame(height: 1)
-                Text("paperboxd.in")
-                    .font(.system(size: 15, weight: .black))
-                    .tracking(3.75) // 0.25em
-                    .foregroundStyle(footerGray)
-                    .padding(.top, 16)
-            }
+        } else {
+            LinearGradient(colors: [paperTop, paperBottom], startPoint: .top, endPoint: .bottom)
         }
-        .padding(cardPadding)
-        .frame(maxWidth: .infinity)
-        .frame(height: cardHeight)
+    }
+
+    // MARK: - Content
+
+    @ViewBuilder
+    private var content: some View {
+        switch format {
+        case .story:  storyContent
+        case .square: squareContent
+        }
+    }
+
+    private var storyContent: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            topBar
+            Spacer(minLength: 18)
+            cover(width: 176)   // sized so the shorter story card still fits title + note
+                .frame(maxWidth: .infinity)
+            Spacer(minLength: 18)
+            details(alignment: .leading)
+            Spacer(minLength: 18)
+            footer
+        }
+    }
+
+    private var squareContent: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            topBar
+            Spacer(minLength: 14)
+            HStack(alignment: .center, spacing: 22) {
+                cover(width: 150)
+                details(alignment: .leading)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            Spacer(minLength: 14)
+            footer
+        }
+    }
+
+    // MARK: - Pieces
+
+    private var topBar: some View {
+        HStack(alignment: .center) {
+            Text("PaperBoxd")
+                .font(.custom("SnellRoundhand-Black", size: 26))
+                .foregroundStyle(ink)
+            Spacer()
+            if !statusLabel.isEmpty { statusBadge }
+        }
+    }
+
+    private var statusBadge: some View {
+        HStack(spacing: 6) {
+            Circle()
+                .fill(cream)
+                .frame(width: 5, height: 5)
+            Text(statusLabel.uppercased())
+                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                .tracking(1.2)
+                .foregroundStyle(cream)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 7)
         .background(
-            RoundedRectangle(cornerRadius: cardCorner, style: .continuous)
-                .fill(.white)
-                .shadow(color: .white.opacity(0.10), radius: 40)
+            Capsule().fill(theme == .dark ? Color.white.opacity(0.14) : Color.black.opacity(0.88))
         )
     }
 
-    private var coverFace: some View {
-        Group {
+    private func cover(width: CGFloat) -> some View {
+        let height = width * 1.5
+        return Group {
             if let coverImage {
                 Image(uiImage: coverImage).resizable().scaledToFill()
             } else {
                 ZStack {
-                    Color(red: 0.953, green: 0.957, blue: 0.965) // #f3f4f6
-                    Text("NO COVER")
-                        .font(.system(size: 12, weight: .black))
-                        .foregroundStyle(footerGray)
+                    LinearGradient(
+                        colors: [Color(red: 0.66, green: 0.53, blue: 0.37),
+                                 Color(red: 0.45, green: 0.34, blue: 0.22)],
+                        startPoint: .top, endPoint: .bottom
+                    )
+                    Text(title)
+                        .font(.system(size: 15, weight: .semibold, design: .serif))
+                        .foregroundStyle(cream)
+                        .multilineTextAlignment(.center)
+                        .padding(14)
                 }
             }
         }
-        .frame(width: coverSize.width, height: coverSize.height)
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .strokeBorder(.black.opacity(0.05), lineWidth: 2)
-        )
-        .shadow(color: .black.opacity(0.1), radius: 8, y: 5)
+        .frame(width: width, height: height)
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .shadow(color: .black.opacity(0.5), radius: 36, x: 0, y: 10)
+    }
+
+    private func details(alignment: HorizontalAlignment) -> some View {
+        VStack(alignment: alignment, spacing: 0) {
+            if let rating, rating > 0 {
+                starRow(rating).padding(.bottom, 12)
+            }
+            Text(title)
+                .font(PB.serif(34, .black))
+                .foregroundStyle(ink)
+                .lineLimit(3)
+                .minimumScaleFactor(0.7)
+                .fixedSize(horizontal: false, vertical: true)
+            Text(authorLine)
+                .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(inkSoft)
+                .padding(.top, 8)
+
+            if let note, !note.isEmpty {
+                Rectangle().fill(hairlineColor)
+                    .frame(height: 1)
+                    .padding(.vertical, 16)
+                Text("“\(note)”")
+                    .font(.system(size: 15, weight: .regular, design: .serif))
+                    .italic()
+                    .foregroundStyle(inkSoft)
+                    .lineLimit(3)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private var authorLine: String {
+        if let year, !year.isEmpty { return "\(author) · \(year)" }
+        return author
     }
 
     private func starRow(_ rating: Int) -> some View {
-        HStack(spacing: 3) {
+        HStack(spacing: 4) {
             ForEach(0..<5, id: \.self) { i in
                 Image(systemName: i < rating ? "star.fill" : "star")
-                    .font(.system(size: 15))
-                    .foregroundStyle(i < rating ? .black : Color(red: 0.82, green: 0.835, blue: 0.859))
+                    .font(.system(size: 14))
+                    .foregroundStyle(i < rating ? ink : ink.opacity(0.3))
             }
+        }
+    }
+
+    // MARK: - Footer pill (@handle) — hugs its content, sits bottom-left
+
+    @ViewBuilder
+    private var footer: some View {
+        if let handle, !handle.isEmpty {
+            Text(handle)
+                .font(.system(size: 13, weight: .medium, design: .monospaced))
+                .foregroundStyle(cream)
+                .padding(.horizontal, 20)
+                .padding(.vertical, 14)
+                .background(
+                    Capsule().fill(theme == .dark ? Color.black.opacity(0.45) : Color.black.opacity(0.9))
+                )
+                .overlay(
+                    Capsule().strokeBorder(cream.opacity(theme == .dark ? 0.12 : 0), lineWidth: 1)
+                )
         }
     }
 }
 
-/// The full shared image — for the web-style card the canvas *is* the design
-/// (black background, white card), so this is a thin alias kept for the sheet's
-/// render call.
+/// The full shared image — for this design the card *is* the canvas, so this is
+/// a thin alias kept for the sheet's render call.
 struct ShareComposition: View {
     let title: String
     let author: String
+    let year: String?
     let coverImage: UIImage?
     let handle: String?
     let rating: Int?
+    let note: String?
+    let statusLabel: String
+    let theme: BookShareCardView.Theme
     let format: BookShareCardView.Format
 
     var body: some View {
         BookShareCardView(
             title: title,
             author: author,
+            year: year,
             coverImage: coverImage,
             handle: handle,
             rating: rating,
+            note: note,
+            statusLabel: statusLabel,
+            theme: theme,
             format: format
         )
     }

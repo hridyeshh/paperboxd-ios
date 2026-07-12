@@ -100,7 +100,8 @@ final class HomeViewModel: ObservableObject {
             method: .get,
             requiresAuth: true
         )
-        return resp?.activities ?? []
+        // Between covers shows friends' activity, not your own.
+        return (resp?.activities ?? []).filter { $0.userID != user.id }
     }
 
     func refresh() async { await load() }

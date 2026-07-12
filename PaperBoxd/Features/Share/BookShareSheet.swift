@@ -5,8 +5,9 @@ import SwiftUI
 struct BookShareSheet: View {
     let book: Book
     let user: User?
-    var status: ShareStatus = .reading
+    var status: ShareStatus? = nil
     var userRating: Int? = nil
+    var note: String? = nil
 
     @Environment(\.dismiss) private var dismiss
 
@@ -50,32 +51,34 @@ struct BookShareSheet: View {
         }
     }
 
-    // MARK: - Chrome
+    // MARK: - Chrome (brutalist: hard edges, ink borders, offset shadows)
 
     private var grabber: some View {
-        Capsule().fill(Color("Border"))
-            .frame(width: 38, height: 5)
+        Rectangle().fill(Color("TextPrimary"))
+            .frame(width: 40, height: 5)
             .padding(.top, 10)
     }
 
     private var header: some View {
         HStack {
-            Text("Share")
-                .font(PB.serif(22, .bold))
+            Text("SHARE")
+                .font(.system(size: 17, weight: .black, design: .monospaced))
+                .tracking(2)
                 .foregroundStyle(Color("TextPrimary"))
             Spacer()
             Button { dismiss() } label: {
                 Image(systemName: "xmark")
                     .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(Color("TextSecondary"))
-                    .frame(width: 30, height: 30)
-                    .background(Color("Surface"), in: Circle())
+                    .foregroundStyle(Color("TextPrimary"))
+                    .frame(width: 34, height: 34)
+                    .background(Color("Surface"))
+                    .overlay(Rectangle().strokeBorder(Color("TextPrimary"), lineWidth: 1.5))
             }
             .buttonStyle(.plain)
         }
-        .padding(.horizontal, 20)
-        .padding(.top, 14)
-        .padding(.bottom, 10)
+        .padding(.horizontal, 24)
+        .padding(.top, 16)
+        .padding(.bottom, 12)
     }
 
     // MARK: - Preview
@@ -89,50 +92,49 @@ struct BookShareSheet: View {
                         Image(uiImage: rendered)
                             .resizable()
                             .scaledToFit()
-                            .padding(14)
-                            .shadow(color: .black.opacity(0.35), radius: 16, y: 6)
-                    )
-                    .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 18, style: .continuous)
-                            .strokeBorder(Color("Border"), lineWidth: 1)
+                            .padding(12)
                     )
             } else {
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(Color("Surface"))
-                    .overlay(ProgressView().tint(Color("Accent")))
+                Color("Surface").overlay(PBSpinner())
             }
         }
         .frame(maxWidth: .infinity)
         .frame(height: 360)
-        .padding(.horizontal, 24)
-        .padding(.vertical, 8)
+        .background(Color("Surface"))
+        .overlay(Rectangle().strokeBorder(Color("TextPrimary"), lineWidth: 2))
+        .background(Rectangle().fill(Color("TextPrimary")).offset(x: 5, y: 5))
+        .padding(.leading, 24)
+        .padding(.trailing, 29)
+        .padding(.top, 8)
+        .padding(.bottom, 13)
         .animation(.easeInOut(duration: 0.2), value: rendered)
     }
 
     private var controlsRow: some View {
-        HStack(spacing: 6) {
-            formatPill("Story", .story)
-            formatPill("Square", .square)
+        HStack(spacing: 12) {
+            formatTab("STORY", .story)
+            formatTab("SQUARE", .square)
         }
-        .padding(4)
-        .background(Color("Surface"), in: Capsule())
-        .padding(.top, 6)
+        .padding(.horizontal, 24)
+        .padding(.top, 4)
     }
 
-    private func formatPill(_ label: String, _ f: BookShareCardView.Format) -> some View {
+    /// Two separate rectangular buttons (not a fused segmented block), each with
+    /// its own ink border so the selected fill never swallows the outline.
+    private func formatTab(_ label: String, _ f: BookShareCardView.Format) -> some View {
         Button {
             guard format != f else { return }
             format = f
             rerender()
         } label: {
             Text(label)
-                .font(.system(size: 13, weight: format == f ? .semibold : .medium))
-                .foregroundStyle(format == f ? Color("Background") : Color("TextSecondary"))
-                .padding(.horizontal, 20).padding(.vertical, 8)
-                .background(
-                    Capsule().fill(format == f ? Color("TextPrimary") : Color.clear)
-                )
+                .font(.system(size: 12, weight: .bold, design: .monospaced))
+                .tracking(1.5)
+                .foregroundStyle(format == f ? Color("Background") : Color("TextPrimary"))
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 11)
+                .background(format == f ? Color("TextPrimary") : Color("Surface"))
+                .overlay(Rectangle().strokeBorder(Color("TextPrimary"), lineWidth: 1.5))
         }
         .buttonStyle(.plain)
     }
@@ -140,38 +142,38 @@ struct BookShareSheet: View {
     // MARK: - Options
 
     private var optionsRow: some View {
-        HStack(alignment: .top, spacing: 14) {
+        HStack(alignment: .top, spacing: 12) {
             if ShareService.canShareToInstagramStories {
-                option("Story", tint: instagramGradient) {
+                option("STORY", tint: instagramGradient) {
                     shareToInstagram()
                 } icon: {
-                    InstagramGlyph(size: 26, color: .white)
+                    InstagramGlyph(size: 24, color: .white)
                 }
             }
-            option("More", tint: AnyShapeStyle(Color("Surface"))) {
+            option("MORE", tint: AnyShapeStyle(Color("Surface"))) {
                 showSystemShare = true
             } icon: {
                 Image(systemName: "square.and.arrow.up")
-                    .font(.system(size: 22, weight: .medium))
+                    .font(.system(size: 20, weight: .medium))
                     .foregroundStyle(Color("TextPrimary"))
             }
-            option("Save", tint: AnyShapeStyle(Color("Surface"))) {
+            option("SAVE", tint: AnyShapeStyle(Color("Surface"))) {
                 saveImage()
             } icon: {
                 Image(systemName: "arrow.down.to.line")
-                    .font(.system(size: 22, weight: .medium))
+                    .font(.system(size: 20, weight: .medium))
                     .foregroundStyle(Color("TextPrimary"))
             }
-            option("Copy link", tint: AnyShapeStyle(Color("Surface"))) {
+            option("COPY", tint: AnyShapeStyle(Color("Surface"))) {
                 copyLink()
             } icon: {
                 Image(systemName: "link")
-                    .font(.system(size: 22, weight: .medium))
+                    .font(.system(size: 20, weight: .medium))
                     .foregroundStyle(Color("TextPrimary"))
             }
         }
-        .padding(.horizontal, 20)
-        .padding(.top, 20)
+        .padding(.horizontal, 24)
+        .padding(.top, 22)
         .padding(.bottom, 34)
         .frame(maxWidth: .infinity)
     }
@@ -184,16 +186,18 @@ struct BookShareSheet: View {
     ) -> some View {
         let iconView = icon()
         return Button(action: action) {
-            VStack(spacing: 8) {
+            VStack(spacing: 9) {
                 ZStack {
-                    Circle().fill(tint)
-                        .overlay(Circle().strokeBorder(Color("Border").opacity(0.5), lineWidth: 1))
+                    Rectangle().fill(tint)
                     iconView
                 }
-                .frame(width: 58, height: 58)
+                .frame(width: 56, height: 56)
+                .overlay(Rectangle().strokeBorder(Color("TextPrimary"), lineWidth: 1.5))
+                .background(Rectangle().fill(Color("TextPrimary")).offset(x: 3, y: 3))
 
                 Text(label)
-                    .font(.system(size: 11.5, weight: .medium))
+                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                    .tracking(0.8)
                     .foregroundStyle(Color("TextSecondary"))
                     .lineLimit(1)
             }
@@ -201,7 +205,7 @@ struct BookShareSheet: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .disabled(rendered == nil && label != "Copy link")
+        .disabled(rendered == nil && label != "COPY")
     }
 
     private var instagramGradient: AnyShapeStyle {
@@ -276,9 +280,13 @@ struct BookShareSheet: View {
         let composition = ShareComposition(
             title: book.title,
             author: book.authorLine,
+            year: book.publishedYear,
             coverImage: coverImage,
             handle: handle,
             rating: userRating,
+            note: note,
+            statusLabel: status?.label ?? "",
+            theme: .light,
             format: format
         )
         rendered = ShareService.render(composition, baseSize: format.baseSize, scale: format.renderScale)

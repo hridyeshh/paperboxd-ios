@@ -11,10 +11,8 @@ struct FavouriteFourView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            SectionHeader(eyebrow: "Favourites", title: title) {
-                if books.count > 4 { SeeAllButton {} }
-            }
-            .padding(.horizontal, 20)
+            SectionHeader(eyebrow: "Favourites", title: title)
+                .padding(.horizontal, 20)
 
             HStack(alignment: .top, spacing: 8) {
                 ForEach(Array(books.prefix(4))) { fav in
@@ -51,6 +49,10 @@ struct FavouriteFourView: View {
 struct ShelfGridView: View {
     let books: [BookWithStatus]
     let isLoading: Bool
+    /// When set, caps the grid (the profile tab shows 3×3) and swaps infinite
+    /// pagination for a Show More button. `nil` = full paginated grid.
+    var limit: Int? = nil
+    var onShowMore: (() -> Void)? = nil
     var onAppearItem: (BookWithStatus) async -> Void
 
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 8), count: 3)
@@ -59,21 +61,29 @@ struct ShelfGridView: View {
         if books.isEmpty && !isLoading {
             EmptyTabState(icon: "books.vertical", message: "No books read yet")
         } else {
-            LazyVGrid(columns: columns, spacing: 8) {
-                ForEach(books) { item in
-                    NavigationLink(value: item.id) {
-                        GridCoverCell(url: item.coverURL)
+            VStack(spacing: 0) {
+                LazyVGrid(columns: columns, spacing: 8) {
+                    ForEach(limit.map { Array(books.prefix($0)) } ?? books) { item in
+                        NavigationLink(value: item.id) {
+                            GridCoverCell(url: item.coverURL)
+                        }
+                        .buttonStyle(.plain)
+                        .onAppear {
+                            if limit == nil { Task { await onAppearItem(item) } }
+                        }
                     }
-                    .buttonStyle(.plain)
-                    .onAppear { Task { await onAppearItem(item) } }
+                    if isLoading {
+                        ForEach(0..<6, id: \.self) { _ in
+                            RoundedRectangle(cornerRadius: 6)
+                                .fill(Color("Surface"))
+                                .aspectRatio(2/3, contentMode: .fit)
+                                .pbShimmer()
+                        }
+                    }
                 }
-                if isLoading {
-                    ForEach(0..<6, id: \.self) { _ in
-                        RoundedRectangle(cornerRadius: 6)
-                            .fill(Color("Surface"))
-                            .aspectRatio(2/3, contentMode: .fit)
-                            .pbShimmer()
-                    }
+                if let limit, let onShowMore, books.count > limit {
+                    ShowMoreButton(action: onShowMore)
+                        .padding(.top, 16)
                 }
             }
             .padding(.horizontal, 20)
@@ -88,6 +98,7 @@ struct DiaryListView: View {
     let entries: [DiaryEntry]
     let isLoading: Bool
     var onAppearItem: (DiaryEntry) async -> Void
+    var onOpen: (DiaryEntry) -> Void
 
     var body: some View {
         if entries.isEmpty && !isLoading {
@@ -95,13 +106,16 @@ struct DiaryListView: View {
         } else {
             LazyVStack(spacing: 0) {
                 ForEach(Array(entries.enumerated()), id: \.element.id) { idx, entry in
-                    DiaryEntryRow(entry: entry)
-                        .overlay(alignment: .top) {
-                            if idx > 0 { Rectangle().fill(Color("Border")).frame(height: 1) }
-                        }
-                        .onAppear { Task { await onAppearItem(entry) } }
+                    Button { onOpen(entry) } label: {
+                        DiaryEntryRow(entry: entry)
+                    }
+                    .buttonStyle(.plain)
+                    .overlay(alignment: .top) {
+                        if idx > 0 { Rectangle().fill(Color("Border")).frame(height: 1) }
+                    }
+                    .onAppear { Task { await onAppearItem(entry) } }
                 }
-                if isLoading { ProgressView().tint(Color("Accent")).padding(.vertical, 16) }
+                if isLoading { PBSpinner().padding(.vertical, 16) }
             }
             .padding(.horizontal, 20)
             .padding(.top, 8)
@@ -258,127 +272,126 @@ struct ReadingListCard: View {
     }
 }
 
-// MARK: - TBR tab
+// MARK: - TBR tab (3-col grid, same format as the bookshelf)
 
-struct TBRListView: View {
+struct TBRGridView: View {
     let items: [TBRItem]
     var isLoading: Bool = false
     var emptyMessage: String = "Nothing on the TBR list"
+    /// Same semantics as `ShelfGridView.limit` — 3×3 cap on the profile tab.
+    var limit: Int? = nil
+    var onShowMore: (() -> Void)? = nil
+
+    private let columns = Array(repeating: GridItem(.flexible(), spacing: 8), count: 3)
 
     var body: some View {
         if items.isEmpty && !isLoading {
             EmptyTabState(icon: "bookmark", message: emptyMessage)
         } else {
-            LazyVStack(spacing: 0) {
-                ForEach(Array(items.enumerated()), id: \.element.id) { idx, item in
-                    TBRItemRow(item: item)
-                        .overlay(alignment: .top) {
-                            if idx > 0 { Rectangle().fill(Color("Border")).frame(height: 1) }
+            VStack(spacing: 0) {
+                LazyVGrid(columns: columns, spacing: 8) {
+                    ForEach(limit.map { Array(items.prefix($0)) } ?? items) { item in
+                        NavigationLink(value: item.bookID) {
+                            GridCoverCell(url: item.book.coverURL)
                         }
+                        .buttonStyle(.plain)
+                    }
+                    if isLoading {
+                        ForEach(0..<6, id: \.self) { _ in
+                            RoundedRectangle(cornerRadius: 6)
+                                .fill(Color("Surface"))
+                                .aspectRatio(2/3, contentMode: .fit)
+                                .pbShimmer()
+                        }
+                    }
                 }
-                if isLoading { ProgressView().tint(Color("Accent")).padding(.vertical, 16) }
+                if let limit, let onShowMore, items.count > limit {
+                    ShowMoreButton(action: onShowMore)
+                        .padding(.top, 16)
+                }
             }
             .padding(.horizontal, 20)
-            .padding(.top, 8)
+            .padding(.top, 16)
         }
     }
 }
 
-// MARK: - Authors tab (editorial rows)
+/// Full-width brutalist "show more" — mono caps with a hard ink border.
+struct ShowMoreButton: View {
+    var action: () -> Void
 
-struct AuthorsListView: View {
+    var body: some View {
+        Button(action: action) {
+            Text("SHOW MORE")
+                .font(PB.mono(11, .medium))
+                .tracking(1.5)
+                .foregroundStyle(Color("TextPrimary"))
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 11)
+                .overlay(Rectangle().strokeBorder(Color("TextPrimary"), lineWidth: 1.5))
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+// MARK: - Authors tab (3-col grid, same format as the bookshelf)
+
+struct AuthorsGridView: View {
     let authors: [AuthorSummary]
     let isLoading: Bool
+    /// Same semantics as `ShelfGridView.limit` — 3×3 cap on the profile tab.
+    var limit: Int? = nil
+    var onShowMore: (() -> Void)? = nil
+
+    private let columns = Array(repeating: GridItem(.flexible(), spacing: 8), count: 3)
 
     var body: some View {
         if authors.isEmpty && !isLoading {
             EmptyTabState(icon: "person.2", message: "No authors yet")
         } else {
-            LazyVStack(spacing: 0) {
-                ForEach(Array(authors.enumerated()), id: \.element.id) { idx, author in
-                    AuthorRow(author: author)
-                        .overlay(alignment: .top) {
-                            if idx > 0 { Rectangle().fill(Color("Border")).frame(height: 1) }
+            VStack(spacing: 0) {
+                LazyVGrid(columns: columns, spacing: 8) {
+                    ForEach(limit.map { Array(authors.prefix($0)) } ?? authors) { author in
+                        AuthorGridCell(author: author)
+                    }
+                    if isLoading {
+                        ForEach(0..<6, id: \.self) { _ in
+                            RoundedRectangle(cornerRadius: 6)
+                                .fill(Color("Surface"))
+                                .aspectRatio(2/3, contentMode: .fit)
+                                .pbShimmer()
                         }
+                    }
                 }
-                if isLoading { ProgressView().tint(Color("Accent")).padding(.vertical, 16) }
+                if let limit, let onShowMore, authors.count > limit {
+                    ShowMoreButton(action: onShowMore)
+                        .padding(.top, 16)
+                }
             }
             .padding(.horizontal, 20)
-            .padding(.top, 8)
+            .padding(.top, 16)
         }
     }
 }
 
-struct AuthorRow: View {
+/// One author: a representative book cover with the author's name and book
+/// count beneath — matches the bookshelf cover cells' footprint.
+struct AuthorGridCell: View {
     let author: AuthorSummary
 
     var body: some View {
-        HStack(spacing: 12) {
-            if let url = author.coverURL {
-                BookCoverView(url: url, width: 34, cornerRadius: 4)
-            } else {
-                RoundedRectangle(cornerRadius: 4)
-                    .fill(Color("Surface"))
-                    .frame(width: 34, height: 51)
-            }
-            VStack(alignment: .leading, spacing: 2) {
+        VStack(spacing: 6) {
+            GridCoverCell(url: author.coverURL)
+            VStack(spacing: 1) {
                 Text(author.name)
-                    .font(PB.serif(15))
+                    .font(PB.serif(12.5))
                     .foregroundStyle(Color("TextPrimary"))
                     .lineLimit(1)
                 Text("\(author.bookCount) book\(author.bookCount == 1 ? "" : "s")")
-                    .font(PB.mono(9.5))
+                    .font(PB.mono(8.5))
                     .foregroundStyle(Color("TextSecondary"))
             }
-            Spacer(minLength: 0)
-        }
-        .padding(.vertical, 12)
-    }
-}
-
-struct TBRItemRow: View {
-    let item: TBRItem
-
-    var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            BookCoverView(url: item.book.coverURL, width: 44, cornerRadius: 4)
-            VStack(alignment: .leading, spacing: 4) {
-                Text(item.book.title)
-                    .font(PB.serif(14.5))
-                    .foregroundStyle(Color("TextPrimary"))
-                    .lineLimit(1)
-                Text(item.book.authorLine)
-                    .font(.system(size: 12))
-                    .foregroundStyle(Color("TextSecondary"))
-                    .lineLimit(1)
-                if let notes = item.tbrNotes, !notes.isEmpty {
-                    Text(notes)
-                        .font(PB.serifItalic(12.5))
-                        .foregroundStyle(Color("TextPrimary").opacity(0.7))
-                        .lineLimit(2)
-                }
-                if let priority = item.tbrPriority { priorityBadge(priority) }
-            }
-            Spacer(minLength: 0)
-        }
-        .padding(.vertical, 12)
-    }
-
-    private func priorityBadge(_ p: String) -> some View {
-        Text(p.capitalized)
-            .font(PB.mono(9.5, .medium))
-            .foregroundStyle(priorityColor(p))
-            .padding(.horizontal, 8)
-            .padding(.vertical, 3)
-            .background(priorityColor(p).opacity(0.15))
-            .clipShape(Capsule())
-    }
-
-    private func priorityColor(_ p: String) -> Color {
-        switch p.lowercased() {
-        case "high": return Color(red: 0.82, green: 0.35, blue: 0.30)
-        case "medium": return PB.terracotta
-        default: return Color("TextSecondary")
+            .frame(maxWidth: .infinity)
         }
     }
 }

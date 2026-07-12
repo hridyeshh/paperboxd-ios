@@ -101,7 +101,7 @@ struct LeaderboardView: View {
     @ViewBuilder
     private var content: some View {
         if vm.isLoading && vm.entries.isEmpty {
-            ProgressView().tint(lbAccent).frame(maxHeight: .infinity)
+            PBSpinner().frame(maxHeight: .infinity)
         } else if let err = vm.errorMessage, vm.entries.isEmpty {
             errorView(err)
         } else if vm.entries.isEmpty {

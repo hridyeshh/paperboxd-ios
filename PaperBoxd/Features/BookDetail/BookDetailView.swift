@@ -18,11 +18,14 @@ struct BookDetailView: View {
 
     private let line = BK.ink
 
-    private var shareStatus: ShareStatus {
-        if viewModel.bookState.isLiked { return .favourite }
+    /// The book's status for the share card, mirroring the shelf state. `nil`
+    /// when the book isn't in the user's library — the card then hides the badge.
+    private var shareStatus: ShareStatus? {
         if viewModel.bookState.isRead { return .finished }
+        if viewModel.bookState.isOnShelf { return .reading }
         if viewModel.bookState.isTBR { return .want }
-        return .reading
+        if viewModel.bookState.isLiked { return .favourite }
+        return nil
     }
 
     init(bookId: String, user: User) {
@@ -67,7 +70,7 @@ struct BookDetailView: View {
         .toolbar(.hidden, for: .tabBar)
         .sheet(isPresented: $showShare) {
             if let book = viewModel.book {
-                BookShareSheet(book: book, user: user, status: shareStatus, userRating: viewModel.myReview?.rating)
+                BookShareSheet(book: book, user: user, status: shareStatus, userRating: viewModel.myReview?.rating, note: viewModel.myReview?.review)
                     .presentationDetents([.large])
                     .presentationDragIndicator(.hidden)
             }
@@ -104,7 +107,8 @@ struct BookDetailView: View {
             squareIcon("square.and.pencil") { showWrite = true }
         }
         .padding(.horizontal, 14)
-        .padding(.vertical, 8)
+        .padding(.top, 16)
+        .padding(.bottom, 10)
         .background(BK.paper)
         .overlay(alignment: .bottom) { Rectangle().fill(line).frame(height: 2) }
     }
@@ -142,6 +146,12 @@ struct BookDetailView: View {
                 .padding(.top, 18)
             }
             .padding(.bottom, 120)
+            // Pin content to the scroll viewport width. On iOS 17/18 a horizontal
+            // ScrollView (Readers also enjoyed) nested in this vertical ScrollView
+            // can report an oversized width, stretching the whole column and
+            // shifting/clipping every row. This hard frame stops that.
+            .frame(maxWidth: .infinity)
+            .containerRelativeFrame(.horizontal)
         }
     }
 
@@ -586,7 +596,7 @@ struct BookDetailView: View {
     // MARK: - Loading / Error
 
     private var loadingView: some View {
-        VStack { Spacer(); ProgressView().tint(BK.accent); Spacer() }
+        VStack { Spacer(); PBSpinner(); Spacer() }
             .frame(maxWidth: .infinity)
     }
 

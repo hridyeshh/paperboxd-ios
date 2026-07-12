@@ -57,7 +57,7 @@ struct FollowListView: View {
         ZStack {
             Color("Background").ignoresSafeArea()
             if vm.isLoading && vm.users.isEmpty {
-                ProgressView().tint(Color("Accent"))
+                PBSpinner()
             } else if let err = vm.errorMessage, vm.users.isEmpty {
                 Text(err)
                     .foregroundStyle(Color("TextSecondary"))

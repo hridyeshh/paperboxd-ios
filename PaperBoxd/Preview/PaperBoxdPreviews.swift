@@ -74,9 +74,13 @@ import SwiftUI
     ShareComposition(
         title: "Norwegian Wood",
         author: "Haruki Murakami",
+        year: "1987",
         coverImage: nil,
         handle: "@hridyesh",
         rating: 4,
+        note: "Loved the rain scene. A whole evening lost — happily.",
+        statusLabel: "Just finished",
+        theme: .dark,
         format: .story
     )
     .scaleEffect(0.36)
@@ -86,9 +90,13 @@ import SwiftUI
     ShareComposition(
         title: "Piranesi",
         author: "Susanna Clarke",
+        year: "2020",
         coverImage: nil,
         handle: "@hridyesh",
         rating: 5,
+        note: nil,
+        statusLabel: "Just finished",
+        theme: .light,
         format: .square
     )
     .scaleEffect(0.46)

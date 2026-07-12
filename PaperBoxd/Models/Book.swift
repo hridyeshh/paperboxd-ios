@@ -24,7 +24,7 @@ struct Book: Codable, Identifiable, Hashable {
     var authors: [String] { volumeInfo.authors ?? [] }
     var authorLine: String { authors.isEmpty ? "" : authors.joined(separator: ", ") }
     var description: String? {
-        guard let d = volumeInfo.description, !d.isEmpty else { return nil }
+        guard let d = volumeInfo.description?.strippingHTML, !d.isEmpty else { return nil }
         return d
     }
     var pageCount: Int? {

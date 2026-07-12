@@ -2,6 +2,7 @@ import SwiftUI
 
 struct DiaryView: View {
     @StateObject private var vm: DiaryViewModel
+    @State private var diarySheet: DiaryNavItem?
 
     init(user: User) {
         _vm = StateObject(wrappedValue: DiaryViewModel(user: user))
@@ -24,11 +25,11 @@ struct DiaryView: View {
                 }
             }
             .navigationBarHidden(true)
-            .navigationDestination(for: DiaryNavItem.self) { nav in
-                DiaryEntryDetailView(entry: nav.entry, viewer: vm.user)
-            }
             .navigationDestination(for: String.self) { bookId in
                 BookDetailView(bookId: bookId, user: vm.user)
+            }
+            .sheet(item: $diarySheet) { nav in
+                DiaryEntryDetailView(entry: nav.entry, viewer: vm.user)
             }
         }
         .environment(\.colorScheme, .light)
@@ -92,7 +93,7 @@ struct DiaryView: View {
 
     @ViewBuilder
     private func entryRow(_ entry: DiaryEntry, isFirst: Bool) -> some View {
-        NavigationLink(value: DiaryNavItem(entry: entry)) {
+        Button { diarySheet = DiaryNavItem(entry: entry) } label: {
             DiaryEntryRow(entry: entry)
         }
         .buttonStyle(.plain)

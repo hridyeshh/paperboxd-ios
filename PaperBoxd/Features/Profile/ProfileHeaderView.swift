@@ -30,7 +30,7 @@ struct ProfileHeaderView: View {
                 }
             }
             .padding(.horizontal, 20)
-            .padding(.top, 64) // clears the floating PaperBoxd wordmark / top bar
+            .padding(.top, 8) // wordmark clearance now comes from the scroll's topInset
 
             VStack(alignment: .leading, spacing: 0) {
                 if let bio = profile.bio, !bio.isEmpty {

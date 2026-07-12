@@ -13,10 +13,8 @@ struct SettingsView: View {
     @EnvironmentObject private var appState: AppState
     @Environment(\.dismiss) private var dismiss
     @AppStorage("pb_scans_remaining") private var scansRemaining: Int = 7
-    @State private var showDeleteConfirmation = false
+    @State private var showDeleteSheet = false
     @State private var showRateAlert = false
-    @State private var isDeleting = false
-    @State private var deleteError: String?
     @State private var shareItem: ShareItem?
 
     var body: some View {
@@ -50,12 +48,10 @@ struct SettingsView: View {
                 ShareSheet(items: [item.url])
                     .presentationDetents([.medium, .large])
             }
-            .alert("Couldn't delete account",
-                   isPresented: Binding(get: { deleteError != nil },
-                                        set: { if !$0 { deleteError = nil } })) {
-                Button("OK", role: .cancel) {}
-            } message: {
-                Text(deleteError ?? "")
+            .sheet(isPresented: $showDeleteSheet) {
+                DeleteAccountSheet(onDeleted: onSignOut)
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.hidden)
             }
         }
     }
@@ -186,7 +182,7 @@ struct SettingsView: View {
     private var dangerZoneSection: some View {
         Section {
             Button {
-                showDeleteConfirmation = true
+                showDeleteSheet = true
             } label: {
                 HStack {
                     Spacer()
@@ -197,43 +193,8 @@ struct SettingsView: View {
                     Spacer()
                 }
             }
-            .confirmationDialog(
-                "Delete your account?",
-                isPresented: $showDeleteConfirmation,
-                titleVisibility: .visible
-            ) {
-                Button("Delete Account", role: .destructive) {
-                    Task { await deleteAccount() }
-                }
-                Button("Cancel", role: .cancel) {}
-            } message: {
-                Text("This will permanently delete your PaperBoxd account and all your reading data. This cannot be undone.")
-            }
         }
         .listRowBackground(Color.clear)
-    }
-
-    // MARK: - Delete account
-
-    /// DELETE /api/v1/users/me — soft-deletes the account and revokes tokens
-    /// server-side. On success we clear the local session via `onSignOut`.
-    private func deleteAccount() async {
-        guard !isDeleting else { return }
-        isDeleting = true
-        defer { isDeleting = false }
-        do {
-            struct DeleteResponse: Decodable { let message: String? }
-            let _: DeleteResponse = try await APIClient.shared.request(
-                path: Endpoints.deleteMe,
-                method: .delete,
-                requiresAuth: true
-            )
-            onSignOut()
-        } catch let e as APIError {
-            deleteError = e.errorDescription ?? "Something went wrong. Try again."
-        } catch {
-            deleteError = "Something went wrong. Try again."
-        }
     }
 }
 

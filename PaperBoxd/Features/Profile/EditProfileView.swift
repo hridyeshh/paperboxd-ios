@@ -96,7 +96,7 @@ struct EditProfileView: View {
                         }
                     } label: {
                         if vm.isSaving {
-                            ProgressView().tint(Color("Accent"))
+                            PBSpinner()
                         } else {
                             Text("Save").fontWeight(.semibold).foregroundStyle(Color("Accent"))
                         }

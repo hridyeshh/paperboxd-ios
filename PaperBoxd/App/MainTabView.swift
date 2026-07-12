@@ -2,7 +2,7 @@ import SwiftUI
 import UIKit
 
 enum DockTab: String, CaseIterable, Identifiable {
-    case home, search, scan, leaderboard, you
+    case home, search, leaderboard, you
 
     var id: String { rawValue }
 
@@ -10,7 +10,6 @@ enum DockTab: String, CaseIterable, Identifiable {
         switch self {
         case .home:        return "Home"
         case .search:      return "Search"
-        case .scan:        return "Scan"
         case .leaderboard: return "Leaderboard"
         case .you:         return "Profile"
         }
@@ -20,7 +19,6 @@ enum DockTab: String, CaseIterable, Identifiable {
         switch self {
         case .home:        return "house"
         case .search:      return "magnifyingglass"
-        case .scan:        return "barcode.viewfinder"
         case .leaderboard: return "trophy"
         case .you:         return "person"
         }
@@ -30,20 +28,16 @@ enum DockTab: String, CaseIterable, Identifiable {
         switch self {
         case .home:        return "house.fill"
         case .search:      return "magnifyingglass"
-        case .scan:        return "barcode.viewfinder"
         case .leaderboard: return "trophy.fill"
         case .you:         return "person.fill"
         }
     }
-
-    var isSpecial: Bool { self == .scan }
 }
 
 struct MainTabView: View {
     let user: User
     @EnvironmentObject private var appState: AppState
     @State private var selectedTab: DockTab = .home
-    @State private var previousTab: DockTab = .home
     @State private var hideDock = false
     @State private var profileImage: Image?
     @State private var showScan = false
@@ -56,19 +50,18 @@ struct MainTabView: View {
                 dock
             }
         }
-        // Scan & Know is a modal flow, not a tab destination. Intercept selection of
-        // the .scan tab: present the flow and bounce the selection back so the tab
-        // highlight never sticks on Scan.
+        // Pip — floating Scan & Know entry point, bottom-right above the dock.
+        .overlay(alignment: .bottomTrailing) {
+            PipScanButton { showScan = true }
+                .padding(.trailing, 18)
+                .padding(.bottom, 84)
+                .offset(y: hideDock ? 200 : 0)
+                .opacity(hideDock ? 0 : 1)
+                .animation(.spring(response: 0.32, dampingFraction: 0.85), value: hideDock)
+        }
+        .onPreferenceChange(HideDockPreferenceKey.self) { hideDock = $0 }
         .fullScreenCover(isPresented: $showScan) {
             ScanFlowView()
-        }
-        .onChange(of: selectedTab) { _, newTab in
-            if newTab == .scan {
-                showScan = true
-                selectedTab = previousTab
-            } else {
-                previousTab = newTab
-            }
         }
     }
 
@@ -86,11 +79,6 @@ struct MainTabView: View {
                 SearchView(viewer: user)
             } label: {
                 Image(systemName: "magnifyingglass")
-            }
-            Tab(value: DockTab.scan) {
-                HomeView(user: user) // placeholder — barcode scan feature TBD
-            } label: {
-                Image(systemName: "barcode.viewfinder")
             }
             Tab(value: DockTab.leaderboard) {
                 LeaderboardView(viewer: user)
@@ -155,12 +143,6 @@ struct MainTabView: View {
                 .animation(.spring(response: 0.32, dampingFraction: 0.85), value: hideDock)
         }
         .ignoresSafeArea(.keyboard)
-        .onPreferenceChange(HideDockPreferenceKey.self) { hideDock = $0 }
-        .onChange(of: selectedTab) { _, newTab in
-            if newTab != .scan {
-                previousTab = newTab
-            }
-        }
     }
 
     @ViewBuilder
@@ -170,8 +152,6 @@ struct MainTabView: View {
             HomeView(user: user)
         case .search:
             SearchView(viewer: user)
-        case .scan:
-            HomeView(user: user) // placeholder — barcode scan feature TBD
         case .leaderboard:
             LeaderboardView(viewer: user)
         case .you:
@@ -191,11 +171,7 @@ private struct CustomDock: View {
     var body: some View {
         HStack(alignment: .center, spacing: 0) {
             ForEach(DockTab.allCases) { tab in
-                if tab.isSpecial {
-                    scanButton
-                } else {
-                    regularButton(tab)
-                }
+                regularButton(tab)
             }
         }
         .padding(.vertical, 12)
@@ -222,25 +198,6 @@ private struct CustomDock: View {
         .shadow(color: .black.opacity(0.4), radius: 22, y: 10)
         .padding(.horizontal, 16)
         .padding(.bottom, 6)
-    }
-
-    // MARK: - Scan (center button: white circle, icon only)
-
-    private var scanButton: some View {
-        Button { selected = .scan } label: {
-            ZStack {
-                Circle()
-                    .fill(Color("TextPrimary"))
-                    .frame(width: 38, height: 38)
-                    .shadow(color: .black.opacity(0.25), radius: 6, y: 2)
-                Image(systemName: "barcode.viewfinder")
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(Color("Background"))
-            }
-            .frame(maxWidth: .infinity, minHeight: 44)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
     }
 
     // MARK: - Regular tab (icon only; active gets a soft glow halo)

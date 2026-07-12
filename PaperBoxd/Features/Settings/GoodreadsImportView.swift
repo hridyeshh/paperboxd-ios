@@ -97,8 +97,7 @@ struct GoodreadsImportView: View {
     private func importingView(done: Int, total: Int) -> some View {
         VStack(spacing: 18) {
             Spacer()
-            ProgressView()
-                .tint(Color("Accent"))
+            PBSpinner()
                 .scaleEffect(1.2)
             Text("Importing your books")
                 .font(PB.serif(20))

@@ -26,6 +26,10 @@ final class SearchViewModel: ObservableObject {
     @Published var suggestedReaders: [UserProfile] = []
     private var suggestedReadersLoaded = false
 
+    // "Picked for you" rail above the wall — same payload the home feed uses.
+    @Published var recommendations: [RecommendationItem] = []
+    private var recommendationsLoaded = false
+
     @Published var recentSearches: [String] = []
     private let historyKey = "pb_search_history"
 
@@ -185,6 +189,17 @@ final class SearchViewModel: ObservableObject {
             requiresAuth: false
         )
         return resp?.items ?? []
+    }
+
+    func loadRecommendationsIfNeeded() async {
+        guard !recommendationsLoaded else { return }
+        recommendationsLoaded = true
+        let resp: HomeRecommendationsResponse? = try? await APIClient.shared.request(
+            path: Endpoints.recommendationsHome,
+            method: .get,
+            requiresAuth: true
+        )
+        recommendations = resp?.recommendations ?? []
     }
 
     func loadSuggestedReaders() async {

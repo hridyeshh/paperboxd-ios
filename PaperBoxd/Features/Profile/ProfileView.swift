@@ -11,8 +11,16 @@ struct ProfileView: View {
     @State private var showBannerPicker = false
     @State private var showSettings = false
     @State private var bannerCropTarget: CropTarget?
+    @State private var fullList: FullList?
+    @State private var diarySheet: DiaryNavItem?
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var appState: AppState
+
+    /// Pushed pages for the profile tabs' "Show more" buttons.
+    enum FullList: String, Identifiable, Hashable {
+        case bookshelf, tbr, authors
+        var id: String { rawValue }
+    }
 
     init(username: String, viewer: User) {
         _vm = StateObject(wrappedValue: ProfileViewModel(username: username, viewer: viewer))
@@ -33,6 +41,15 @@ struct ProfileView: View {
         .toolbar(.hidden, for: .navigationBar)
         .navigationDestination(for: String.self) { bookId in
             BookDetailView(bookId: bookId, user: vm.viewerUser)
+        }
+        .sheet(item: $diarySheet) { nav in
+            DiaryEntryDetailView(entry: nav.entry, viewer: vm.viewerUser)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .diaryEntryDeleted)) { note in
+            if let id = note.object as? String { vm.handleDeletedEntry(id) }
+        }
+        .navigationDestination(item: $fullList) { which in
+            fullListPage(which)
         }
         .overlay(alignment: .bottom) {
             if let toast = vm.toastMessage {
@@ -152,7 +169,7 @@ struct ProfileView: View {
     @ViewBuilder
     private var content: some View {
         if vm.isLoading && vm.profile == nil {
-            ProgressView().tint(Color("Accent")).frame(maxHeight: .infinity)
+            PBSpinner().frame(maxHeight: .infinity)
         } else if let err = vm.errorMessage, vm.profile == nil {
             errorView(err)
         } else if let profile = vm.profile {
@@ -254,24 +271,71 @@ struct ProfileView: View {
             ShelfGridView(
                 books: vm.shelfBooks,
                 isLoading: vm.isLoadingShelf,
+                limit: 9,
+                onShowMore: { fullList = .bookshelf },
                 onAppearItem: { await vm.fetchShelfIfNeeded(item: $0) }
             )
         case .diary:
             DiaryListView(
                 entries: vm.diaryEntries,
                 isLoading: vm.isLoadingDiary,
-                onAppearItem: { await vm.fetchDiaryIfNeeded(item: $0) }
+                onAppearItem: { await vm.fetchDiaryIfNeeded(item: $0) },
+                onOpen: { diarySheet = DiaryNavItem(entry: $0) }
             )
         case .lists:
             ListsTabView(ownLists: vm.ownLists, savedLists: vm.savedLists)
         case .tbr:
-            TBRListView(
+            TBRGridView(
                 items: vm.tbrItems,
                 isLoading: vm.isLoadingTBR,
-                emptyMessage: "Nothing on the TBR list yet"
+                emptyMessage: "Nothing on the TBR list yet",
+                limit: 9,
+                onShowMore: { fullList = .tbr }
             )
         case .authors:
-            AuthorsListView(authors: vm.authors, isLoading: vm.isLoadingAuthors)
+            AuthorsGridView(
+                authors: vm.authors,
+                isLoading: vm.isLoadingAuthors,
+                limit: 9,
+                onShowMore: { fullList = .authors }
+            )
+        }
+    }
+
+    /// Full grid pushed from a tab's "Show more". Shares the view model, so the
+    /// bookshelf page keeps the existing infinite pagination.
+    @ViewBuilder
+    private func fullListPage(_ which: FullList) -> some View {
+        ScrollView {
+            switch which {
+            case .bookshelf:
+                ShelfGridView(
+                    books: vm.shelfBooks,
+                    isLoading: vm.isLoadingShelf,
+                    onAppearItem: { await vm.fetchShelfIfNeeded(item: $0) }
+                )
+            case .tbr:
+                TBRGridView(
+                    items: vm.tbrItems,
+                    isLoading: vm.isLoadingTBR,
+                    emptyMessage: "Nothing on the TBR list yet"
+                )
+            case .authors:
+                AuthorsGridView(authors: vm.authors, isLoading: vm.isLoadingAuthors)
+            }
+        }
+        .background(Color("Background").ignoresSafeArea())
+        .navigationTitle(fullListTitle(which))
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar(.visible, for: .navigationBar)
+        .environment(\.colorScheme, .light)
+    }
+
+    private func fullListTitle(_ which: FullList) -> String {
+        switch which {
+        case .bookshelf: return "Bookshelf"
+        case .tbr:       return "To Be Read"
+        case .authors:   return "Authors"
         }
     }
 

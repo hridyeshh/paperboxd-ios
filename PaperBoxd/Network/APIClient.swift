@@ -27,6 +27,10 @@ actor APIClient {
         let cfg = URLSessionConfiguration.default
         cfg.timeoutIntervalForRequest = 15
         cfg.waitsForConnectivity = true
+        // API responses must never be served from URLCache: pull-to-refresh and
+        // post-delete refetches were returning stale cached JSON until relaunch.
+        cfg.requestCachePolicy = .reloadIgnoringLocalCacheData
+        cfg.urlCache = nil
         cfg.httpAdditionalHeaders = [
             "Content-Type": "application/json",
             "Accept": "application/json",
@@ -137,6 +141,12 @@ actor APIClient {
         let (data, response): (Data, URLResponse)
         do {
             (data, response) = try await session.data(for: req)
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch let e as URLError where e.code == .cancelled {
+            // Task was cancelled (e.g. pull-to-refresh gesture ended). Surface as
+            // CancellationError, not a transport failure, so callers can ignore it.
+            throw CancellationError()
         } catch {
             throw APIError.transport(error.localizedDescription)
         }
