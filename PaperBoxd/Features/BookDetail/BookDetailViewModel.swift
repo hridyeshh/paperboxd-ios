@@ -134,7 +134,11 @@ final class BookDetailViewModel: ObservableObject {
         await fetchAll()
     }
 
-    func updateProgress(currentPage: Int, totalPages: Int) async {
+    /// Logging pages is what extends the reading streak (the server counts any
+    /// UTC day with >=1 page logged), so a successful log refetches it and
+    /// celebrates a growth. `celebrateStreak: false` for the mark-as-read path —
+    /// that moment already gets the shelved takeover, and only one can play.
+    func updateProgress(currentPage: Int, totalPages: Int, celebrateStreak: Bool = true) async {
         guard let uname = user.username else { return }
         isSavingProgress = true
         defer { isSavingProgress = false }
@@ -156,11 +160,25 @@ final class BookDetailViewModel: ObservableObject {
                 finishedAt: nil
             )
             toastMessage = "Progress saved"
+            if celebrateStreak {
+                await celebrateStreakIfExtended(username: uname)
+            }
         } catch let e as APIError {
             toastMessage = e.errorDescription
         } catch {
             toastMessage = error.localizedDescription
         }
+    }
+
+    /// Refetches the server-computed streak and celebrates if it grew past the
+    /// last value seen. Mirrors WriteViewModel's post-log check.
+    private func celebrateStreakIfExtended(username: String) async {
+        let resp: StreakResponse? = try? await APIClient.shared.request(
+            path: Endpoints.userStreak(username: username),
+            method: .get,
+            requiresAuth: true
+        )
+        if let s = resp?.streak { CelebrationCenter.shared.checkStreak(s) }
     }
 
     /// Posts the viewer's rating + optional review. The backend stores reviews
@@ -392,9 +410,15 @@ final class BookDetailViewModel: ObservableObject {
                     requiresAuth: true
                 )
                 if target == .read, let total = book?.pageCount, total > 0 {
-                    await updateProgress(currentPage: total, totalPages: total)
+                    // Suppressed: the shelved takeover plays for this moment.
+                    await updateProgress(currentPage: total, totalPages: total, celebrateStreak: false)
                 }
-                toastMessage = target.toast
+                CelebrationCenter.shared.show(.shelved(
+                    shelf: target,
+                    title: book?.title ?? "",
+                    author: book?.authorLine ?? "",
+                    coverURL: book?.coverURL
+                ))
             } else {
                 let _: Empty = try await APIClient.shared.request(
                     path: Endpoints.removeFromBookshelf(username: uname, bookId: bookId),

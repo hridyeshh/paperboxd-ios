@@ -63,6 +63,8 @@ struct MainTabView: View {
         .fullScreenCover(isPresented: $showScan) {
             ScanFlowView()
         }
+        // Full-screen celebration takeovers (shelved / streak / level-up).
+        .overlay { CelebrationOverlayView() }
     }
 
     // MARK: - iOS 26+ : native Liquid Glass tab bar (shrink on scroll + sliding indicator)

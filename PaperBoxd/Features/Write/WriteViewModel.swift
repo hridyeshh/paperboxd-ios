@@ -79,11 +79,23 @@ final class WriteViewModel: ObservableObject {
             )
             NotificationCenter.default.post(name: .diaryEntryCreated, object: entry)
             didSubmit = true
+            await celebrateStreakIfExtended()
         } catch let e as APIError {
             errorMessage = e.errorDescription
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+
+    /// Logging is what extends the reading streak — refetch it and celebrate
+    /// if it grew past the last value we've seen.
+    private func celebrateStreakIfExtended() async {
+        let resp: StreakResponse? = try? await APIClient.shared.request(
+            path: Endpoints.userStreak(username: username),
+            method: .get,
+            requiresAuth: true
+        )
+        if let s = resp?.streak { CelebrationCenter.shared.checkStreak(s) }
     }
 }
 

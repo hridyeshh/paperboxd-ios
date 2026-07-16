@@ -115,6 +115,9 @@ final class LeaderboardViewModel: ObservableObject {
         myStats = try? await APIClient.shared.request(
             path: Endpoints.myLeaderboardStats, method: .get, requiresAuth: true
         )
+        // Level lives on the leaderboard stats payload — this is where a
+        // level-up becomes visible to the client.
+        CelebrationCenter.shared.checkLevel(myStats?.level)
     }
 
     func refresh() async {
