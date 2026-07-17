@@ -39,16 +39,23 @@ final class CelebrationCenter: ObservableObject {
 
     // MARK: - Increment detection (streak / level)
 
-    private var streakKey: String { "celebrated_streak" }
+    private var streakDayKey: String { "celebrated_streak_day" }
     private var levelKey: String { "celebrated_level" }
 
-    /// Celebrate when the server-computed streak grows past the last one seen.
+    /// Celebrate the first successful page-log of each UTC day — that's the moment
+    /// a reading day (and thus the streak) is earned. Keyed on the UTC day so
+    /// repeat logs the same day don't re-fire, but a fresh day / first-ever log /
+    /// streak reset all celebrate (a numeric-increase check missed those).
     func checkStreak(_ new: Int) {
+        guard new > 0 else { return }
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "UTC")!
+        let today = cal.startOfDay(for: Date()).timeIntervalSince1970
         let d = UserDefaults.standard
-        let old = d.integer(forKey: streakKey)
-        d.set(new, forKey: streakKey)
-        // old == 0 means first run — record silently, don't celebrate stale state.
-        if old > 0, new > old { show(.streak(days: new)) }
+        // 0 when unset — genuine UTC epoch start never lands here, so first log fires.
+        guard d.double(forKey: streakDayKey) != today else { return }
+        d.set(today, forKey: streakDayKey)
+        show(.streak(days: new))
     }
 
     /// Celebrate when the user's level rises past the last one seen.
