@@ -140,6 +140,9 @@ final class BookDetailViewModel: ObservableObject {
     /// that moment already gets the shelved takeover, and only one can play.
     func updateProgress(currentPage: Int, totalPages: Int, celebrateStreak: Bool = true) async {
         guard let uname = user.username else { return }
+        // Only forward progress earns a reading day / streak celebration. Logging
+        // a lower page (e.g. correcting 192 → 19) is not a reading day.
+        let previousPage = progress?.currentPage ?? 0
         isSavingProgress = true
         defer { isSavingProgress = false }
         do {
@@ -160,7 +163,7 @@ final class BookDetailViewModel: ObservableObject {
                 finishedAt: nil
             )
             toastMessage = "Progress saved"
-            if celebrateStreak {
+            if celebrateStreak && currentPage > previousPage {
                 await celebrateStreakIfExtended(username: uname)
             }
         } catch let e as APIError {

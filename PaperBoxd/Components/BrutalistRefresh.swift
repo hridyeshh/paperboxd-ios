@@ -23,9 +23,11 @@ struct BrutalistRefreshable<Content: View>: View {
         ScrollView {
             content()
         }
-        .safeAreaInset(edge: .top, spacing: 0) {
-            Color.clear.frame(height: topInset)
-        }
+        // Use contentMargins, NOT safeAreaInset, for the top inset: a top
+        // safeAreaInset silently breaks `.refreshable` (the pull gesture never
+        // fires). contentMargins insets the content and drops the spinner below
+        // the floating header while keeping pull-to-refresh working.
+        .contentMargins(.top, topInset, for: .scrollContent)
         .refreshable {
             await onRefresh()
         }
