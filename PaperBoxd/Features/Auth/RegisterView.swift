@@ -4,6 +4,8 @@ struct RegisterView: View {
     @ObservedObject var viewModel: AuthViewModel
     @State private var showPassword = false
     @State private var showConfirm  = false
+    @State private var acceptedTerms = false
+    @State private var legalSheet: LegalDocKind?
     @FocusState private var focused: Field?
 
     enum Field { case email, password, confirm }
@@ -39,7 +41,8 @@ struct RegisterView: View {
             .overlay(Rectangle().stroke(.white.opacity(0.85), lineWidth: 1.5))
         }
         .buttonStyle(ScaleButtonStyle())
-        .disabled(viewModel.isLoading)
+        .disabled(viewModel.isLoading || !acceptedTerms)
+        .opacity(acceptedTerms ? 1 : 0.45)
     }
 
     var body: some View {
@@ -49,6 +52,16 @@ struct RegisterView: View {
             glassCard
                 .padding(.horizontal, 18)
                 .padding(.bottom, 32)
+        }
+        .environment(\.openURL, OpenURLAction { url in
+            switch url.absoluteString {
+            case "paperboxd://terms":   legalSheet = .terms;   return .handled
+            case "paperboxd://privacy": legalSheet = .privacy; return .handled
+            default:                    return .systemAction
+            }
+        })
+        .sheet(item: $legalSheet) { kind in
+            LegalSheetView(kind: kind)
         }
     }
 
@@ -82,6 +95,7 @@ struct RegisterView: View {
                 emailField
                 passwordFields
                 errorRow
+                termsCheckbox
                 createButton
                 orDivider.padding(.vertical, 14)
                 googleButton
@@ -195,6 +209,33 @@ struct RegisterView: View {
         }
     }
 
+    private var termsCheckbox: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Button {
+                acceptedTerms.toggle()
+            } label: {
+                ZStack {
+                    Rectangle()
+                        .stroke(.white.opacity(0.85), lineWidth: 1.5)
+                        .frame(width: 20, height: 20)
+                    if acceptedTerms {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundStyle(.white)
+                    }
+                }
+            }
+            .buttonStyle(.plain)
+
+            Text("I agree to the [Terms of Service](paperboxd://terms) and [Privacy Policy](paperboxd://privacy).")
+                .font(.system(size: 12.5))
+                .foregroundStyle(.white.opacity(0.6))
+                .tint(Color("Accent"))
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.top, 16)
+    }
+
     private var createButton: some View {
         Button {
             Task { await viewModel.register() }
@@ -247,6 +288,7 @@ struct RegisterView: View {
             && !viewModel.password.isEmpty
             && viewModel.password == viewModel.confirmPassword
             && PasswordStrength.from(viewModel.password) != .weak
+            && acceptedTerms
     }
 
     private func fieldLabel(_ text: String) -> some View {

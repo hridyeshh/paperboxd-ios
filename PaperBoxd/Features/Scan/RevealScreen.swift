@@ -50,6 +50,12 @@ struct RevealScreen: View {
                     .padding(.horizontal, 36)
                     .padding(.top, 11)
                     .opacity(verdictIn ? 1 : 0)
+
+                // AI-content disclosure: the score/verdict come from an LLM. Backs
+                // the ToS AI-generated-content clause.
+                MonoLabel(text: "AI-GENERATED · MAY BE INACCURATE", size: 9, tracking: 1.5, color: SK.faint)
+                    .padding(.top, 14)
+                    .opacity(verdictIn ? 1 : 0)
             }
             Spacer()
             BruButton(title: "See the breakdown", trailing: "chevron.down", action: onBreakdown)

@@ -313,6 +313,13 @@ enum LegalContent {
         }
     }
 
+    var url: URL {
+        switch self {
+        case .privacyPolicy:  return URL(string: "https://paperboxd.in/privacy")!
+        case .termsOfService: return URL(string: "https://paperboxd.in/terms")!
+        }
+    }
+
     var body: String {
         switch self {
         case .privacyPolicy:
@@ -325,7 +332,7 @@ enum LegalContent {
             come from third-party sources (Google Books, Open Library, Hardcover).
 
             You can request deletion of your account and data at any time by \
-            emailing hello@paperboxd.in.
+            emailing paperboxd@gmail.com.
 
             For the full, current policy see paperboxd.in/privacy.
             """
@@ -352,12 +359,20 @@ struct LegalView: View {
 
     var body: some View {
         ScrollView {
-            Text(content.body)
-                .font(.system(size: 15))
-                .foregroundStyle(Color("TextPrimary").opacity(0.85))
-                .lineSpacing(4)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(20)
+            VStack(alignment: .leading, spacing: 20) {
+                Text(content.body)
+                    .font(.system(size: 15))
+                    .foregroundStyle(Color("TextPrimary").opacity(0.85))
+                    .lineSpacing(4)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                Link(destination: content.url) {
+                    Text("Read the full \(content.title) →")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(Color("Accent"))
+                }
+            }
+            .padding(20)
         }
         .background(Color("Background").ignoresSafeArea())
         .navigationTitle(content.title)
