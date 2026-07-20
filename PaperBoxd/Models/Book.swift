@@ -1,243 +1,120 @@
 import Foundation
 
-// MARK: - Nested Types
-
-struct IndustryIdentifier: Codable {
-    let type: String
-    let identifier: String
-}
-
-struct ImageLinks: Codable {
-    let smallThumbnail: String?
-    let thumbnail: String?
-    let small: String?
-    let medium: String?
-    let large: String?
-    let extraLarge: String?
-}
-
-struct VolumeInfo: Codable {
-    let title: String
-    let subtitle: String?
-    let authors: [String]
-    let publisher: String?
-    let publishedDate: String?
-    let description: String?
-    let industryIdentifiers: [IndustryIdentifier]?
-    let pageCount: Int?
-    let categories: [String]?
-    let averageRating: Double?
-    let ratingsCount: Int?
-    let language: String?
-    let imageLinks: ImageLinks?
-    let previewLink: String?
-    let infoLink: String?
-    let canonicalVolumeLink: String?
-}
-
-struct Price: Codable {
-    let amount: Double
-    let currencyCode: String
-}
-
-struct SaleInfo: Codable {
-    let country: String?
-    let saleability: String?
-    let isEbook: Bool?
-    let listPrice: Price?
-    let retailPrice: Price?
-    let buyLink: String?
-}
-
-// MARK: - Book
-// Note: This model matches the simplified format returned by /api/books/sphere
-// The API transforms the full database Book model into this format
-
-struct Book: Codable, Identifiable {
-    // The JSON uses "id" (not "_id") - backend already transforms it
+/// Full book detail. Maps to types.BookResponse from the Go backend.
+/// The backend wraps metadata in a nested `volumeInfo` to mirror Google Books API shape.
+struct Book: Codable, Identifiable, Hashable {
     let id: String
-    
-    // Optional fields from the API response
-    let bookId: String?
-    let title: String
-    let author: String? // Singular string from API (first author) - made optional
-    let authors: [String]? // Array of authors (for mobile API)
-    let src: String? // Image URL (legacy field)
-    let cover: String? // Image URL (mobile API field)
-    let alt: String? // Alt text for image
-    let description: String? // Truncated description
-    let publishedDate: String?
-    let isbn: String?
-    let isbn13: String?
-    let averageRating: Double?
-    let ratingsCount: Int?
-    let pageCount: Int?
-    let categories: [String]?
-    let publisher: String?
-    let userInteraction: UserInteraction? // User's interaction with this book
-    
-    // Computed property to get the best available image URL
-    var imageURL: String? {
-        return cover ?? src
-    }
-    
-    // Computed property to get a secure HTTPS URL for the cover image
-    // This ensures iOS App Transport Security compliance by converting HTTP to HTTPS
-    var secureCoverURL: URL? {
-        guard let imageURL = imageURL else { return nil }
-        
-        // Check if the URL starts with http:// and replace it with https://
-        if imageURL.hasPrefix("http://") {
-            let secureSrc = imageURL.replacingOccurrences(of: "http://", with: "https://")
-            return URL(string: secureSrc)
-        }
-        
-        return URL(string: imageURL)
-    }
-    
-    // Computed property to get the author string
-    var authorString: String {
-        if let author = author {
-            return author
-        }
-        if let authors = authors, !authors.isEmpty {
-            return authors.joined(separator: ", ")
-        }
-        return "Unknown Author"
-    }
-    
+    let slug: String?
+    let volumeInfo: VolumeInfo
+    let paperboxdStats: PaperboxdStats?
+    let googleBooksId: String?
+    let apiSource: String?
+
     enum CodingKeys: String, CodingKey {
-        case id
-        case _id // Support MongoDB's _id format
-        case bookId
-        case title
-        case author
-        case authors
-        case src
-        case cover
-        case alt
-        case description
-        case publishedDate
-        case isbn
-        case isbn13
-        case averageRating
-        case ratingsCount
-        case pageCount
-        case categories
-        case publisher
-        case userInteraction
+        case id, slug
+        case volumeInfo = "volumeInfo"
+        case paperboxdStats = "paperboxdStats"
+        case googleBooksId = "googleBooksId"
+        case apiSource = "apiSource"
     }
-    
-    init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        
-        // Handle both "id" and "_id" for the id field
-        if let idValue = try? container.decode(String.self, forKey: .id) {
-            id = idValue
-        } else if let idValue = try? container.decode(String.self, forKey: ._id) {
-            id = idValue
-        } else {
-            throw DecodingError.keyNotFound(CodingKeys.id, DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "Neither 'id' nor '_id' found in Book"))
-        }
-        
-        bookId = try? container.decode(String.self, forKey: .bookId)
-        title = try container.decode(String.self, forKey: .title)
-        author = try? container.decode(String.self, forKey: .author)
-        authors = try? container.decode([String].self, forKey: .authors)
-        src = try? container.decode(String.self, forKey: .src)
-        cover = try? container.decode(String.self, forKey: .cover)
-        alt = try? container.decode(String.self, forKey: .alt)
-        description = try? container.decode(String.self, forKey: .description)
-        publishedDate = try? container.decode(String.self, forKey: .publishedDate)
-        isbn = try? container.decode(String.self, forKey: .isbn)
-        isbn13 = try? container.decode(String.self, forKey: .isbn13)
-        averageRating = try? container.decode(Double.self, forKey: .averageRating)
-        ratingsCount = try? container.decode(Int.self, forKey: .ratingsCount)
-        pageCount = try? container.decode(Int.self, forKey: .pageCount)
-        categories = try? container.decode([String].self, forKey: .categories)
-        publisher = try? container.decode(String.self, forKey: .publisher)
-        userInteraction = try? container.decode(UserInteraction.self, forKey: .userInteraction)
+
+    // MARK: - Convenience
+
+    var title: String { volumeInfo.title }
+    var authors: [String] { volumeInfo.authors ?? [] }
+    var authorLine: String { authors.isEmpty ? "" : authors.joined(separator: ", ") }
+    var description: String? {
+        guard let d = volumeInfo.description?.strippingHTML, !d.isEmpty else { return nil }
+        return d
     }
-    
-    func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        
-        // Always encode as "id" (not "_id")
-        try container.encode(id, forKey: .id)
-        try container.encodeIfPresent(bookId, forKey: .bookId)
-        try container.encode(title, forKey: .title)
-        try container.encodeIfPresent(author, forKey: .author)
-        try container.encodeIfPresent(authors, forKey: .authors)
-        try container.encodeIfPresent(src, forKey: .src)
-        try container.encodeIfPresent(cover, forKey: .cover)
-        try container.encodeIfPresent(alt, forKey: .alt)
-        try container.encodeIfPresent(description, forKey: .description)
-        try container.encodeIfPresent(publishedDate, forKey: .publishedDate)
-        try container.encodeIfPresent(isbn, forKey: .isbn)
-        try container.encodeIfPresent(isbn13, forKey: .isbn13)
-        try container.encodeIfPresent(averageRating, forKey: .averageRating)
-        try container.encodeIfPresent(ratingsCount, forKey: .ratingsCount)
-        try container.encodeIfPresent(pageCount, forKey: .pageCount)
-        try container.encodeIfPresent(categories, forKey: .categories)
-        try container.encodeIfPresent(publisher, forKey: .publisher)
-        try container.encodeIfPresent(userInteraction, forKey: .userInteraction)
+    var pageCount: Int? {
+        guard let p = volumeInfo.pageCount, p > 0 else { return nil }
+        return p
+    }
+    var publishedYear: String? {
+        guard let d = volumeInfo.publishedDate, d.count >= 4 else { return nil }
+        return String(d.prefix(4))
+    }
+    var categories: [String] { volumeInfo.categories ?? [] }
+    var averageRating: Double? { volumeInfo.averageRating }
+
+    /// Best ISBN for this book — prefers ISBN-13, falls back to ISBN-10.
+    var isbn: String? {
+        let ids = volumeInfo.industryIdentifiers ?? []
+        return ids.first { $0.type == "ISBN_13" }?.identifier
+            ?? ids.first { $0.type == "ISBN_10" }?.identifier
+            ?? ids.first?.identifier
+    }
+
+    /// Best available cover URL, largest to smallest. Forces HTTPS (Google Books returns http://).
+    var coverURL: String? {
+        let links = volumeInfo.imageLinks
+        let raw = links?.large ?? links?.medium ?? links?.thumbnail ?? links?.small ?? links?.smallThumbnail
+        return raw?.replacingOccurrences(of: "http://", with: "https://")
     }
 }
 
-// MARK: - UserInteraction
-struct UserInteraction: Codable {
-    let isLiked: Bool?
-    let shelfStatus: String? // "None", "Want to Read", "Reading", "Read", "DNF"
-}
+// MARK: - VolumeInfo
 
-// MARK: - Book Extension for Manual Creation
 extension Book {
-    init(
-        id: String,
-        bookId: String? = nil,
-        title: String,
-        author: String? = nil,
-        authors: [String]? = nil,
-        src: String? = nil,
-        cover: String? = nil,
-        alt: String? = nil,
-        description: String? = nil,
-        publishedDate: String? = nil,
-        isbn: String? = nil,
-        isbn13: String? = nil,
-        averageRating: Double? = nil,
-        ratingsCount: Int? = nil,
-        pageCount: Int? = nil,
-        categories: [String]? = nil,
-        publisher: String? = nil,
-        userInteraction: UserInteraction? = nil
-    ) {
-        self.id = id
-        self.bookId = bookId
-        self.title = title
-        self.author = author
-        self.authors = authors
-        self.src = src
-        self.cover = cover
-        self.alt = alt
-        self.description = description
-        self.publishedDate = publishedDate
-        self.isbn = isbn
-        self.isbn13 = isbn13
-        self.averageRating = averageRating
-        self.ratingsCount = ratingsCount
-        self.pageCount = pageCount
-        self.categories = categories
-        self.publisher = publisher
-        self.userInteraction = userInteraction
+    struct VolumeInfo: Codable, Hashable {
+        let title: String
+        let authors: [String]?
+        let publishedDate: String?
+        let description: String?
+        let pageCount: Int?
+        let categories: [String]?
+        let imageLinks: ImageLinks?
+        let averageRating: Double?
+        let publisher: String?
+        let language: String?
+        let industryIdentifiers: [IndustryIdentifier]?
+
+        init(title: String, authors: [String]?, publishedDate: String?, description: String?,
+             pageCount: Int?, categories: [String]?, imageLinks: ImageLinks?, averageRating: Double?,
+             publisher: String?, language: String?, industryIdentifiers: [IndustryIdentifier]? = nil) {
+            self.title = title
+            self.authors = authors
+            self.publishedDate = publishedDate
+            self.description = description
+            self.pageCount = pageCount
+            self.categories = categories
+            self.imageLinks = imageLinks
+            self.averageRating = averageRating
+            self.publisher = publisher
+            self.language = language
+            self.industryIdentifiers = industryIdentifiers
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case title, authors, description, categories, publisher, language
+            case publishedDate = "publishedDate"
+            case pageCount = "pageCount"
+            case imageLinks = "imageLinks"
+            case averageRating = "averageRating"
+            case industryIdentifiers = "industryIdentifiers"
+        }
+    }
+
+    struct IndustryIdentifier: Codable, Hashable {
+        let type: String       // e.g. "ISBN_13", "ISBN_10"
+        let identifier: String
+    }
+
+    struct ImageLinks: Codable, Hashable {
+        let smallThumbnail: String?
+        let thumbnail: String?
+        let small: String?
+        let medium: String?
+        let large: String?
+        let extraLarge: String?
+    }
+
+    struct PaperboxdStats: Codable, Hashable {
+        let rating: Double?
+        let ratingsCount: Int?
+        let totalReads: Int?
+        let totalLikes: Int?
+        let totalTBR: Int?
     }
 }
-
-// MARK: - SphereResponse
-
-struct SphereResponse: Codable {
-    let books: [Book]
-    let count: Int?
-}
-
-
