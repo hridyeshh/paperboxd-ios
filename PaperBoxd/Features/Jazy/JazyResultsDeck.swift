@@ -214,18 +214,9 @@ private struct JazyMatchCard: View {
 
             Spacer(minLength: 16)
 
-            HStack(spacing: 10) {
-                Button(action: onNext) {
-                    Text("Next")
-                        .font(.system(size: 14))
-                        .foregroundStyle(JZ.sub)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 13)
-                        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(JZ.line))
-                }
-                .buttonStyle(.plain)
-                .accessibilityHint("Or swipe the card aside")
-
+            // Open is the primary action and takes the full width; Next sits
+            // under it, so skipping never competes with opening.
+            VStack(spacing: 10) {
                 Button(action: onOpen) {
                     HStack(spacing: 7) {
                         Text("Open this book")
@@ -239,7 +230,20 @@ private struct JazyMatchCard: View {
                     .clipShape(RoundedRectangle(cornerRadius: 12))
                 }
                 .buttonStyle(.plain)
-                .layoutPriority(1)
+
+                Button(action: onNext) {
+                    HStack(spacing: 6) {
+                        Text("Next")
+                        Image(systemName: "chevron.right").font(.system(size: 11, weight: .semibold))
+                    }
+                    .font(.system(size: 14))
+                    .foregroundStyle(JZ.sub)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 13)
+                    .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(JZ.line))
+                }
+                .buttonStyle(.plain)
+                .accessibilityHint("Or swipe the card aside")
             }
         }
         .padding(24)
