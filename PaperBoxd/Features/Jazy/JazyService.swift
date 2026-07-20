@@ -6,14 +6,18 @@ import Foundation
 struct VibeMatch: Decodable, Identifiable {
     let book: Book
     let similarityScore: Double
+    /// The "% match" pill. Claude sets it server-side so the number and
+    /// `matchReason` make the same claim; raw cosine similarity is the fallback
+    /// for a backend running without an Anthropic key.
+    let matchPercent: Int
     let matchReason: String
+    /// One honest note on what might not land. Empty when Claude is unavailable.
+    let matchCaveat: String
 
     var id: String { book.id }
-    /// 0…1 similarity rendered as the card's "% match" pill.
-    var matchPercent: Int { max(0, min(100, Int((similarityScore * 100).rounded()))) }
 
     private enum Keys: String, CodingKey {
-        case similarityScore, matchReason
+        case similarityScore, matchPercent, matchReason, matchCaveat
     }
 
     init(from decoder: Decoder) throws {
@@ -21,6 +25,10 @@ struct VibeMatch: Decodable, Identifiable {
         let c = try decoder.container(keyedBy: Keys.self)
         similarityScore = try c.decodeIfPresent(Double.self, forKey: .similarityScore) ?? 0
         matchReason = try c.decodeIfPresent(String.self, forKey: .matchReason) ?? ""
+        matchCaveat = try c.decodeIfPresent(String.self, forKey: .matchCaveat) ?? ""
+        let percent = try c.decodeIfPresent(Int.self, forKey: .matchPercent)
+            ?? Int((similarityScore * 100).rounded())
+        matchPercent = max(0, min(100, percent))
     }
 }
 

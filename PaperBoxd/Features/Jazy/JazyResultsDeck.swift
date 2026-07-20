@@ -11,6 +11,12 @@ struct JazyResultsDeck: View {
     @State private var index = 0
     @State private var leaving = false
     @State private var openMatch: VibeMatch?
+    /// Live finger position on the top card. Released short of `flickDistance`
+    /// it springs back; past it the card leaves the way it was thrown.
+    @State private var drag: CGSize = .zero
+    @State private var leavingDirection: CGFloat = -1
+
+    private static let flickDistance: CGFloat = 110
 
     private var done: Bool { index >= matches.count }
 
@@ -84,16 +90,20 @@ struct JazyResultsDeck: View {
                 }
             } else {
                 ForEach(Array(matches[index..<min(index + 3, matches.count)].enumerated()), id: \.element.id) { depth, match in
+                    let top = depth == 0
                     JazyMatchCard(match: match,
-                                  onSkip: skip,
+                                  onNext: { skip() },
                                   onOpen: { openMatch = match })
                         .scaleEffect(1 - CGFloat(depth) * 0.045)
-                        .offset(x: depth == 0 && leaving ? -520 : 0,
-                                y: CGFloat(depth) * 14)
-                        .rotationEffect(.degrees(depth == 0 && leaving ? -9 : 0))
-                        .opacity(depth == 0 && leaving ? 0 : (depth == 2 ? 0.55 : 1))
+                        .offset(x: top ? (leaving ? 520 * leavingDirection : drag.width) : 0,
+                                y: CGFloat(depth) * 14 + (top ? drag.height * 0.12 : 0))
+                        // Tilt follows the throw, so the card pivots off the
+                        // wrist rather than sliding flat.
+                        .rotationEffect(.degrees(top ? (leaving ? 9 * leavingDirection : drag.width / 22) : 0))
+                        .opacity(top && leaving ? 0 : (depth == 2 ? 0.55 : 1))
                         .zIndex(Double(10 - depth))
-                        .allowsHitTesting(depth == 0)
+                        .allowsHitTesting(top)
+                        .gesture(top ? swipe : nil)
                 }
             }
         }
@@ -114,9 +124,31 @@ struct JazyResultsDeck: View {
         .padding(.bottom, 26)
     }
 
-    private func skip() {
+    private var swipe: some Gesture {
+        DragGesture()
+            .onChanged { value in
+                guard !leaving else { return }
+                drag = value.translation
+            }
+            .onEnded { value in
+                guard !leaving else { return }
+                if abs(value.translation.width) > Self.flickDistance {
+                    skip(direction: value.translation.width < 0 ? -1 : 1)
+                } else {
+                    withAnimation(.spring(response: 0.32, dampingFraction: 0.7)) { drag = .zero }
+                }
+            }
+    }
+
+    /// Advance to the next match. `direction` is which way the card flies out —
+    /// the way it was thrown, or left by default when the button was tapped.
+    private func skip(direction: CGFloat = -1) {
         guard !leaving, !done else { return }
-        withAnimation(.easeIn(duration: 0.4)) { leaving = true }
+        leavingDirection = direction
+        withAnimation(.easeIn(duration: 0.4)) {
+            leaving = true
+            drag = .zero
+        }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
             index += 1
             leaving = false
@@ -128,7 +160,7 @@ struct JazyResultsDeck: View {
 
 private struct JazyMatchCard: View {
     let match: VibeMatch
-    let onSkip: () -> Void
+    let onNext: () -> Void
     let onOpen: () -> Void
 
     private var book: Book { match.book }
@@ -167,19 +199,15 @@ private struct JazyMatchCard: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
 
-            // Why Jazy picked it. The backend sends one reason string per match.
+            // Why Jazy picked it, and what it's honest about. Both come from
+            // Claude alongside the match percent above.
             if !match.matchReason.isEmpty {
                 Divider().overlay(JZ.line).padding(.top, 20)
-                HStack(alignment: .top, spacing: 10) {
-                    Image(systemName: "checkmark")
-                        .font(.system(size: 11, weight: .bold))
-                        .foregroundStyle(JZ.accent)
-                        .padding(.top, 3)
-                    Text(match.matchReason)
-                        .font(.system(size: 13))
-                        .foregroundStyle(JZ.ink)
-                        .lineSpacing(3)
-                        .fixedSize(horizontal: false, vertical: true)
+                VStack(alignment: .leading, spacing: 10) {
+                    reasonLine("checkmark", match.matchReason, tint: JZ.accent, ink: JZ.ink)
+                    if !match.matchCaveat.isEmpty {
+                        reasonLine("exclamationmark", match.matchCaveat, tint: JZ.faint, ink: JZ.sub)
+                    }
                 }
                 .padding(.top, 16)
             }
@@ -187,8 +215,8 @@ private struct JazyMatchCard: View {
             Spacer(minLength: 16)
 
             HStack(spacing: 10) {
-                Button(action: onSkip) {
-                    Text("Skip")
+                Button(action: onNext) {
+                    Text("Next")
                         .font(.system(size: 14))
                         .foregroundStyle(JZ.sub)
                         .frame(maxWidth: .infinity)
@@ -196,6 +224,7 @@ private struct JazyMatchCard: View {
                         .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(JZ.line))
                 }
                 .buttonStyle(.plain)
+                .accessibilityHint("Or swipe the card aside")
 
                 Button(action: onOpen) {
                     HStack(spacing: 7) {
@@ -219,6 +248,21 @@ private struct JazyMatchCard: View {
         .overlay(RoundedRectangle(cornerRadius: 20).strokeBorder(JZ.line))
         .clipShape(RoundedRectangle(cornerRadius: 20))
         .shadow(color: .black.opacity(0.13), radius: 22, y: 18)
+    }
+
+    private func reasonLine(_ symbol: String, _ text: String, tint: Color, ink: Color) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: symbol)
+                .font(.system(size: 11, weight: .bold))
+                .foregroundStyle(tint)
+                .frame(width: 12)
+                .padding(.top, 3)
+            Text(text)
+                .font(.system(size: 13))
+                .foregroundStyle(ink)
+                .lineSpacing(3)
+                .fixedSize(horizontal: false, vertical: true)
+        }
     }
 
     private var cover: some View {

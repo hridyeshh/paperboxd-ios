@@ -49,7 +49,11 @@ struct JazyView: View {
     private let promptTimer = Timer.publish(every: 3, on: .main, in: .common).autoconnect()
 
     private var hasText: Bool { !query.trimmingCharacters(in: .whitespaces).isEmpty }
-    private var dimmed: Bool { focused || showResults }
+    private var dimmed: Bool { focused || showResults || isSearching }
+
+    /// The searching page holds for at least this long even when the backend
+    /// answers sooner — a 300ms flash of book covers reads as a glitch.
+    private static let minSearchDisplay: TimeInterval = 2.0
 
     var body: some View {
         ZStack {
@@ -58,8 +62,13 @@ struct JazyView: View {
             JazyDoodleField().opacity(dimmed ? 0.3 : 1)
 
             entryLayer
-                .opacity(showResults ? 0 : 1)
+                .opacity(showResults || isSearching ? 0 : 1)
                 .offset(y: showResults ? -36 : 0)
+
+            if isSearching {
+                JazySearchingView(query: query)
+                    .transition(.opacity)
+            }
 
             if showResults {
                 JazyResultsDeck(query: query, matches: matches, user: user) {
@@ -98,6 +107,9 @@ struct JazyView: View {
             }
             .padding(.horizontal, 22)
 
+            // Both spacers have to be greedy for the block to sit centred. A
+            // bare Spacer below a `maxHeight: .infinity` one loses the split,
+            // and the whole page slides to the bottom of the screen.
             Spacer(minLength: 0)
                 .frame(maxHeight: focused ? 60 : .infinity)
 
@@ -139,6 +151,7 @@ struct JazyView: View {
             }
 
             Spacer(minLength: 0)
+                .frame(maxHeight: .infinity)
 
             Text("\(scansRemaining) free scans left")
                 .font(.system(size: 11.5))
@@ -253,13 +266,15 @@ struct JazyView: View {
         let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !q.isEmpty, !isSearching else { return }
         focused = false
-        isSearching = true
         errorMessage = nil
+        withAnimation(.easeInOut(duration: 0.3)) { isSearching = true }
+        let startedAt = Date()
         Task {
             do {
                 let items = try await JazyService.vibeSearch(q)
+                await holdSearchingPage(since: startedAt)
                 await MainActor.run {
-                    isSearching = false
+                    withAnimation(.easeInOut(duration: 0.3)) { isSearching = false }
                     guard !items.isEmpty else {
                         errorMessage = "Jazy couldn't find anything for that. Try another vibe."
                         return
@@ -268,13 +283,122 @@ struct JazyView: View {
                     withAnimation(.easeInOut(duration: 0.45)) { showResults = true }
                 }
             } catch {
+                await holdSearchingPage(since: startedAt)
                 await MainActor.run {
-                    isSearching = false
+                    withAnimation(.easeInOut(duration: 0.3)) { isSearching = false }
                     errorMessage = (error as? APIError)?.errorDescription
                         ?? "Jazy is unavailable right now. Try again."
                 }
             }
         }
+    }
+
+    private func holdSearchingPage(since startedAt: Date) async {
+        let remaining = Self.minSearchDisplay - Date().timeIntervalSince(startedAt)
+        guard remaining > 0 else { return }
+        try? await Task.sleep(nanoseconds: UInt64(remaining * 1_000_000_000))
+    }
+}
+
+// MARK: - Searching
+
+/// The wait while the backend embeds the query and Claude writes the reasons —
+/// a couple of seconds, so it gets a page rather than a spinner. Covers riffle
+/// off the top of a stack while the caption walks through what Jazy is doing.
+private struct JazySearchingView: View {
+    let query: String
+
+    /// One cover's full trip from the back of the stack to off-screen.
+    private static let tripDuration = 3.2
+    private static let coverCount = 5
+
+    private static let captions = [
+        "Reading the shelves…",
+        "Weighing the vibe…",
+        "Writing your reasons…",
+    ]
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Spacer(minLength: 0)
+
+            TimelineView(.animation(minimumInterval: 1.0 / 30)) { timeline in
+                let now = timeline.date.timeIntervalSinceReferenceDate
+                ZStack {
+                    ForEach(0..<Self.coverCount, id: \.self) { i in
+                        cover(at: tripProgress(now: now, index: i))
+                    }
+                }
+                .frame(width: 200, height: 190)
+                .overlay(alignment: .bottom) { caption(now: now) }
+            }
+
+            Text("“\(query)”")
+                .font(PB.serifItalic(15))
+                .foregroundStyle(JZ.sub)
+                .multilineTextAlignment(.center)
+                .lineLimit(2)
+                .padding(.horizontal, 40)
+                .padding(.top, 34)
+
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    /// 0 = just joined the back of the stack, 1 = gone. Staggered per cover so
+    /// the five are evenly spaced around the loop.
+    private func tripProgress(now: TimeInterval, index: Int) -> Double {
+        let offset = Double(index) / Double(Self.coverCount)
+        return ((now / Self.tripDuration) + offset).truncatingRemainder(dividingBy: 1)
+    }
+
+    /// The last quarter of the trip is the flick off to the left; before that
+    /// the cover is climbing the stack.
+    private func cover(at t: Double) -> some View {
+        let leaving = max(0, (t - 0.75) / 0.25)
+        let climb = min(t, 0.75) / 0.75          // 0 at the back, 1 at the front
+
+        return JazyLoadingCover()
+            .frame(width: 96, height: 144)
+            .scaleEffect(0.9 + 0.1 * climb)
+            .rotationEffect(.degrees(-5 + 5 * climb - 24 * leaving))
+            .offset(x: -190 * leaving, y: 22 * (1 - climb))
+            .opacity(min(climb * 4, 1) * (1 - leaving))
+            .zIndex(t)
+    }
+
+    private func caption(now: TimeInterval) -> some View {
+        // One caption per third of the loop, so the words change with the covers.
+        let slot = Int(now / Self.tripDuration * 3) % Self.captions.count
+        return Text(Self.captions[slot])
+            .font(.system(size: 13))
+            .foregroundStyle(JZ.sub)
+            .id(slot)
+            .transition(.opacity)
+            .offset(y: 34)
+    }
+}
+
+/// A blank cover in the Ask Jazy palette — ruled lines standing in for a title.
+private struct JazyLoadingCover: View {
+    var body: some View {
+        RoundedRectangle(cornerRadius: 8)
+            .fill(JZ.card)
+            .overlay(alignment: .leading) {
+                Rectangle().fill(JZ.accent.opacity(0.5)).frame(width: 5)
+            }
+            .overlay(alignment: .topLeading) {
+                VStack(alignment: .leading, spacing: 7) {
+                    Capsule().fill(JZ.ink.opacity(0.16)).frame(width: 46, height: 6)
+                    Capsule().fill(JZ.ink.opacity(0.16)).frame(width: 32, height: 6)
+                    Capsule().fill(JZ.ink.opacity(0.09)).frame(width: 40, height: 5)
+                }
+                .padding(.leading, 18)
+                .padding(.top, 22)
+            }
+            .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(JZ.line))
+            .shadow(color: .black.opacity(0.12), radius: 14, y: 10)
     }
 }
 
