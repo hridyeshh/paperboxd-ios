@@ -1,10 +1,10 @@
 import Combine
 import Foundation
 
+/// Vibe search moved out of here — it lives in Ask Jazy now (`Features/Jazy`).
 enum SearchType: String, CaseIterable {
     case books = "Books"
     case readers = "Readers"
-    case vibe = "Vibe"
 }
 
 @MainActor
@@ -13,7 +13,6 @@ final class SearchViewModel: ObservableObject {
     @Published var searchType: SearchType = .books
     @Published var books: [Book] = []
     @Published var users: [UserProfile] = []
-    @Published var vibeBooks: [Book] = []
     @Published var isSearching = false
     @Published var errorMessage: String?
 
@@ -61,7 +60,6 @@ final class SearchViewModel: ObservableObject {
     var currentResults: [Book] {
         switch searchType {
         case .books: return books
-        case .vibe: return vibeBooks
         case .readers: return []
         }
     }
@@ -70,12 +68,11 @@ final class SearchViewModel: ObservableObject {
         searchTask?.cancel()
         let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
         if q.isEmpty {
-            books = []; users = []; vibeBooks = []; errorMessage = nil
+            books = []; users = []; errorMessage = nil
             return
         }
-        let debounce: UInt64 = searchType == .vibe ? 600_000_000 : 400_000_000
         searchTask = Task {
-            try? await Task.sleep(nanoseconds: debounce)
+            try? await Task.sleep(nanoseconds: 400_000_000)
             guard !Task.isCancelled else { return }
             await search(query: q)
         }
@@ -83,7 +80,7 @@ final class SearchViewModel: ObservableObject {
 
     func onTypeChanged() {
         searchTask?.cancel()
-        books = []; users = []; vibeBooks = []; errorMessage = nil
+        books = []; users = []; errorMessage = nil
         let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !q.isEmpty else { return }
         searchTask = Task {
@@ -104,10 +101,6 @@ final class SearchViewModel: ObservableObject {
         case .readers:
             let result = (try? await searchUsers(query)) ?? []
             users = result
-            if !result.isEmpty { addToHistory(query) }
-        case .vibe:
-            let result = (try? await searchVibe(query)) ?? []
-            vibeBooks = result
             if !result.isEmpty { addToHistory(query) }
         }
     }
@@ -132,17 +125,6 @@ final class SearchViewModel: ObservableObject {
             requiresAuth: true
         )
         return resp.users
-    }
-
-    private func searchVibe(_ q: String) async throws -> [Book] {
-        struct VibeRequest: Encodable { let query: String; let limit: Int }
-        let resp: BookListResponse = try await APIClient.shared.request(
-            path: "/api/v1/search/vibe",
-            method: .post,
-            body: VibeRequest(query: q, limit: 10),
-            requiresAuth: false
-        )
-        return resp.items
     }
 
     func loadWallIfNeeded() async {

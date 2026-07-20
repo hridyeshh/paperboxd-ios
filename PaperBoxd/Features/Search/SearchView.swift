@@ -62,7 +62,6 @@ struct SearchView: View {
                         vm.query = ""
                         vm.books = []
                         vm.users = []
-                        vm.vibeBooks = []
                     } label: {
                         Image(systemName: "arrow.left")
                             .font(.system(size: 16, weight: .medium))
@@ -104,9 +103,9 @@ struct SearchView: View {
         let offset: CGFloat = 5
         let pressed = searchFocused
         return HStack(spacing: 10) {
-            Image(systemName: vm.searchType == .vibe ? "sparkles" : "magnifyingglass")
+            Image(systemName: "magnifyingglass")
                 .font(.system(size: 15, weight: .medium))
-                .foregroundStyle(vm.searchType == .vibe ? slAccent : slInk)
+                .foregroundStyle(slInk)
 
             TextField(placeholder, text: $vm.query)
                 .focused($searchFocused)
@@ -122,7 +121,6 @@ struct SearchView: View {
                     vm.query = ""
                     vm.books = []
                     vm.users = []
-                    vm.vibeBooks = []
                 } label: {
                     Image(systemName: "xmark.circle.fill")
                         .font(.system(size: 15))
@@ -153,7 +151,6 @@ struct SearchView: View {
         switch vm.searchType {
         case .books:   return "Title, author, or ISBN..."
         case .readers: return "Find readers by username..."
-        case .vibe:    return "Describe a mood or feeling..."
         }
     }
 
@@ -237,7 +234,7 @@ struct SearchView: View {
             Text("search anything.")
                 .font(PB.serif(32))
                 .foregroundStyle(slInk)
-            Text("Books, readers, or a vibe.")
+            Text("Books or readers.")
                 .font(PB.serifItalic(18, .regular))
                 .foregroundStyle(slMuted)
         }
@@ -304,7 +301,7 @@ struct SearchView: View {
                 } else if vm.searchType == .readers {
                     readerResults
                 } else {
-                    bookResults(vm.searchType == .vibe ? vm.vibeBooks : vm.books)
+                    bookResults(vm.books)
                 }
             }
             .padding(.top, 8)

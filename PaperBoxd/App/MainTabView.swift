@@ -50,7 +50,8 @@ struct MainTabView: View {
                 dock
             }
         }
-        // Pip — floating Scan & Know entry point, bottom-right above the dock.
+        // Pip — floating Ask Jazy entry point (vibe search + Scan & Know),
+        // bottom-right above the dock.
         .overlay(alignment: .bottomTrailing) {
             PipScanButton { showScan = true }
                 .padding(.trailing, 18)
@@ -61,7 +62,7 @@ struct MainTabView: View {
         }
         .onPreferenceChange(HideDockPreferenceKey.self) { hideDock = $0 }
         .fullScreenCover(isPresented: $showScan) {
-            ScanFlowView()
+            JazyView(user: user)
         }
         // Full-screen celebration takeovers (shelved / streak / level-up).
         .overlay { CelebrationOverlayView() }

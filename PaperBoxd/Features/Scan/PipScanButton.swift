@@ -55,7 +55,7 @@ struct PipScanButton: View {
     }
 
     /// Deterministic per-frame noise in -1…1 — cheap hash, no state.
-    private static func jitter(_ frame: Int, salt: Int) -> Double {
+    static func jitter(_ frame: Int, salt: Int) -> Double {
         var h = UInt64(bitPattern: Int64(frame &* 2654435761 &+ salt &* 40503))
         h ^= h >> 13; h &*= 0x9E3779B97F4A7C15; h ^= h >> 32
         return Double(h % 1000) / 500 - 1
@@ -81,9 +81,60 @@ struct PipScanButton: View {
     }
 }
 
+// MARK: - Pip on his own (no button)
+
+/// Pip's face with the full pose machine, minus the white circle and the tap
+/// target — used by the Ask Jazy entry and results header.
+///
+/// Five states: idle → blink → glance → think → tap. `thinking` pins him to the
+/// reading pose (the idle glance/blink loop pauses so he doesn't look away
+/// mid-sentence); `excited` is the tap startle.
+struct PipFace: View {
+    var thinking: Bool = false
+    var excited: Bool = false
+
+    @State private var blink = false
+    @State private var gaze: CGFloat = 0
+
+    private static let fps: Double = 10
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 1.0 / Self.fps)) { timeline in
+            // boil "on twos" — same stepped ink wobble as the button
+            let frame = Int(timeline.date.timeIntervalSinceReferenceDate * Self.fps) / 2
+            PipGlyph(blink: blink, gaze: thinking ? 0 : gaze, excited: excited, thinking: thinking)
+                .rotationEffect(.degrees(-3 + PipScanButton.jitter(frame, salt: 1) * 0.9))
+                .scaleEffect(excited ? 1.12 : 1)
+                .animation(nil, value: frame)
+        }
+        .task { await live() }
+    }
+
+    /// Idle life: blink every few seconds, sometimes glance aside. Paused while
+    /// thinking — he's reading what you typed, not looking around.
+    private func live() async {
+        while !Task.isCancelled {
+            try? await Task.sleep(for: .seconds(2.4))
+            guard !thinking else { continue }
+            blink = true
+            try? await Task.sleep(for: .seconds(0.12))
+            blink = false
+
+            if Bool.random() {
+                try? await Task.sleep(for: .seconds(0.5))
+                guard !thinking else { continue }
+                gaze = Bool.random() ? 1 : -1
+                try? await Task.sleep(for: .seconds(1.1))
+                gaze = 0
+            }
+        }
+    }
+}
+
 // MARK: - Ink drawing (40×44 canvas)
 
-private struct PipGlyph: View {
+/// Pip's face on its own — reused at rest by the Ask Jazy entry + results header.
+struct PipGlyph: View {
     var blink: Bool
     var gaze: CGFloat
     var excited: Bool
