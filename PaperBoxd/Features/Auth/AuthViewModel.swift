@@ -193,6 +193,29 @@ final class AuthViewModel: ObservableObject {
         }
     }
 
+    // MARK: - Apple
+
+    func loginWithApple(identityToken: String, name: String?) async {
+        isLoading = true
+        errorMessage = nil
+        successMessage = nil
+        defer { isLoading = false }
+        do {
+            var body: [String: String] = ["identity_token": identityToken]
+            if let name, !name.isEmpty { body["name"] = name }
+            let resp: GoogleAuthResponse = try await APIClient.shared.request(
+                path: Endpoints.mobileApple,
+                method: .post,
+                body: body
+            )
+            onAuthSuccess(resp.token, resp.user)
+        } catch let e as APIError {
+            errorMessage = e.errorDescription
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
     // MARK: - Countdown
 
     private func startCountdown(seconds: Int) {

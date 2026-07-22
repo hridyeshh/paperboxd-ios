@@ -360,6 +360,33 @@ final class ProfileViewModel: ObservableObject {
         } catch {}
     }
 
+    struct CreateListBody: Encodable {
+        let title: String
+        let description: String?
+        let isPrivate: Bool
+        enum CodingKeys: String, CodingKey {
+            case title, description
+            case isPrivate = "is_private"
+        }
+    }
+
+    /// Creates a list for the current profile. Returns true on success; prepends
+    /// the new list to `ownLists` so the tab updates without a full refetch.
+    func createList(title: String, description: String?, isPrivate: Bool) async -> Bool {
+        do {
+            let created: ReadingList = try await APIClient.shared.request(
+                path: Endpoints.userLists(username: profileUsername),
+                method: .post,
+                body: CreateListBody(title: title, description: description, isPrivate: isPrivate),
+                requiresAuth: true
+            )
+            ownLists.insert(created, at: 0)
+            return true
+        } catch {
+            return false
+        }
+    }
+
     // MARK: - TBR
 
     func fetchTBR() async {
@@ -443,6 +470,29 @@ final class ProfileViewModel: ObservableObject {
             toastMessage = e.errorDescription
         } catch {
             toastMessage = error.localizedDescription
+        }
+    }
+
+    // MARK: - Moderation
+
+    func reportUser(reason: String) async {
+        do {
+            try await ModerationService.report(contentType: "user", contentID: profileUsername, reason: reason)
+            toastMessage = "Report received — we review within 24 hours"
+        } catch {
+            toastMessage = "Couldn't send report"
+        }
+    }
+
+    /// Blocks the profile user. Returns true on success so the view can dismiss.
+    func blockUser() async -> Bool {
+        guard !isOwnProfile else { return false }
+        do {
+            try await ModerationService.block(username: profileUsername)
+            return true
+        } catch {
+            toastMessage = "Couldn't block"
+            return false
         }
     }
 }

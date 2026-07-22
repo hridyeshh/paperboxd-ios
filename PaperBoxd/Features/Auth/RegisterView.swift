@@ -1,3 +1,4 @@
+import AuthenticationServices
 import SwiftUI
 
 struct RegisterView: View {
@@ -44,6 +45,7 @@ struct RegisterView: View {
         .disabled(viewModel.isLoading || !acceptedTerms)
         .opacity(acceptedTerms ? 1 : 0.45)
     }
+
 
     var body: some View {
         VStack(spacing: 0) {
