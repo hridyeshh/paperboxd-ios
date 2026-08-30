@@ -14,8 +14,8 @@ struct AuthContainerView: View {
                 .animation(.easeInOut(duration: 0.25), value: viewModel.mode)
         }
         .onAppear {
-            viewModel.onAuthSuccess = { [weak appState] token, user in
-                appState?.signedIn(token: token, user: user)
+            viewModel.onAuthSuccess = { [weak appState] token, user, refreshToken in
+                appState?.signedIn(token: token, user: user, refreshToken: refreshToken)
             }
         }
     }

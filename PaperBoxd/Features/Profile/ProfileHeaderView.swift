@@ -135,10 +135,11 @@ struct ProfileHeaderView: View {
                 PillButton(title: "Share profile", style: .brutalGhost, action: onShare)
             } else {
                 let following = profile.isFollowing ?? false
+                let requested = profile.hasRequested ?? false
                 PillButton(
-                    title: following ? "Following" : "Follow",
-                    systemImage: following ? nil : "plus",
-                    style: following ? .ghost : .primary,
+                    title: following ? "Following" : (requested ? "Requested" : "Follow"),
+                    systemImage: (following || requested) ? nil : "plus",
+                    style: (following || requested) ? .ghost : .primary,
                     loading: isFollowLoading,
                     action: onFollow
                 )

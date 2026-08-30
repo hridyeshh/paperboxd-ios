@@ -134,10 +134,54 @@ actor APIClient {
         return try await send(req)
     }
 
+    /// Serialises concurrent refreshes so a burst of 401s produces one exchange.
+    private var refreshTask: Task<Bool, Never>?
+
+    /// Swaps the stored refresh token for a new pair. Returns false when the
+    /// session is genuinely gone.
+    ///
+    /// The refresh token is opaque and stored server-side, so it does not depend
+    /// on JWT_SECRET the way the access token does — this is what carries a
+    /// session across a backend redeploy that rotates the signing secret.
+    private func refreshSession() async -> Bool {
+        if let existing = refreshTask {
+            return await existing.value
+        }
+        let task = Task<Bool, Never> { [session, baseURL] in
+            guard let refreshToken = KeychainManager.shared.getRefreshToken(),
+                  !refreshToken.isEmpty,
+                  let url = URL(string: Endpoints.mobileRefresh, relativeTo: baseURL)
+            else { return false }
+
+            var req = URLRequest(url: url)
+            req.httpMethod = "POST"
+            req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            req.httpBody = try? JSONSerialization.data(
+                withJSONObject: ["refresh_token": refreshToken]
+            )
+
+            guard let (data, response) = try? await session.data(for: req),
+                  let http = response as? HTTPURLResponse,
+                  (200...299).contains(http.statusCode),
+                  let decoded = try? JSONDecoder().decode(RefreshResponse.self, from: data)
+            else { return false }
+
+            KeychainManager.shared.saveToken(decoded.token)
+            if let newRefresh = decoded.refreshToken {
+                KeychainManager.shared.saveRefreshToken(newRefresh)
+            }
+            return true
+        }
+        refreshTask = task
+        let result = await task.value
+        refreshTask = nil
+        return result
+    }
+
     /// Performs the request, maps status codes, and surfaces typed errors. Shared
     /// by `rawRequest` and `upload` so the 401 / error-envelope handling stays in
     /// one place.
-    private func send(_ req: URLRequest) async throws -> Data {
+    private func send(_ req: URLRequest, allowRetry: Bool = true) async throws -> Data {
         let (data, response): (Data, URLResponse)
         do {
             (data, response) = try await session.data(for: req)
@@ -171,8 +215,18 @@ actor APIClient {
         )
 
         if http.statusCode == 401 {
-            // Don't loop if the request itself was the refresh attempt
-            // (caller can still handle via APIError.unauthorized).
+            // Try the refresh token before giving up. Signing out on the first
+            // 401 — which this used to do — turned every backend redeploy that
+            // rotated JWT_SECRET into a forced logout for every user.
+            let isRefreshCall = req.url?.path.hasSuffix(Endpoints.mobileRefresh) ?? false
+            if !isRefreshCall, allowRetry, await refreshSession() {
+                var retry = req
+                if let token = KeychainManager.shared.getToken(), !token.isEmpty {
+                    retry.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+                }
+                return try await send(retry, allowRetry: false)
+            }
+
             KeychainManager.shared.clearAll()
             NotificationCenter.default.post(name: .paperboxdSessionExpired, object: nil)
         }

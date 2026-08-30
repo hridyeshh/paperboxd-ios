@@ -22,6 +22,10 @@ struct UserProfile: Codable, Identifiable, Equatable {
     let favoriteGenres: [String]
     let createdAt: String
     var isFollowing: Bool?
+    /// Private accounts: the backend redacts the payload and sets can_view=false
+    /// for anyone who is neither the owner nor an approved follower.
+    var canView: Bool?
+    var hasRequested: Bool?
 
     enum CodingKeys: String, CodingKey {
         case id, username, name, bio, pronouns, birthday, gender, links
@@ -38,6 +42,8 @@ struct UserProfile: Codable, Identifiable, Equatable {
         case favoriteGenres = "favorite_genres"
         case createdAt = "created_at"
         case isFollowing = "is_following"
+        case canView = "can_view"
+        case hasRequested = "has_requested"
     }
 
     var displayName: String { name.isEmpty ? username : name }
@@ -72,8 +78,38 @@ struct StreakResponse: Decodable {
 struct FollowResponse: Decodable {
     let message: String
     let isFollowing: Bool
+    /// True when the target is private and the follow was queued as a request.
+    let hasRequested: Bool?
     let followersCount: Int
     let followingCount: Int
+}
+
+/// One pending follow request in the owner's inbox.
+struct FollowRequestUser: Decodable, Identifiable {
+    let requestID: String
+    let requestedAt: String?
+    let id: String
+    let username: String
+    let name: String
+    let avatarURL: String?
+    let bio: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id, username, name, bio
+        case requestID = "request_id"
+        case requestedAt = "requested_at"
+        case avatarURL = "avatar_url"
+    }
+}
+
+struct FollowRequestsResponse: Decodable {
+    let requests: [FollowRequestUser]
+    let totalCount: Int
+
+    enum CodingKeys: String, CodingKey {
+        case requests
+        case totalCount = "total_count"
+    }
 }
 
 struct UserListResponse: Decodable {

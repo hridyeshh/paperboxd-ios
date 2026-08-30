@@ -26,6 +26,16 @@ enum Endpoints {
     static let recommendationsHome = "/api/v1/recommendations/home"
     static let scanAnalyze        = "/api/v1/scan/analyze"
 
+    /// Monthly Wrapped. `month` is YYYY-MM (defaults to the current month) and
+    /// `tz` is an IANA zone so the day/hour buckets match the reader's clock.
+    static func wrapped(month: String?, timeZone: String) -> String {
+        var items = [URLQueryItem(name: "tz", value: timeZone)]
+        if let month { items.append(URLQueryItem(name: "month", value: month)) }
+        var comps = URLComponents(string: "/api/v1/users/me/wrapped")!
+        comps.queryItems = items
+        return comps.string ?? "/api/v1/users/me/wrapped"
+    }
+
     static func addToBookshelf(username: String) -> String {
         "/api/v1/users/\(username)/bookshelf"
     }
@@ -56,6 +66,13 @@ enum Endpoints {
 
     // Profile
     static func profile(username: String) -> String { "/api/v1/users/\(username)" }
+
+    // Private profiles
+    static let visibility     = "/api/v1/users/me/visibility"
+    static let followRequests = "/api/v1/users/me/follow-requests"
+    static func followRequest(username: String) -> String {
+        "/api/v1/users/me/follow-requests/\(username)"
+    }
     static func followers(username: String) -> String { "/api/v1/users/\(username)/followers" }
     static func following(username: String) -> String { "/api/v1/users/\(username)/following" }
     static func follow(username: String) -> String { "/api/v1/users/\(username)/follow" }

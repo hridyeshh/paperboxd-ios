@@ -5,6 +5,8 @@ import SwiftUI
 struct NotificationsView: View {
     let activities: [FriendActivity]
     let user: User
+    var followRequests: [FollowRequestUser] = []
+    var onRespondToRequest: (String, Bool) -> Void = { _, _ in }
 
     @Environment(\.dismiss) private var dismiss
     @State private var path = NavigationPath()
@@ -19,11 +21,25 @@ struct NotificationsView: View {
         NavigationStack(path: $path) {
             ZStack {
                 Color("Background").ignoresSafeArea()
-                if visibleActivities.isEmpty {
+                if visibleActivities.isEmpty && followRequests.isEmpty {
                     emptyState
                 } else {
                     ScrollView {
                         LazyVStack(spacing: 14) {
+                            // Requests sit above the feed: they need an answer,
+                            // the rest is only news.
+                            if !followRequests.isEmpty {
+                                HStack {
+                                    Text("Follow requests")
+                                        .font(.caption.weight(.semibold))
+                                        .foregroundStyle(.secondary)
+                                    Spacer()
+                                }
+                                ForEach(followRequests) { request in
+                                    requestRow(request)
+                                }
+                            }
+
                             ForEach(visibleActivities) { activity in
                                 row(activity)
                             }
@@ -48,6 +64,27 @@ struct NotificationsView: View {
         }
         .environment(\.colorScheme, .light)
         .preferredColorScheme(.light)
+    }
+
+    @ViewBuilder
+    private func requestRow(_ request: FollowRequestUser) -> some View {
+        HStack(spacing: 11) {
+            VStack(alignment: .leading, spacing: 6) {
+                (Text("@\(request.username) ").font(.subheadline.weight(.semibold))
+                    + Text("wants to follow you").font(.subheadline).foregroundColor(.secondary))
+                HStack(spacing: 8) {
+                    Button("Confirm") { onRespondToRequest(request.username, true) }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.small)
+                    Button("Decline") { onRespondToRequest(request.username, false) }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(13)
+        .background(Color("Surface"), in: RoundedRectangle(cornerRadius: 12))
     }
 
     @ViewBuilder

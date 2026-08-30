@@ -14,6 +14,7 @@ struct ProfileView: View {
     @State private var bannerCropTarget: CropTarget?
     @State private var fullList: FullList?
     @State private var diarySheet: DiaryNavItem?
+    @State private var showWrapped = false
     @State private var showReportUser = false
     @State private var showBlockConfirm = false
     @Environment(\.dismiss) private var dismiss
@@ -108,6 +109,9 @@ struct ProfileView: View {
             ImagePicker(source: .photoLibrary, allowsEditing: false) { image in
                 bannerCropTarget = CropTarget(image: image)
             }
+        }
+        .fullScreenCover(isPresented: $showWrapped) {
+            WrappedView()
         }
         .fullScreenCover(item: $bannerCropTarget) { target in
             ImageCropper(image: target.image, ratio: 2.3) { cropped in
@@ -237,6 +241,28 @@ struct ProfileView: View {
                         onBlock: { showBlockConfirm = true }
                     )
 
+                    // Private account: the gated endpoints already return nothing,
+                    // so this only has to explain why the profile looks empty.
+                    if profile.canView == false && !vm.isOwnProfile {
+                        VStack(spacing: 8) {
+                            Image(systemName: "lock")
+                                .font(.system(size: 20, weight: .regular))
+                            Text("This account is private")
+                                .font(.headline)
+                            Text(
+                                (profile.hasRequested ?? false)
+                                    ? "\(profile.displayName) has to approve your request before you can see their shelves, diary and lists."
+                                    : "Follow \(profile.displayName) to see their shelves, diary and lists."
+                            )
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.horizontal, 32)
+                        .padding(.top, 48)
+                    }
+
                     if let activity = vm.activity {
                         ReadingHeatmapView(
                             activity: activity,
@@ -266,6 +292,12 @@ struct ProfileView: View {
                         .padding(.top, 28)
                     }
 
+                    if vm.isOwnProfile {
+                        WrappedEntryCard(monthName: currentMonthName) { showWrapped = true }
+                            .padding(.horizontal, 20)
+                            .padding(.top, 28)
+                    }
+
                     if !vm.favoriteBooks.isEmpty {
                         FavouriteFourView(
                             books: vm.favoriteBooks,
@@ -293,6 +325,13 @@ struct ProfileView: View {
 
     private var bannerCoverURLs: [String] {
         vm.favoriteBooks.compactMap { $0.coverURL }
+    }
+
+    /// The month the Wrapped card offers — always the one in progress.
+    private var currentMonthName: String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMMM"
+        return formatter.string(from: Date())
     }
 
     private func firstName(of profile: UserProfile) -> String {

@@ -392,4 +392,78 @@ extension SearchViewModel {
         return vm
     }
 }
+extension PreviewData {
+    /// A month of Wrapped, decoded from the exact JSON the backend sends so a
+    /// drift between `Wrapped`'s CodingKeys and GET /users/me/wrapped shows up
+    /// here as a failed preview rather than as an empty story on a device.
+    static let wrapped: Wrapped = {
+        let json = """
+        {
+          "has_data": true,
+          "month": "August", "month_short": "AUG", "year": "2026", "next_month": "September",
+          "reader": { "name": "Hridyesh Pillai", "handle": "@hridyesh", "first": "Hridyesh" },
+          "totals": {
+            "books": 9, "pages": 2847, "estimated_hours": 71, "estimated_minutes": 10,
+            "sessions": 68, "active_days": 26, "biggest_day_pages": 142, "biggest_day": "Aug 17"
+          },
+          "books": [
+            { "title": "Norwegian Wood", "author": "Haruki Murakami", "cover": "", "pages": 389, "days": 6, "rating": 4 },
+            { "title": "The Vegetarian", "author": "Han Kang", "cover": "", "pages": 188, "days": 2, "rating": 5 },
+            { "title": "Convenience Store Woman", "author": "Sayaka Murata", "cover": "", "pages": 163, "days": 2, "rating": 4 },
+            { "title": "Kitchen", "author": "Banana Yoshimoto", "cover": "", "pages": 152, "days": 3, "rating": 4 },
+            { "title": "Tokyo Ueno Station", "author": "Miri Yu", "cover": "", "pages": 180, "days": 4, "rating": 3 }
+          ],
+          "authors": [
+            { "name": "Haruki Murakami", "books": 3, "pages": 921, "note": "3 books this month." },
+            { "name": "Han Kang", "books": 2, "pages": 372 },
+            { "name": "Sayaka Murata", "books": 1, "pages": 163 },
+            { "name": "Banana Yoshimoto", "books": 1, "pages": 152 },
+            { "name": "Miri Yu", "books": 1, "pages": 180 }
+          ],
+          "genres": [
+            { "name": "Translated Fiction", "pct": 41 },
+            { "name": "Literary Fiction", "pct": 28 },
+            { "name": "Magical Realism", "pct": 17 },
+            { "name": "Essays", "pct": 9 },
+            { "name": "Poetry", "pct": 5 }
+          ],
+          "rhythm": {
+            "label": "Night Owl", "peak": "11PM — 1AM", "pct_after_midnight": 62,
+            "line": "You read when the rest of the house had given up.",
+            "hours": [42,18,6,2,0,0,0,4,12,8,6,10,14,9,7,11,16,22,31,38,52,74,96,88]
+          },
+          "streak": {
+            "days": 23, "start": "Aug 2", "end": "Aug 24", "broke": "Aug 25", "longest_ever": 31,
+            "calendar": [0,62,88,41,120,96,74,55,132,108,91,47,86,119,73,64,142,97,58,111,84,69,127,93,0,0,76,104,61,88,115],
+            "streak_start": 1, "streak_end": 23, "broke_index": 24
+          },
+          "top_rated": {
+            "title": "The Vegetarian", "author": "Han Kang", "cover": "", "rating": 5, "date": "Aug 11",
+            "review": "Finished it on the balcony at 1am and just sat there. I have no notes, only a small hole where my appetite used to be."
+          },
+          "abandoned": {
+            "title": "A Little Life", "author": "Hanya Yanagihara", "page": 84, "of": 814,
+            "started": "Aug 6", "last_opened": "Aug 9",
+            "roast": "You left it on page 84. It is still waiting, and it has 730 pages of things to tell you."
+          },
+          "rank": {
+            "percentile": 3, "label": "Top 3%", "readers": 1204, "beat": 97,
+            "line": "You out-read 97 out of every 100 people on PaperBoxd this month."
+          },
+          "archetype": {
+            "name": "The Midnight Romantic", "kicker": "Your August type",
+            "definition": "Reads for feeling, not for finishing. Will stay up for one more chapter and then three more.",
+            "traits": ["Nocturnal", "One more chapter", "Slow, then all at once"],
+            "stat_label": "AFTER DARK", "stat_value": "62%", "pairs": "The Early Riser"
+          },
+          "dare": {
+            "title": "Finish what you started.",
+            "body": "A Little Life is sitting on page 84 with 730 pages left. September dares you to close it properly.",
+            "target": "1 book", "tag": "THE SEPTEMBER DARE"
+          }
+        }
+        """
+        return try! JSONDecoder().decode(Wrapped.self, from: Data(json.utf8))
+    }()
+}
 #endif
