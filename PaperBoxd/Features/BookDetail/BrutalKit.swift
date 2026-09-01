@@ -9,6 +9,7 @@ import SwiftUI
 enum BK {
     static let paper  = Color(red: 0.949, green: 0.929, blue: 0.882) // #f2ede1
     static let paper2 = Color(red: 0.914, green: 0.886, blue: 0.820) // #e9e2d1
+    static let card   = Color(red: 0.992, green: 0.984, blue: 0.965) // #fdfbf6
     static let ink    = Color(red: 0.082, green: 0.082, blue: 0.075) // #151513
     static let muted  = Color(red: 0.416, green: 0.392, blue: 0.337) // #6a6456
     static let accent = Color(red: 0.824, green: 0.231, blue: 0.149) // #d23b26

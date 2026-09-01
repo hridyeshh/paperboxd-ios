@@ -22,7 +22,7 @@ struct OTPView: View {
         HStack {
             Text("PaperBoxd")
                 .font(.custom("SnellRoundhand-Black", size: 30))
-                .foregroundStyle(.white)
+                .foregroundStyle(BK.ink)
             Spacer()
         }
         .padding(.horizontal, 26)
@@ -42,25 +42,7 @@ struct OTPView: View {
         .padding(.horizontal, 24)
         .padding(.top, 28)
         .padding(.bottom, 26)
-        .background {
-            ZStack {
-                RoundedRectangle(cornerRadius: 28, style: .continuous)
-                    .fill(.ultraThinMaterial)
-                RoundedRectangle(cornerRadius: 28, style: .continuous)
-                    .fill(Color(red: 0.055, green: 0.055, blue: 0.065).opacity(0.54))
-                LinearGradient(
-                    colors: [.white.opacity(0.07), .clear],
-                    startPoint: .top,
-                    endPoint: UnitPoint(x: 0.5, y: 0.14)
-                )
-                .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
-            }
-        }
-        .overlay(
-            RoundedRectangle(cornerRadius: 28, style: .continuous)
-                .stroke(.white.opacity(0.10), lineWidth: 1)
-        )
-        .shadow(color: .black.opacity(0.62), radius: 58, x: 0, y: 34)
+        .background(BrutalCard())
     }
 
     // MARK: - Card sections
@@ -70,12 +52,12 @@ struct OTPView: View {
             Text("Enter your code.")
                 .font(.system(size: 30, weight: .bold))
                 .tracking(-0.8)
-                .foregroundStyle(.white)
+                .foregroundStyle(BK.ink)
             Group {
                 Text("Sent to ")
-                    .foregroundStyle(.white.opacity(0.55))
+                    .foregroundStyle(BK.muted)
                 + Text(viewModel.otpEmail)
-                    .foregroundStyle(.white.opacity(0.88))
+                    .foregroundStyle(BK.ink)
             }
             .font(.system(size: 14, design: .serif).italic())
             .lineSpacing(2)
@@ -117,7 +99,7 @@ struct OTPView: View {
         if let msg = viewModel.errorMessage {
             Text(msg)
                 .font(.footnote)
-                .foregroundStyle(Color("Error"))
+                .foregroundStyle(BK.accent)
                 .padding(.top, 12)
         }
     }
@@ -128,21 +110,21 @@ struct OTPView: View {
             if viewModel.otpCountdown > 0 {
                 Text("Expires in \(formatCountdown(viewModel.otpCountdown))")
                     .font(.footnote)
-                    .foregroundStyle(.white.opacity(0.5))
+                    .foregroundStyle(BK.muted)
                 Spacer()
                 Text("Resend")
                     .font(.footnote.weight(.medium))
-                    .foregroundStyle(.white.opacity(0.25))
+                    .foregroundStyle(BK.muted.opacity(0.7))
             } else {
                 Text("Code expired")
                     .font(.footnote)
-                    .foregroundStyle(Color("Error"))
+                    .foregroundStyle(BK.accent)
                 Spacer()
                 Button("Resend code") {
                     Task { await viewModel.sendOTP() }
                 }
                 .font(.footnote.weight(.semibold))
-                .foregroundStyle(Color("Accent"))
+                .foregroundStyle(BK.accent)
             }
         }
     }
@@ -153,8 +135,8 @@ struct OTPView: View {
         } label: {
             Text("Use a different email")
                 .font(.system(size: 13))
-                .foregroundStyle(.white.opacity(0.55))
-                .underline(color: .white.opacity(0.3))
+                .foregroundStyle(BK.muted)
+                .underline(color: BK.muted.opacity(0.7))
                 .frame(maxWidth: .infinity)
         }
     }
@@ -178,13 +160,13 @@ private struct OTPBox: View {
     var body: some View {
         Text(digit)
             .font(.system(size: 26, weight: .semibold, design: .monospaced))
-            .foregroundStyle(.white)
+            .foregroundStyle(BK.ink)
             .frame(width: 46, height: 56)
-            .background(.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .background(BK.paper2, in: Rectangle())
             .overlay(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                Rectangle()
                     .stroke(
-                        isActive ? Color("Accent") : .white.opacity(0.14),
+                        isActive ? BK.accent : BK.ink.opacity(0.28),
                         lineWidth: 1.5
                     )
             )

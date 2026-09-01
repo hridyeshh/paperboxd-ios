@@ -3,10 +3,19 @@ import SwiftUI
 struct SplashView: View {
     @EnvironmentObject private var appState: AppState
 
-    @State private var wordmarkIn = false
-    @State private var taglineIn  = false
-    @State private var dotsOn     = false
+    @State private var videoIn  = false
+    @State private var chromeIn = false
+    /// Set when the clip reaches its end — everything on the white ground fades
+    /// out first, so the hand-off to the next screen reads as one movement
+    /// instead of a cut.
+    @State private var outro    = false
+    @State private var dotsOn   = false
     @State private var captionIdx = 0
+
+    /// How long the clip takes to fade off the paper ground once it ends.
+    /// `AppState.holdSplash` is floored above clip + this, so routing never
+    /// interrupts the fade.
+    static let outroDuration: TimeInterval = 0.5
 
     private let captions = [
         "Opening your library…",
@@ -16,32 +25,28 @@ struct SplashView: View {
 
     var body: some View {
         ZStack {
-            Color(red: 0.09, green: 0.09, blue: 0.09).ignoresSafeArea()
-            BookCoverColumns().ignoresSafeArea()
-            darkWash
+            // The clip's ground is tinted to the same paper beige the home
+            // screen uses, so the screen behind it is that colour too: no video
+            // frame edge, and the outro fades into the colour the app is about
+            // to show rather than through white.
+            BK.paper.ignoresSafeArea()
 
             VStack(spacing: 0) {
                 Spacer()
 
-                // Wordmark
-                Text("PaperBoxd")
-                    .font(.custom("SnellRoundhand-Black", size: 46))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.75)
-                    .foregroundStyle(.white)
-                    .shadow(color: .black.opacity(0.55), radius: 14, y: 4)
-                    .opacity(wordmarkIn ? 1 : 0)
-                    .scaleEffect(wordmarkIn ? 1 : 0.96)
-                    .animation(.easeOut(duration: 0.7), value: wordmarkIn)
-
-                // Tagline
-                Text("Your reading universe, organised.")
-                    .font(.system(size: 15, design: .serif).italic())
-                    .foregroundStyle(.white.opacity(0.58))
-                    .padding(.top, 14)
-                    .opacity(taglineIn ? 1 : 0)
-                    .offset(y: taglineIn ? 0 : 5)
-                    .animation(.easeOut(duration: 0.6).delay(0.5), value: taglineIn)
+                SplashVideoView(
+                    resource: "splash",
+                    ext: "mp4",
+                    // No fade in: the clip's first frame is the same paper as
+                    // the screen behind it, so it cuts in invisibly. Fading it
+                    // would read as a video loading. The outro still fades.
+                    onReady: { videoIn = true },
+                    onFinished: { withAnimation(.easeInOut(duration: SplashView.outroDuration)) { outro = true } }
+                )
+                .aspectRatio(1080.0 / 1350.0, contentMode: .fit)
+                .frame(maxWidth: .infinity)
+                .opacity(outro ? 0 : (videoIn ? 1 : 0))
+                .allowsHitTesting(false)
 
                 Spacer()
 
@@ -49,9 +54,9 @@ struct SplashView: View {
                 HStack(spacing: 7) {
                     ForEach(0..<3, id: \.self) { i in
                         Circle()
-                            .fill(.white)
+                            .fill(.black)
                             .frame(width: 5, height: 5)
-                            .opacity(dotsOn ? 0.9 : 0.2)
+                            .opacity(dotsOn ? 0.55 : 0.14)
                             .scaleEffect(dotsOn ? 1.1 : 0.9)
                             .animation(
                                 .easeInOut(duration: 0.48)
@@ -62,6 +67,7 @@ struct SplashView: View {
                     }
                 }
                 .padding(.bottom, 10)
+                .opacity(outro ? 0 : 1)
 
                 // Cycling caption
                 ZStack {
@@ -70,7 +76,7 @@ struct SplashView: View {
                             .font(.system(size: 10.5, design: .monospaced))
                             .textCase(.uppercase)
                             .kerning(1.4)
-                            .foregroundStyle(.white.opacity(0.42))
+                            .foregroundStyle(.black.opacity(0.38))
                             .opacity(captionIdx == i ? 1 : 0)
                             .offset(y: captionIdx == i ? 0 : 4)
                             .animation(.easeInOut(duration: 0.35), value: captionIdx)
@@ -78,12 +84,14 @@ struct SplashView: View {
                 }
                 .frame(height: 16)
                 .padding(.bottom, 52)
+                .opacity(outro ? 0 : (chromeIn ? 1 : 0))
+                .animation(.easeOut(duration: 0.5).delay(0.3), value: chromeIn)
             }
         }
+        .preferredColorScheme(.light)
         .onAppear {
-            wordmarkIn = true
-            taglineIn  = true
-            dotsOn     = true
+            chromeIn = true
+            dotsOn   = true
         }
         .task {
             while !Task.isCancelled {
@@ -95,20 +103,5 @@ struct SplashView: View {
             guard !PreviewRuntime.isRunning else { return }
             await appState.bootstrap()
         }
-    }
-
-    private var darkWash: some View {
-        ZStack {
-            RadialGradient(
-                colors: [.black.opacity(0.5), .black.opacity(0.76), .black.opacity(0.93)],
-                center: .center, startRadius: 0, endRadius: 440
-            )
-            LinearGradient(
-                colors: [.black.opacity(0.42), .black.opacity(0.55)],
-                startPoint: .top, endPoint: .bottom
-            )
-        }
-        .ignoresSafeArea()
-        .allowsHitTesting(false)
     }
 }

@@ -49,16 +49,16 @@ struct LoginView: View {
                 .font(.custom("SnellRoundhand-Black", size: 30))
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
-                .foregroundStyle(.white)
+                .foregroundStyle(BK.ink)
             Spacer()
             Text("sign in")
                 .font(.system(size: 9.5, design: .monospaced))
                 .textCase(.uppercase)
                 .kerning(1.6)
-                .foregroundStyle(.white.opacity(0.55))
+                .foregroundStyle(BK.muted)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 5)
-                .overlay(Rectangle().stroke(.white.opacity(0.30), lineWidth: 1))
+                .overlay(Rectangle().stroke(BK.muted.opacity(0.7), lineWidth: 1))
         }
         .padding(.horizontal, 26)
         .padding(.top, 20)
@@ -93,10 +93,10 @@ struct LoginView: View {
                 .font(.system(size: 30, weight: .bold))
                 .tracking(-0.8)
                 .lineSpacing(1)
-                .foregroundStyle(.white)
+                .foregroundStyle(BK.ink)
             Text("Your shelves are right where you left them.")
                 .font(.system(size: 14, design: .serif).italic())
-                .foregroundStyle(.white.opacity(0.62))
+                .foregroundStyle(BK.muted)
                 .lineSpacing(2)
         }
         .padding(.bottom, 24)
@@ -107,7 +107,7 @@ struct LoginView: View {
     private var emailField: some View {
         VStack(alignment: .leading, spacing: 0) {
             fieldLabel("Email")
-            DarkTextField(
+            PaperTextField(
                 title: "you@paperboxd.com",
                 text: $viewModel.email,
                 keyboard: .emailAddress,
@@ -133,13 +133,13 @@ struct LoginView: View {
                 } label: {
                     Text("Forgot?")
                         .font(.system(size: 11.5))
-                        .foregroundStyle(.white.opacity(0.65))
+                        .foregroundStyle(BK.muted)
                 }
                 .padding(.bottom, 6)
             }
             .padding(.top, 12)
             ZStack(alignment: .trailing) {
-                DarkSecureField(
+                PaperSecureField(
                     title: "••••••••",
                     text: $viewModel.password,
                     showText: showPassword
@@ -149,7 +149,7 @@ struct LoginView: View {
                 .onSubmit { Task { await viewModel.login() } }
                 Button { showPassword.toggle() } label: {
                     Image(systemName: showPassword ? "eye.slash" : "eye")
-                        .foregroundStyle(.white.opacity(0.45))
+                        .foregroundStyle(BK.muted)
                         .padding(.trailing, 14)
                 }
             }
@@ -163,12 +163,12 @@ struct LoginView: View {
         if let msg = viewModel.errorMessage {
             Text(msg)
                 .font(.footnote)
-                .foregroundStyle(Color("Error"))
+                .foregroundStyle(BK.accent)
                 .padding(.top, 10)
         } else if let msg = viewModel.successMessage {
             Text(msg)
                 .font(.footnote)
-                .foregroundStyle(Color(red: 0.3, green: 0.85, blue: 0.5))
+                .foregroundStyle(Color(red: 0.13, green: 0.55, blue: 0.30))
                 .padding(.top, 10)
         }
     }
@@ -182,7 +182,7 @@ struct LoginView: View {
         } label: {
             ZStack {
                 if viewModel.isLoading {
-                    ProgressView().tint(.black)
+                    ProgressView().tint(BK.paper)
                 } else {
                     HStack(spacing: 8) {
                         Text("Sign in")
@@ -192,17 +192,17 @@ struct LoginView: View {
                     .font(.system(size: 14.5, weight: .semibold))
                 }
             }
-            .foregroundStyle(.black)
+            .foregroundStyle(BK.paper)
             .frame(maxWidth: .infinity)
             .frame(height: 52)
             // Shadow lives on the fill rect, not the label — otherwise the hard
             // white offset shadow casts a ghost copy of "Sign in" onto the side.
             .background(
                 Rectangle()
-                    .fill(Color(red: 0.96, green: 0.95, blue: 0.93))
-                    .shadow(color: .white.opacity(0.22), radius: 0, x: 4, y: 4)
+                    .fill(BK.ink)
+                    .shadow(color: BK.ink.opacity(0.25), radius: 0, x: 4, y: 4)
             )
-            .overlay(Rectangle().stroke(.black.opacity(0.9), lineWidth: 2))
+            .overlay(Rectangle().stroke(BK.ink, lineWidth: 2))
             .opacity(enabled ? 1 : 0.45)
         }
         .buttonStyle(ScaleButtonStyle())
@@ -214,13 +214,13 @@ struct LoginView: View {
 
     private var orDivider: some View {
         HStack(spacing: 10) {
-            Rectangle().fill(.white.opacity(0.12)).frame(height: 1)
+            Rectangle().fill(BK.ink.opacity(0.18)).frame(height: 1)
             Text("or")
                 .font(.system(size: 11, design: .monospaced))
                 .textCase(.uppercase)
                 .kerning(2.2)
-                .foregroundStyle(.white.opacity(0.3))
-            Rectangle().fill(.white.opacity(0.12)).frame(height: 1)
+                .foregroundStyle(BK.muted.opacity(0.7))
+            Rectangle().fill(BK.ink.opacity(0.18)).frame(height: 1)
         }
     }
 
@@ -232,12 +232,12 @@ struct LoginView: View {
                 googleLogo
                 Text("Continue with Google")
                     .font(.system(size: 14.5, weight: .semibold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(BK.ink)
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 14)
-            .background(.white.opacity(0.05))
-            .overlay(Rectangle().stroke(.white.opacity(0.85), lineWidth: 1.5))
+            .background(BK.paper2)
+            .overlay(Rectangle().stroke(BK.ink, lineWidth: 1.5))
         }
         .buttonStyle(ScaleButtonStyle())
         .disabled(viewModel.isLoading)
@@ -253,13 +253,13 @@ struct LoginView: View {
     private var registerLink: some View {
         HStack(spacing: 5) {
             Text("New here?")
-                .foregroundStyle(.white.opacity(0.48))
+                .foregroundStyle(BK.muted)
             Button("Create an account") {
                 viewModel.switchTo(.register)
             }
-            .foregroundStyle(.white.opacity(0.90))
+            .foregroundStyle(BK.ink)
             .fontWeight(.semibold)
-            .underline(color: .white.opacity(0.30))
+            .underline(color: BK.muted.opacity(0.7))
         }
         .font(.system(size: 13))
         .frame(maxWidth: .infinity)
@@ -273,7 +273,7 @@ struct LoginView: View {
             .font(.system(size: 11, weight: .medium, design: .monospaced))
             .textCase(.uppercase)
             .kerning(1.2)
-            .foregroundStyle(.white.opacity(0.48))
+            .foregroundStyle(BK.muted)
             .padding(.bottom, 6)
     }
 }

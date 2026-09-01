@@ -137,8 +137,11 @@ final class AppState: ObservableObject {
     }
 
     /// Keep the splash on screen at least `minimum` seconds so transitions
-    /// don't flicker on hot starts with a warm cache.
-    private func holdSplash(since start: Date, minimum: TimeInterval = 2.5) async {
+    /// don't flicker on hot starts with a warm cache. The floor covers the
+    /// splash clip (4.87s source, 3.9s at its 1.25x playback rate) and the
+    /// outro fade that follows it, so bootstrap never cuts the mark animation
+    /// off mid-morph or mid-fade.
+    private func holdSplash(since start: Date, minimum: TimeInterval = 4.6) async {
         let elapsed = Date().timeIntervalSince(start)
         if elapsed < minimum {
             let remaining = UInt64((minimum - elapsed) * 1_000_000_000)
@@ -210,7 +213,7 @@ final class AppState: ObservableObject {
     }
 
     private func transition(to screen: AppScreen) {
-        withAnimation(.easeInOut(duration: 0.3)) {
+        withAnimation(.easeInOut(duration: 0.45)) {
             self.currentScreen = screen
         }
     }
