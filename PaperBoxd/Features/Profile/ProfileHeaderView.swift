@@ -14,6 +14,8 @@ struct ProfileHeaderView: View {
     let onFollowing: () -> Void
     var onShare: () -> Void = {}
     var onEditBanner: (() -> Void)? = nil
+    var onReport: () -> Void = {}
+    var onBlock: () -> Void = {}
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -133,13 +135,24 @@ struct ProfileHeaderView: View {
                 PillButton(title: "Share profile", style: .brutalGhost, action: onShare)
             } else {
                 let following = profile.isFollowing ?? false
+                let requested = profile.hasRequested ?? false
                 PillButton(
-                    title: following ? "Following" : "Follow",
-                    systemImage: following ? nil : "plus",
-                    style: following ? .ghost : .primary,
+                    title: following ? "Following" : (requested ? "Requested" : "Follow"),
+                    systemImage: (following || requested) ? nil : "plus",
+                    style: (following || requested) ? .ghost : .primary,
                     loading: isFollowLoading,
                     action: onFollow
                 )
+                Menu {
+                    Button("Report user", systemImage: "flag") { onReport() }
+                    Button("Block user", systemImage: "hand.raised", role: .destructive) { onBlock() }
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(Color("TextPrimary"))
+                        .frame(width: 44, height: 40)
+                        .overlay(Rectangle().strokeBorder(Color("TextPrimary").opacity(0.7), lineWidth: 2))
+                }
             }
         }
     }

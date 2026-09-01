@@ -1,0 +1,22 @@
+# Push notification credentials — NEVER commit. The APNs .p8 auth key is a
+# backend secret (APNS_KEY_PATH); a leak requires revoking the key in the
+# Apple Developer portal, not just a revert — git history keeps the blob.
+*.p8
+*adminsdk*.json
+*serviceaccount*.json
+GoogleService-Info.plist
+
+# Secrets
+*.xcconfig.local
+.env
+
+# Build output
+build/
+DerivedData/
+.build/
+.swiftpm/
+.DS_Store
+
+# NOTE: xcuserdata/ is deliberately NOT ignored here — three of those files are
+# already tracked in this repo, so an ignore rule would be a silent no-op. Untrack
+# them first (git rm --cached) if you want them gone, then add the rule.

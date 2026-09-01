@@ -16,10 +16,13 @@ struct SettingsView: View {
     @State private var showDeleteSheet = false
     @State private var showRateAlert = false
     @State private var shareItem: ShareItem?
+    @State private var isPublic = true
+    @State private var followRequests: [FollowRequestUser] = []
 
     var body: some View {
         NavigationStack {
             List {
+                privacySection
                 accountSection
                 scanSection
                 dataSection
@@ -52,6 +55,104 @@ struct SettingsView: View {
                 DeleteAccountSheet(onDeleted: onSignOut)
                     .presentationDetents([.large])
                     .presentationDragIndicator(.hidden)
+            }
+        }
+    }
+
+    // MARK: - Private profile
+
+    private var privacySection: some View {
+        Section {
+            Toggle(isOn: Binding(
+                get: { !isPublic },
+                set: { newValue in setPublic(!newValue) }
+            )) {
+                VStack(alignment: .leading, spacing: 2) {
+                    SettingsRow(icon: "lock", label: "Private account")
+                    Text(isPublic
+                         ? "Anyone can see your shelves, diary and lists."
+                         : "Only followers you approve can see your shelves.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            // Only meaningful while private; going public auto-accepts everyone
+            // who was waiting, so the list empties itself.
+            ForEach(followRequests) { request in
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(request.name.isEmpty ? request.username : request.name)
+                            .font(.body)
+                        Text("@\(request.username)")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Button("Confirm") { respond(to: request.username, accept: true) }
+                        .buttonStyle(.borderless)
+                    Button("Decline") { respond(to: request.username, accept: false) }
+                        .buttonStyle(.borderless)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        } header: {
+            Eyebrow(text: "Privacy")
+        }
+        .listRowBackground(Color("Surface"))
+        .task {
+            isPublic = profile.isPublic
+            if !profile.isPublic { await loadFollowRequests() }
+        }
+    }
+
+    private func setPublic(_ newValue: Bool) {
+        let previous = isPublic
+        isPublic = newValue
+        Task {
+            do {
+                let _: UserProfile = try await APIClient.shared.request(
+                    path: Endpoints.visibility,
+                    method: .patch,
+                    body: ["is_public": newValue],
+                    requiresAuth: true
+                )
+                if newValue {
+                    followRequests = []
+                } else {
+                    await loadFollowRequests()
+                }
+            } catch {
+                isPublic = previous
+            }
+        }
+    }
+
+    private func loadFollowRequests() async {
+        let response: FollowRequestsResponse? = try? await APIClient.shared.request(
+            path: Endpoints.followRequests,
+            method: .get,
+            requiresAuth: true
+        )
+        followRequests = response?.requests ?? []
+    }
+
+    private func respond(to username: String, accept: Bool) {
+        Task {
+            let path = Endpoints.followRequest(username: username)
+            do {
+                if accept {
+                    let _: FollowResponse = try await APIClient.shared.request(
+                        path: path, method: .post, requiresAuth: true
+                    )
+                } else {
+                    let _: Empty = try await APIClient.shared.request(
+                        path: path, method: .delete, requiresAuth: true
+                    )
+                }
+                followRequests.removeAll { $0.username == username }
+            } catch {
+                // Leave the row in place; the next open re-fetches the truth.
             }
         }
     }

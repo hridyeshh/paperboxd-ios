@@ -206,17 +206,38 @@ struct DiaryEntryRow: View {
 struct ListsTabView: View {
     let ownLists: [ReadingList]
     let savedLists: [ReadingList]
+    var isOwnProfile: Bool = false
+    var username: String = ""
+    var onCreate: () -> Void = {}
 
     var body: some View {
-        if ownLists.isEmpty && savedLists.isEmpty {
-            EmptyTabState(icon: "list.bullet", message: "No lists yet")
-        } else {
-            VStack(alignment: .leading, spacing: 18) {
+        VStack(alignment: .leading, spacing: 18) {
+            if isOwnProfile {
+                Button(action: onCreate) {
+                    Label("New list", systemImage: "plus")
+                        .font(PB.mono(12, .medium))
+                        .tracking(1)
+                        .foregroundStyle(Color("TextPrimary"))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10)
+                                .stroke(Color("TextPrimary"), lineWidth: 1.5)
+                        )
+                }
+                .buttonStyle(.plain)
+                .padding(.horizontal, 20)
+            }
+
+            if ownLists.isEmpty && savedLists.isEmpty {
+                EmptyTabState(icon: "list.bullet",
+                              message: isOwnProfile ? "Create your first list" : "No lists yet")
+            } else {
                 if !ownLists.isEmpty { listSection("Made", ownLists) }
                 if !savedLists.isEmpty { listSection("Saved", savedLists) }
             }
-            .padding(.top, 16)
         }
+        .padding(.top, 16)
     }
 
     private func listSection(_ eyebrow: String, _ lists: [ReadingList]) -> some View {
@@ -224,7 +245,12 @@ struct ListsTabView: View {
             Eyebrow(text: eyebrow).padding(.horizontal, 20)
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 10) {
-                    ForEach(lists) { ReadingListCard(list: $0) }
+                    ForEach(lists) { list in
+                        NavigationLink(value: ListNav(listId: list.id, username: list.username)) {
+                            ReadingListCard(list: list)
+                        }
+                        .buttonStyle(.plain)
+                    }
                 }
                 .padding(.horizontal, 20)
             }

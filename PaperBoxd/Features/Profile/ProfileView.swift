@@ -10,9 +10,13 @@ struct ProfileView: View {
     @State private var showEdit = false
     @State private var showBannerPicker = false
     @State private var showSettings = false
+    @State private var showCreateList = false
     @State private var bannerCropTarget: CropTarget?
     @State private var fullList: FullList?
     @State private var diarySheet: DiaryNavItem?
+    @State private var showWrapped = false
+    @State private var showReportUser = false
+    @State private var showBlockConfirm = false
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var appState: AppState
 
@@ -41,6 +45,9 @@ struct ProfileView: View {
         .toolbar(.hidden, for: .navigationBar)
         .navigationDestination(for: String.self) { bookId in
             BookDetailView(bookId: bookId, user: vm.viewerUser)
+        }
+        .navigationDestination(for: ListNav.self) { nav in
+            ListDetailView(nav: nav, viewer: vm.viewerUser)
         }
         .sheet(item: $diarySheet) { nav in
             DiaryEntryDetailView(entry: nav.entry, viewer: vm.viewerUser)
@@ -92,17 +99,39 @@ struct ProfileView: View {
                 }
             }
         }
+        .sheet(isPresented: $showCreateList) {
+            CreateListSheet { title, description, isPrivate in
+                await vm.createList(title: title, description: description, isPrivate: isPrivate)
+            }
+        }
         .sheet(isPresented: $showBannerPicker) {
             // Pick the raw image (no square crop), then crop wide in Mantis.
             ImagePicker(source: .photoLibrary, allowsEditing: false) { image in
                 bannerCropTarget = CropTarget(image: image)
             }
         }
+        .fullScreenCover(isPresented: $showWrapped) {
+            WrappedView()
+        }
         .fullScreenCover(item: $bannerCropTarget) { target in
             ImageCropper(image: target.image, ratio: 2.3) { cropped in
                 guard let data = cropped.avatarJPEGData(maxDimension: 1600) else { return }
                 Task { await vm.uploadBanner(data) }
             }
+        }
+        .confirmationDialog("Report user", isPresented: $showReportUser, titleVisibility: .visible) {
+            ForEach(ModerationService.reportReasons, id: \.self) { reason in
+                Button(reason) { Task { await vm.reportUser(reason: reason) } }
+            }
+            Button("Cancel", role: .cancel) {}
+        }
+        .alert("Block user?", isPresented: $showBlockConfirm) {
+            Button("Block", role: .destructive) {
+                Task { if await vm.blockUser() { dismiss() } }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("They won't be able to follow you, and you'll stop seeing each other's reviews.")
         }
         .environment(\.colorScheme, .light)   // profile page is light-mode only
         .preferredColorScheme(.light)
@@ -150,6 +179,25 @@ struct ProfileView: View {
         }
         .padding(.horizontal, 12)
         .padding(.top, 8)
+        .padding(.bottom, 24)
+        .background(alignment: .top) {
+            // Blur fades to nothing at the bottom so there's no hard blurry/clear
+            // seam — the material is masked by a top-opaque → bottom-clear gradient.
+            Rectangle()
+                .fill(.ultraThinMaterial)
+                .mask {
+                    LinearGradient(
+                        stops: [
+                            .init(color: .black, location: 0),
+                            .init(color: .black, location: 0.55),
+                            .init(color: .clear, location: 1)
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                }
+                .ignoresSafeArea(edges: .top)
+        }
     }
 
     private func circleButton(systemName: String, action: @escaping () -> Void) -> some View {
@@ -188,8 +236,32 @@ struct ProfileView: View {
                         onFollowers: { showFollowers = true },
                         onFollowing: { showFollowing = true },
                         onShare: { shareProfile() },
-                        onEditBanner: vm.isOwnProfile ? { showBannerPicker = true } : nil
+                        onEditBanner: vm.isOwnProfile ? { showBannerPicker = true } : nil,
+                        onReport: { showReportUser = true },
+                        onBlock: { showBlockConfirm = true }
                     )
+
+                    // Private account: the gated endpoints already return nothing,
+                    // so this only has to explain why the profile looks empty.
+                    if profile.canView == false && !vm.isOwnProfile {
+                        VStack(spacing: 8) {
+                            Image(systemName: "lock")
+                                .font(.system(size: 20, weight: .regular))
+                            Text("This account is private")
+                                .font(.headline)
+                            Text(
+                                (profile.hasRequested ?? false)
+                                    ? "\(profile.displayName) has to approve your request before you can see their shelves, diary and lists."
+                                    : "Follow \(profile.displayName) to see their shelves, diary and lists."
+                            )
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.horizontal, 32)
+                        .padding(.top, 48)
+                    }
 
                     if let activity = vm.activity {
                         ReadingHeatmapView(
@@ -220,6 +292,12 @@ struct ProfileView: View {
                         .padding(.top, 28)
                     }
 
+                    if vm.isOwnProfile {
+                        WrappedEntryCard(monthName: currentMonthName) { showWrapped = true }
+                            .padding(.horizontal, 20)
+                            .padding(.top, 28)
+                    }
+
                     if !vm.favoriteBooks.isEmpty {
                         FavouriteFourView(
                             books: vm.favoriteBooks,
@@ -247,6 +325,13 @@ struct ProfileView: View {
 
     private var bannerCoverURLs: [String] {
         vm.favoriteBooks.compactMap { $0.coverURL }
+    }
+
+    /// The month the Wrapped card offers — always the one in progress.
+    private var currentMonthName: String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMMM"
+        return formatter.string(from: Date())
     }
 
     private func firstName(of profile: UserProfile) -> String {
@@ -283,7 +368,13 @@ struct ProfileView: View {
                 onOpen: { diarySheet = DiaryNavItem(entry: $0) }
             )
         case .lists:
-            ListsTabView(ownLists: vm.ownLists, savedLists: vm.savedLists)
+            ListsTabView(
+                ownLists: vm.ownLists,
+                savedLists: vm.savedLists,
+                isOwnProfile: vm.isOwnProfile,
+                username: vm.profileUsername,
+                onCreate: { showCreateList = true }
+            )
         case .tbr:
             TBRGridView(
                 items: vm.tbrItems,

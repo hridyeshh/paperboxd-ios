@@ -6,16 +6,22 @@ struct AuthContainerView: View {
 
     var body: some View {
         ZStack {
-            Color(red: 0.09, green: 0.09, blue: 0.09).ignoresSafeArea()
-            BookCoverColumns().ignoresSafeArea()
-            darkWash
+            // Paper ground, continuous with the splash before it and the home
+            // screen after it — the cover wall and its dark wash belonged to the
+            // old dark auth design and would break that run of colour.
+            BK.paper.ignoresSafeArea()
+            DotGrid().ignoresSafeArea()
 
             content
                 .animation(.easeInOut(duration: 0.25), value: viewModel.mode)
         }
+        // The app forces dark appearance window-wide; auth is a paper surface,
+        // so it opts back into light or the keyboard and other system chrome
+        // come up dark against it.
+        .preferredColorScheme(.light)
         .onAppear {
-            viewModel.onAuthSuccess = { [weak appState] token, user in
-                appState?.signedIn(token: token, user: user)
+            viewModel.onAuthSuccess = { [weak appState] token, user, refreshToken in
+                appState?.signedIn(token: token, user: user, refreshToken: refreshToken)
             }
         }
     }
@@ -32,18 +38,29 @@ struct AuthContainerView: View {
         }
     }
 
-    private var darkWash: some View {
-        ZStack {
-            RadialGradient(
-                colors: [.black.opacity(0.48), .black.opacity(0.74), .black.opacity(0.90)],
-                center: .center, startRadius: 0, endRadius: 440
-            )
-            LinearGradient(
-                colors: [.black.opacity(0.40), .black.opacity(0.55)],
-                startPoint: .top, endPoint: .bottom
-            )
+}
+
+/// The same faint ink dot grid the home screen lays over its paper, so auth and
+/// home read as one surface.
+private struct DotGrid: View {
+    var body: some View {
+        Canvas { context, size in
+            let spacing: CGFloat = 26
+            let radius: CGFloat = 0.75
+            var y: CGFloat = 0
+            while y < size.height {
+                var x: CGFloat = 0
+                while x < size.width {
+                    context.fill(
+                        Path(ellipseIn: CGRect(x: x - radius, y: y - radius,
+                                               width: radius * 2, height: radius * 2)),
+                        with: .color(BK.ink.opacity(0.05))
+                    )
+                    x += spacing
+                }
+                y += spacing
+            }
         }
-        .ignoresSafeArea()
         .allowsHitTesting(false)
     }
 }

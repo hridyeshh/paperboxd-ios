@@ -12,6 +12,7 @@ struct BookDetailView: View {
     @State private var showLibrarySheet = false
     @State private var activePanel: InlinePanel?
     @State private var likePulse = 0
+    @State private var reportReviewTarget: BookReview?
 
     /// Inline drop-down panels below the action row.
     private enum InlinePanel { case rate, review }
@@ -68,6 +69,28 @@ struct BookDetailView: View {
         .overlay(toastOverlay, alignment: .bottom)
         .hidesBottomDock()
         .toolbar(.hidden, for: .tabBar)
+        .confirmationDialog(
+            "Report review",
+            isPresented: Binding(
+                get: { reportReviewTarget != nil },
+                set: { if !$0 { reportReviewTarget = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            ForEach(ModerationService.reportReasons, id: \.self) { reason in
+                Button(reason) {
+                    guard let target = reportReviewTarget else { return }
+                    Task {
+                        try? await ModerationService.report(
+                            contentType: "review",
+                            contentID: "book:\(bookId):user:\(target.userID)",
+                            reason: reason
+                        )
+                    }
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        }
         .sheet(isPresented: $showShare) {
             if let book = viewModel.book {
                 BookShareSheet(book: book, user: user, status: shareStatus, userRating: viewModel.myReview?.rating, note: viewModel.myReview?.review)
@@ -528,7 +551,7 @@ struct BookDetailView: View {
             VStack(alignment: .leading, spacing: 4) {
                 brutalSectionHeader("04", "All reviews")
                 ForEach(Array(viewModel.reviews.enumerated()), id: \.element.id) { idx, review in
-                    BookReviewRow(review: review)
+                    BookReviewRow(review: review, onReport: { reportReviewTarget = review })
                         .overlay(alignment: .top) {
                             if idx > 0 { Rectangle().fill(line.opacity(0.3)).frame(height: 1) }
                         }
@@ -927,6 +950,7 @@ private struct ReviewPanel: View {
 
 private struct BookReviewRow: View {
     let review: BookReview
+    var onReport: () -> Void = {}
     @State private var expanded = false
 
     var body: some View {
@@ -947,6 +971,12 @@ private struct BookReviewRow: View {
                     Text(relativeDate(review.reviewedAt))
                         .font(PB.mono(9)).tracking(1)
                         .foregroundStyle(BK.muted)
+                    Button(action: onReport) {
+                        Image(systemName: "flag")
+                            .font(.system(size: 11))
+                            .foregroundStyle(BK.muted.opacity(0.6))
+                    }
+                    .buttonStyle(.plain)
                 }
                 if let text = review.review, !text.isEmpty {
                     Text(text)

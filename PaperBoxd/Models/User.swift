@@ -22,23 +22,37 @@ struct User: Codable, Equatable, Identifiable {
 /// Response shape for login / OTP verify / Google success.
 struct AuthResponse: Codable {
     let token: String
+    let refreshToken: String?
     let user: User
+
+    enum CodingKeys: String, CodingKey {
+        case token, user
+        case refreshToken = "refresh_token"
+    }
 }
 
 /// Response shape for register — same as AuthResponse plus optional flag the
 /// backend sets when it had to auto-create the account.
 struct RegisterResponse: Codable {
     let token: String
+    let refreshToken: String?
     let user: User
+
+    enum CodingKeys: String, CodingKey {
+        case token, user
+        case refreshToken = "refresh_token"
+    }
 }
 
 struct GoogleAuthResponse: Codable {
     let token: String
+    let refreshToken: String?
     let user: User
     let isNewUser: Bool
 
     enum CodingKeys: String, CodingKey {
         case token, user
+        case refreshToken = "refresh_token"
         case isNewUser = "is_new_user"
     }
 }
@@ -57,6 +71,12 @@ struct OTPSendResponse: Codable {
 /// Response shape for POST /api/mobile/auth/refresh.
 struct RefreshResponse: Codable {
     let token: String
+    let refreshToken: String?
+
+    enum CodingKeys: String, CodingKey {
+        case token
+        case refreshToken = "refresh_token"
+    }
 }
 
 /// Response shape for GET /api/health.

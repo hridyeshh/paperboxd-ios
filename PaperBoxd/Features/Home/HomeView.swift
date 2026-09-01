@@ -51,7 +51,12 @@ struct HomeView: View {
                 BookDetailView(bookId: bookId, user: user)
             }
             .sheet(isPresented: $showNotifications) {
-                NotificationsView(activities: viewModel.friendsActivities, user: user)
+                NotificationsView(
+                    activities: viewModel.friendsActivities,
+                    user: user,
+                    followRequests: viewModel.followRequests,
+                    onRespondToRequest: { viewModel.respondToFollowRequest($0, accept: $1) }
+                )
                     .onAppear { viewModel.markActivitiesViewed() }
             }
         }

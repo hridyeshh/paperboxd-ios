@@ -17,6 +17,7 @@ struct DiaryEntryDetailView: View {
     @State private var showDeleteAlert = false
     @State private var isDeleting = false
     @State private var deleteError: String?
+    @State private var showReportEntry = false
     @Environment(\.dismiss) private var dismiss
 
     var isOwnEntry: Bool {
@@ -61,6 +62,20 @@ struct DiaryEntryDetailView: View {
                 Button("OK", role: .cancel) { }
             } message: {
                 Text(deleteError ?? "")
+            }
+            .confirmationDialog("Report entry", isPresented: $showReportEntry, titleVisibility: .visible) {
+                ForEach(ModerationService.reportReasons, id: \.self) { reason in
+                    Button(reason) {
+                        Task {
+                            try? await ModerationService.report(
+                                contentType: "diary_entry",
+                                contentID: entry.id,
+                                reason: reason
+                            )
+                        }
+                    }
+                }
+                Button("Cancel", role: .cancel) {}
             }
         }
         .presentationDetents([.medium, .large])
@@ -164,6 +179,11 @@ struct DiaryEntryDetailView: View {
                     } else {
                         Image(systemName: "trash").font(.system(size: 17)).foregroundStyle(Color("TextSecondary"))
                     }
+                }
+                .buttonStyle(.plain)
+            } else {
+                Button { showReportEntry = true } label: {
+                    Image(systemName: "flag").font(.system(size: 15)).foregroundStyle(Color("TextSecondary"))
                 }
                 .buttonStyle(.plain)
             }

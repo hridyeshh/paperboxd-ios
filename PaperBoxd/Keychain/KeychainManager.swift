@@ -10,6 +10,7 @@ final class KeychainManager: @unchecked Sendable {
 
     private let service = Config.keychainService
     private let tokenKey = "auth.token"
+    private let refreshTokenKey = "auth.refreshToken"
     private let userKey = "auth.user"
 
     // MARK: - Token
@@ -21,6 +22,16 @@ final class KeychainManager: @unchecked Sendable {
 
     func getToken() -> String? {
         guard let data = load(key: tokenKey) else { return nil }
+        return String(data: data, encoding: .utf8)
+    }
+
+    @discardableResult
+    func saveRefreshToken(_ token: String) -> Bool {
+        save(key: refreshTokenKey, data: Data(token.utf8))
+    }
+
+    func getRefreshToken() -> String? {
+        guard let data = load(key: refreshTokenKey) else { return nil }
         return String(data: data, encoding: .utf8)
     }
 

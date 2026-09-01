@@ -1,3 +1,4 @@
+import AuthenticationServices
 import SwiftUI
 
 struct RegisterView: View {
@@ -12,13 +13,13 @@ struct RegisterView: View {
 
     private var orDivider: some View {
         HStack(spacing: 10) {
-            Rectangle().fill(.white.opacity(0.12)).frame(height: 1)
+            Rectangle().fill(BK.ink.opacity(0.18)).frame(height: 1)
             Text("or")
                 .font(.system(size: 11, design: .monospaced))
                 .textCase(.uppercase)
                 .kerning(2.2)
-                .foregroundStyle(.white.opacity(0.3))
-            Rectangle().fill(.white.opacity(0.12)).frame(height: 1)
+                .foregroundStyle(BK.muted.opacity(0.7))
+            Rectangle().fill(BK.ink.opacity(0.18)).frame(height: 1)
         }
     }
 
@@ -33,17 +34,18 @@ struct RegisterView: View {
                     .frame(width: 18, height: 18)
                 Text("Continue with Google")
                     .font(.system(size: 14.5, weight: .semibold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(BK.ink)
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 14)
-            .background(.white.opacity(0.05))
-            .overlay(Rectangle().stroke(.white.opacity(0.85), lineWidth: 1.5))
+            .background(BK.paper2)
+            .overlay(Rectangle().stroke(BK.ink, lineWidth: 1.5))
         }
         .buttonStyle(ScaleButtonStyle())
         .disabled(viewModel.isLoading || !acceptedTerms)
         .opacity(acceptedTerms ? 1 : 0.45)
     }
+
 
     var body: some View {
         VStack(spacing: 0) {
@@ -71,16 +73,16 @@ struct RegisterView: View {
         HStack {
             Text("PaperBoxd")
                 .font(.custom("SnellRoundhand-Black", size: 30))
-                .foregroundStyle(.white)
+                .foregroundStyle(BK.ink)
             Spacer()
             Text("register")
                 .font(.system(size: 9.5, design: .monospaced))
                 .textCase(.uppercase)
                 .kerning(1.6)
-                .foregroundStyle(.white.opacity(0.55))
+                .foregroundStyle(BK.muted)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 5)
-                .overlay(Rectangle().stroke(.white.opacity(0.30), lineWidth: 1))
+                .overlay(Rectangle().stroke(BK.muted.opacity(0.7), lineWidth: 1))
         }
         .padding(.horizontal, 26)
         .padding(.top, 20)
@@ -117,10 +119,10 @@ struct RegisterView: View {
                 .font(.system(size: 30, weight: .bold))
                 .tracking(-0.8)
                 .lineSpacing(1)
-                .foregroundStyle(.white)
+                .foregroundStyle(BK.ink)
             Text("Track every book worth remembering.")
                 .font(.system(size: 14, design: .serif).italic())
-                .foregroundStyle(.white.opacity(0.62))
+                .foregroundStyle(BK.muted)
                 .lineSpacing(2)
         }
         .padding(.bottom, 24)
@@ -129,7 +131,7 @@ struct RegisterView: View {
     private var emailField: some View {
         VStack(alignment: .leading, spacing: 0) {
             fieldLabel("Email")
-            DarkTextField(
+            PaperTextField(
                 title: "you@paperboxd.com",
                 text: $viewModel.email,
                 keyboard: .emailAddress,
@@ -145,7 +147,7 @@ struct RegisterView: View {
         VStack(alignment: .leading, spacing: 0) {
             fieldLabel("Password").padding(.top, 12)
             ZStack(alignment: .trailing) {
-                DarkSecureField(
+                PaperSecureField(
                     title: "Min 8 characters",
                     text: $viewModel.password,
                     showText: showPassword
@@ -155,7 +157,7 @@ struct RegisterView: View {
                 .onSubmit { focused = .confirm }
                 Button { showPassword.toggle() } label: {
                     Image(systemName: showPassword ? "eye.slash" : "eye")
-                        .foregroundStyle(.white.opacity(0.45))
+                        .foregroundStyle(BK.muted)
                         .padding(.trailing, 14)
                 }
             }
@@ -166,7 +168,7 @@ struct RegisterView: View {
 
             fieldLabel("Confirm password").padding(.top, 12)
             ZStack(alignment: .trailing) {
-                DarkSecureField(
+                PaperSecureField(
                     title: "Repeat password",
                     text: $viewModel.confirmPassword,
                     showText: showConfirm
@@ -178,7 +180,7 @@ struct RegisterView: View {
                 }
                 Button { showConfirm.toggle() } label: {
                     Image(systemName: showConfirm ? "eye.slash" : "eye")
-                        .foregroundStyle(.white.opacity(0.45))
+                        .foregroundStyle(BK.muted)
                         .padding(.trailing, 14)
                 }
             }
@@ -190,12 +192,12 @@ struct RegisterView: View {
         return HStack(spacing: 6) {
             ForEach(0..<3, id: \.self) { idx in
                 Capsule()
-                    .fill(idx <= strength.rawValue ? strength.color : Color("Border"))
+                    .fill(idx <= strength.rawValue ? strength.color : BK.ink.opacity(0.18))
                     .frame(height: 3)
             }
             Text(strength.label)
                 .font(.caption2)
-                .foregroundStyle(.white.opacity(0.55))
+                .foregroundStyle(BK.muted)
         }
     }
 
@@ -204,7 +206,7 @@ struct RegisterView: View {
         if let msg = viewModel.errorMessage {
             Text(msg)
                 .font(.footnote)
-                .foregroundStyle(Color("Error"))
+                .foregroundStyle(BK.accent)
                 .padding(.top, 10)
         }
     }
@@ -216,12 +218,12 @@ struct RegisterView: View {
             } label: {
                 ZStack {
                     Rectangle()
-                        .stroke(.white.opacity(0.85), lineWidth: 1.5)
+                        .stroke(BK.ink, lineWidth: 1.5)
                         .frame(width: 20, height: 20)
                     if acceptedTerms {
                         Image(systemName: "checkmark")
                             .font(.system(size: 12, weight: .bold))
-                            .foregroundStyle(.white)
+                            .foregroundStyle(BK.ink)
                     }
                 }
             }
@@ -229,8 +231,8 @@ struct RegisterView: View {
 
             Text("I agree to the [Terms of Service](paperboxd://terms) and [Privacy Policy](paperboxd://privacy).")
                 .font(.system(size: 12.5))
-                .foregroundStyle(.white.opacity(0.6))
-                .tint(Color("Accent"))
+                .foregroundStyle(BK.muted)
+                .tint(BK.accent)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding(.top, 16)
@@ -242,7 +244,7 @@ struct RegisterView: View {
         } label: {
             ZStack {
                 if viewModel.isLoading {
-                    ProgressView().tint(.black)
+                    ProgressView().tint(BK.paper)
                 } else {
                     HStack(spacing: 8) {
                         Text("Create Account")
@@ -252,12 +254,12 @@ struct RegisterView: View {
                     .font(.system(size: 14.5, weight: .semibold))
                 }
             }
-            .foregroundStyle(.black)
+            .foregroundStyle(BK.paper)
             .frame(maxWidth: .infinity)
             .frame(height: 52)
-            .background(Color(red: 0.96, green: 0.95, blue: 0.93))
-            .overlay(Rectangle().stroke(.black.opacity(0.9), lineWidth: 2))
-            .shadow(color: .white.opacity(0.22), radius: 0, x: 4, y: 4)
+            .background(BK.ink)
+            .overlay(Rectangle().stroke(BK.ink, lineWidth: 2))
+            .shadow(color: BK.ink.opacity(0.25), radius: 0, x: 4, y: 4)
             .opacity(canSubmit ? 1 : 0.45)
         }
         .buttonStyle(ScaleButtonStyle())
@@ -270,13 +272,13 @@ struct RegisterView: View {
     private var signInLink: some View {
         HStack(spacing: 4) {
             Text("Already reading?")
-                .foregroundStyle(.white.opacity(0.52))
+                .foregroundStyle(BK.muted)
             Button("Sign in") {
                 viewModel.switchTo(.login)
             }
-            .foregroundStyle(.white)
+            .foregroundStyle(BK.ink)
             .fontWeight(.semibold)
-            .underline(color: .white.opacity(0.35))
+            .underline(color: BK.muted.opacity(0.7))
         }
         .font(.system(size: 13))
         .frame(maxWidth: .infinity)
@@ -296,7 +298,7 @@ struct RegisterView: View {
             .font(.system(size: 11, weight: .medium, design: .monospaced))
             .textCase(.uppercase)
             .kerning(1.2)
-            .foregroundStyle(.white.opacity(0.5))
+            .foregroundStyle(BK.muted)
             .padding(.bottom, 6)
     }
 }

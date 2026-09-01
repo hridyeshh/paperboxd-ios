@@ -34,16 +34,21 @@ struct LegalSheetView: View {
                 LegalMarkdownView(text: kind.text)
                     .padding(20)
             }
-            .background(Color("Background").ignoresSafeArea())
+            .background(BK.paper.ignoresSafeArea())
             .navigationTitle(kind.title)
             .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(BK.paper, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }
-                        .foregroundStyle(Color("Accent"))
+                        .foregroundStyle(BK.accent)
                 }
             }
         }
+        // Sheet inherits the window's forced dark appearance otherwise, which
+        // would put a dark nav bar and status text over the paper document.
+        .preferredColorScheme(.light)
     }
 }
 
@@ -68,21 +73,21 @@ struct LegalMarkdownView: View {
         if line.isEmpty {
             Spacer().frame(height: 10)
         } else if line == "---" {
-            Divider().overlay(Color.white.opacity(0.12)).padding(.vertical, 8)
+            Divider().overlay(BK.ink.opacity(0.18)).padding(.vertical, 8)
         } else if line.hasPrefix("### ") {
             Text(clean(String(line.dropFirst(4))))
                 .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(.white)
+                .foregroundStyle(BK.ink)
                 .padding(.top, 12).padding(.bottom, 2)
         } else if line.hasPrefix("## ") {
             Text(clean(String(line.dropFirst(3))))
                 .font(.system(size: 17, weight: .bold))
-                .foregroundStyle(.white)
+                .foregroundStyle(BK.ink)
                 .padding(.top, 18).padding(.bottom, 4)
         } else if line.hasPrefix("# ") {
             Text(clean(String(line.dropFirst(2))))
                 .font(.system(size: 22, weight: .bold))
-                .foregroundStyle(.white)
+                .foregroundStyle(BK.ink)
                 .padding(.bottom, 6)
         } else if line.hasPrefix("|") {
             if line.allSatisfy({ "|-: ".contains($0) }) {
@@ -90,21 +95,21 @@ struct LegalMarkdownView: View {
             } else {
                 Text(line)
                     .font(.system(size: 11, design: .monospaced))
-                    .foregroundStyle(.white.opacity(0.7))
+                    .foregroundStyle(BK.muted)
                     .padding(.vertical, 1)
             }
         } else if line.hasPrefix("- ") || line.hasPrefix("* ") {
             HStack(alignment: .top, spacing: 8) {
-                Text("•").foregroundStyle(.white.opacity(0.5))
+                Text("•").foregroundStyle(BK.muted)
                 Text(clean(String(line.dropFirst(2))))
                     .font(.system(size: 14))
-                    .foregroundStyle(.white.opacity(0.82))
+                    .foregroundStyle(BK.ink)
             }
             .padding(.vertical, 2)
         } else {
             Text(clean(line))
                 .font(.system(size: 14))
-                .foregroundStyle(.white.opacity(0.82))
+                .foregroundStyle(BK.ink)
                 .padding(.vertical, 3)
         }
     }

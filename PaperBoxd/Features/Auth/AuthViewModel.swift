@@ -31,7 +31,7 @@ final class AuthViewModel: ObservableObject {
 
     /// Called by sub-flows on a successful auth. Container wires this to
     /// AppState.signedIn so the VM never imports AppState directly.
-    var onAuthSuccess: (String, User) -> Void = { _, _ in }
+    var onAuthSuccess: (String, User, String?) -> Void = { _, _, _ in }
 
     private var countdownTask: Task<Void, Never>?
 
@@ -67,7 +67,7 @@ final class AuthViewModel: ObservableObject {
                 method: .post,
                 body: body
             )
-            self.onAuthSuccess(resp.token, resp.user)
+            self.onAuthSuccess(resp.token, resp.user, resp.refreshToken)
         }
     }
 
@@ -96,7 +96,7 @@ final class AuthViewModel: ObservableObject {
             )
             // onboarding_completed is false for all new registrations — AppState
             // routes to .onboarding based on that flag.
-            self.onAuthSuccess(resp.token, resp.user)
+            self.onAuthSuccess(resp.token, resp.user, resp.refreshToken)
         }
     }
 
@@ -136,7 +136,7 @@ final class AuthViewModel: ObservableObject {
                 body: body
             )
             self.stopCountdown()
-            self.onAuthSuccess(resp.token, resp.user)
+            self.onAuthSuccess(resp.token, resp.user, resp.refreshToken)
         }
     }
 
@@ -185,7 +185,30 @@ final class AuthViewModel: ObservableObject {
                 method: .post,
                 body: ["id_token": idToken]
             )
-            onAuthSuccess(resp.token, resp.user)
+            onAuthSuccess(resp.token, resp.user, resp.refreshToken)
+        } catch let e as APIError {
+            errorMessage = e.errorDescription
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    // MARK: - Apple
+
+    func loginWithApple(identityToken: String, name: String?) async {
+        isLoading = true
+        errorMessage = nil
+        successMessage = nil
+        defer { isLoading = false }
+        do {
+            var body: [String: String] = ["identity_token": identityToken]
+            if let name, !name.isEmpty { body["name"] = name }
+            let resp: GoogleAuthResponse = try await APIClient.shared.request(
+                path: Endpoints.mobileApple,
+                method: .post,
+                body: body
+            )
+            onAuthSuccess(resp.token, resp.user, resp.refreshToken)
         } catch let e as APIError {
             errorMessage = e.errorDescription
         } catch {

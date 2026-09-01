@@ -12,6 +12,7 @@ enum Endpoints {
     static let mobileOTPSend   = "/api/mobile/auth/otp/send"
     static let mobileOTPVerify = "/api/mobile/auth/otp/verify"
     static let mobileGoogle    = "/api/mobile/auth/google"
+    static let mobileApple     = "/api/mobile/auth/apple"
     static let mobileRefresh   = "/api/mobile/auth/refresh"
 
     // Authenticated mobile user endpoints
@@ -24,6 +25,16 @@ enum Endpoints {
     static let bannerUpload       = "/api/v1/users/me/banner/upload"
     static let recommendationsHome = "/api/v1/recommendations/home"
     static let scanAnalyze        = "/api/v1/scan/analyze"
+
+    /// Monthly Wrapped. `month` is YYYY-MM (defaults to the current month) and
+    /// `tz` is an IANA zone so the day/hour buckets match the reader's clock.
+    static func wrapped(month: String?, timeZone: String) -> String {
+        var items = [URLQueryItem(name: "tz", value: timeZone)]
+        if let month { items.append(URLQueryItem(name: "month", value: month)) }
+        var comps = URLComponents(string: "/api/v1/users/me/wrapped")!
+        comps.queryItems = items
+        return comps.string ?? "/api/v1/users/me/wrapped"
+    }
 
     static func addToBookshelf(username: String) -> String {
         "/api/v1/users/\(username)/bookshelf"
@@ -55,9 +66,18 @@ enum Endpoints {
 
     // Profile
     static func profile(username: String) -> String { "/api/v1/users/\(username)" }
+
+    // Private profiles
+    static let visibility     = "/api/v1/users/me/visibility"
+    static let followRequests = "/api/v1/users/me/follow-requests"
+    static func followRequest(username: String) -> String {
+        "/api/v1/users/me/follow-requests/\(username)"
+    }
     static func followers(username: String) -> String { "/api/v1/users/\(username)/followers" }
     static func following(username: String) -> String { "/api/v1/users/\(username)/following" }
     static func follow(username: String) -> String { "/api/v1/users/\(username)/follow" }
+    static func block(username: String) -> String { "/api/v1/users/\(username)/block" }
+    static let reports = "/api/v1/reports"
     static func userBookshelf(username: String) -> String { "/api/v1/users/\(username)/bookshelf" }
     static func userFavorites(username: String) -> String { "/api/v1/users/\(username)/favorites" }
     static func userLikes(username: String) -> String { "/api/v1/users/\(username)/likes" }
@@ -66,6 +86,7 @@ enum Endpoints {
     static func userAuthors(username: String) -> String { "/api/v1/users/\(username)/authors" }
     static func userStreak(username: String) -> String { "/api/v1/users/\(username)/streak" }
     static func userLists(username: String) -> String { "/api/v1/users/\(username)/lists" }
+    static func listDetail(username: String, listId: String) -> String { "/api/v1/users/\(username)/lists/\(listId)" }
     static func userDiary(username: String) -> String { "/api/v1/users/\(username)/diary" }
     static func userReading(username: String) -> String { "/api/v1/users/\(username)/reading" }
     static func readingToday(username: String) -> String { "/api/v1/users/\(username)/reading/today" }

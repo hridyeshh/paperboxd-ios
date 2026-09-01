@@ -102,6 +102,9 @@ final class AppState: ObservableObject {
                 requiresAuth: true
             )
             KeychainManager.shared.saveToken(resp.token)
+            if let refresh = resp.refreshToken {
+                KeychainManager.shared.saveRefreshToken(refresh)
+            }
             let user = KeychainManager.shared.getUser()
             await holdSplash(since: start)
             if let user {
@@ -116,14 +119,29 @@ final class AppState: ObservableObject {
             }
         } catch {
             await holdSplash(since: start)
-            KeychainManager.shared.clearAll()
-            transition(to: .auth)
+            // Only a genuine auth failure ends the session. A transport error or
+            // a 5xx — the window while a deploy swaps containers, a flaky
+            // network — must not, or every backend restart looks like a forced
+            // logout. The health probe above narrows that window but cannot
+            // close it: the refresh can still land mid-swap.
+            if case APIError.unauthorized = error {
+                KeychainManager.shared.clearAll()
+                transition(to: .auth)
+            } else if let cached = KeychainManager.shared.getUser() {
+                self.currentUser = cached
+                transition(to: needsOnboarding(cached) ? .onboarding(cached) : .main(cached))
+            } else {
+                transition(to: .auth)
+            }
         }
     }
 
     /// Keep the splash on screen at least `minimum` seconds so transitions
-    /// don't flicker on hot starts with a warm cache.
-    private func holdSplash(since start: Date, minimum: TimeInterval = 2.5) async {
+    /// don't flicker on hot starts with a warm cache. The floor covers the
+    /// splash clip (4.87s source, 3.9s at its 1.25x playback rate) and the
+    /// outro fade that follows it, so bootstrap never cuts the mark animation
+    /// off mid-morph or mid-fade.
+    private func holdSplash(since start: Date, minimum: TimeInterval = 4.6) async {
         let elapsed = Date().timeIntervalSince(start)
         if elapsed < minimum {
             let remaining = UInt64((minimum - elapsed) * 1_000_000_000)
@@ -132,8 +150,11 @@ final class AppState: ObservableObject {
     }
 
     /// Called by views after a successful sign-in. Persists user and routes.
-    func signedIn(token: String, user: User) {
+    func signedIn(token: String, user: User, refreshToken: String? = nil) {
         KeychainManager.shared.saveToken(token)
+        if let refreshToken {
+            KeychainManager.shared.saveRefreshToken(refreshToken)
+        }
         KeychainManager.shared.saveUser(user)
         self.currentUser = user
         transition(to: needsOnboarding(user) ? .onboarding(user) : .main(user))
@@ -192,7 +213,7 @@ final class AppState: ObservableObject {
     }
 
     private func transition(to screen: AppScreen) {
-        withAnimation(.easeInOut(duration: 0.3)) {
+        withAnimation(.easeInOut(duration: 0.45)) {
             self.currentScreen = screen
         }
     }
