@@ -49,6 +49,7 @@ struct DiaryEntryDetailView: View {
             .navigationDestination(for: String.self) { bookId in
                 BookDetailView(bookId: bookId, user: viewer)
             }
+            .navigationDestination(for: AuthorNav.self) { AuthorDetailView(nav: $0) }
             .alert("Delete entry?", isPresented: $showDeleteAlert) {
                 Button("Delete", role: .destructive) { Task { await deleteEntry() } }
                 Button("Cancel", role: .cancel) { }

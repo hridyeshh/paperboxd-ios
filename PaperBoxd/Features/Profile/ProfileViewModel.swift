@@ -3,10 +3,11 @@ import Foundation
 
 enum ProfileTab: String, CaseIterable {
     case bookshelf = "Bookshelf"
-    case diary = "Diary"
+    // Raw value is the dock label (ProfileDockView renders `tab.rawValue`);
+    // identity is the case itself, so renaming the label is display-only.
+    case diary = "Thoughts"
     case lists = "Lists"
     case tbr = "TBR"
-    case authors = "Authors"
 }
 
 @MainActor
@@ -57,10 +58,6 @@ final class ProfileViewModel: ObservableObject {
     // TBR (to be read)
     @Published var tbrItems: [TBRItem] = []
     @Published var isLoadingTBR = false
-
-    // Authors read
-    @Published var authors: [AuthorSummary] = []
-    @Published var isLoadingAuthors = false
 
     // Favourites ("Four books I love")
     @Published var favoriteBooks: [FavoriteBook] = []
@@ -151,13 +148,6 @@ final class ProfileViewModel: ObservableObject {
                 method: .get, requiresAuth: true
             ) {
                 tbrItems = items
-            }
-        case .authors:
-            if let items: [AuthorSummary] = try? await APIClient.shared.request(
-                path: Endpoints.userAuthors(username: profileUsername),
-                method: .get, requiresAuth: true
-            ) {
-                authors = items
             }
         }
     }
@@ -403,22 +393,6 @@ final class ProfileViewModel: ObservableObject {
         } catch {}
     }
 
-    // MARK: - Authors
-
-    func fetchAuthors() async {
-        guard authors.isEmpty, !isLoadingAuthors else { return }
-        isLoadingAuthors = true
-        defer { isLoadingAuthors = false }
-        do {
-            let items: [AuthorSummary] = try await APIClient.shared.request(
-                path: Endpoints.userAuthors(username: profileUsername),
-                method: .get,
-                requiresAuth: true
-            )
-            authors = items
-        } catch {}
-    }
-
     // MARK: - Tab switching
 
     func onTabSelected(_ tab: ProfileTab) {
@@ -429,7 +403,6 @@ final class ProfileViewModel: ObservableObject {
             case .diary:     if diaryEntries.isEmpty { await fetchDiary() }
             case .lists:     await fetchLists()
             case .tbr:       await fetchTBR()
-            case .authors:   await fetchAuthors()
             }
         }
     }

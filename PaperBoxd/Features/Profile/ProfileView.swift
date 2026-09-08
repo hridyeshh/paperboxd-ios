@@ -22,7 +22,7 @@ struct ProfileView: View {
 
     /// Pushed pages for the profile tabs' "Show more" buttons.
     enum FullList: String, Identifiable, Hashable {
-        case bookshelf, tbr, authors
+        case bookshelf, tbr
         var id: String { rawValue }
     }
 
@@ -46,6 +46,7 @@ struct ProfileView: View {
         .navigationDestination(for: String.self) { bookId in
             BookDetailView(bookId: bookId, user: vm.viewerUser)
         }
+        .navigationDestination(for: AuthorNav.self) { AuthorDetailView(nav: $0) }
         .navigationDestination(for: ListNav.self) { nav in
             ListDetailView(nav: nav, viewer: vm.viewerUser)
         }
@@ -345,7 +346,6 @@ struct ProfileView: View {
         case .diary:     return p.diaryEntriesCount
         case .lists:     return p.listsCount
         case .tbr:       return vm.tbrItems.isEmpty ? nil : vm.tbrItems.count
-        case .authors:   return vm.authors.isEmpty ? nil : vm.authors.count
         }
     }
 
@@ -383,13 +383,6 @@ struct ProfileView: View {
                 limit: 9,
                 onShowMore: { fullList = .tbr }
             )
-        case .authors:
-            AuthorsGridView(
-                authors: vm.authors,
-                isLoading: vm.isLoadingAuthors,
-                limit: 9,
-                onShowMore: { fullList = .authors }
-            )
         }
     }
 
@@ -411,8 +404,6 @@ struct ProfileView: View {
                     isLoading: vm.isLoadingTBR,
                     emptyMessage: "Nothing on the TBR list yet"
                 )
-            case .authors:
-                AuthorsGridView(authors: vm.authors, isLoading: vm.isLoadingAuthors)
             }
         }
         .background(Color("Background").ignoresSafeArea())
@@ -426,7 +417,6 @@ struct ProfileView: View {
         switch which {
         case .bookshelf: return "Bookshelf"
         case .tbr:       return "To Be Read"
-        case .authors:   return "Authors"
         }
     }
 

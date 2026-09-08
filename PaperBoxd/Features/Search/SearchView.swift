@@ -43,6 +43,7 @@ struct SearchView: View {
             .navigationDestination(for: String.self) { bookId in
                 BookDetailView(bookId: bookId, user: viewer)
             }
+            .navigationDestination(for: AuthorNav.self) { AuthorDetailView(nav: $0) }
             .navigationDestination(for: ProfileDestination.self) { dest in
                 ProfileView(username: dest.username, viewer: viewer)
             }

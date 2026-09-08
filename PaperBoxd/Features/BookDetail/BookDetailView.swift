@@ -13,6 +13,7 @@ struct BookDetailView: View {
     @State private var activePanel: InlinePanel?
     @State private var likePulse = 0
     @State private var reportReviewTarget: BookReview?
+    @State private var showRateGate = false
 
     /// Inline drop-down panels below the action row.
     private enum InlinePanel { case rate, review }
@@ -90,6 +91,11 @@ struct BookDetailView: View {
                 }
             }
             Button("Cancel", role: .cancel) {}
+        }
+        .alert("Log a few pages first", isPresented: $showRateGate) {
+            Button("Got it", role: .cancel) {}
+        } message: {
+            Text("Rating and reviewing open up once you're \(BookDetailViewModel.minPagesToRate) pages in — or once you've marked the book as finished.")
         }
         .sheet(isPresented: $showShare) {
             if let book = viewModel.book {
@@ -260,11 +266,24 @@ struct BookDetailView: View {
                     .padding(.horizontal, 30)
             }
 
-            if !book.authorLine.isEmpty {
-                Text(book.authorLine.uppercased())
-                    .font(PB.mono(10)).tracking(1.5)
-                    .foregroundStyle(BK.muted)
-                    .multilineTextAlignment(.center)
+            // Each author opens their own page — same destination the web
+            // /authors/[name] route serves.
+            if !book.authors.isEmpty {
+                HStack(spacing: 6) {
+                    ForEach(Array(book.authors.enumerated()), id: \.offset) { idx, author in
+                        if idx > 0 {
+                            Text("·").font(PB.mono(10)).foregroundStyle(BK.muted)
+                        }
+                        NavigationLink(value: AuthorNav(name: author)) {
+                            Text(author.uppercased())
+                                .font(PB.mono(10)).tracking(1.5)
+                                .foregroundStyle(BK.ink)
+                                .underline()
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .multilineTextAlignment(.center)
             }
         }
         .padding(.top, 16).padding(.bottom, 18)
@@ -346,13 +365,24 @@ struct BookDetailView: View {
         }
     }
 
+    /// Opening the rate/review panel is gated on reading progress; a gated tap
+    /// explains the rule rather than silently doing nothing.
     private func togglePanel(_ panel: InlinePanel) {
+        guard viewModel.canRate else {
+            showRateGate = true
+            return
+        }
         withAnimation(.snappy(duration: 0.24, extraBounce: 0.08)) {
             activePanel = (activePanel == panel) ? nil : panel
         }
     }
 
-    private func actionTile(icon: String, label: String, active: Bool, action: @escaping () -> Void) -> some View {
+    private func actionTile(
+        icon: String,
+        label: String,
+        active: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
         Button(action: action) {
             VStack(spacing: 6) {
                 Image(systemName: icon).font(.system(size: 18, weight: .medium))

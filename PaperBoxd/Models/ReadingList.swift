@@ -124,21 +124,6 @@ struct LikesResponse: Decodable {
     }
 }
 
-/// One author the user has read, from GET /api/v1/users/{username}/authors.
-struct AuthorSummary: Codable, Identifiable {
-    let name: String
-    let bookCount: Int
-    let cover: String?
-
-    enum CodingKeys: String, CodingKey {
-        case name, cover
-        case bookCount = "book_count"
-    }
-
-    var id: String { name }
-    var coverURL: String? { (cover?.isEmpty ?? true) ? nil : cover }
-}
-
 struct TBRItem: Codable, Identifiable {
     let id: String
     let bookID: String

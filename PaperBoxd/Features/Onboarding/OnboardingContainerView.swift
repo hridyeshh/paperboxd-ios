@@ -18,7 +18,7 @@ struct OnboardingContainerView: View {
 
     var body: some View {
         ZStack {
-            (isDark ? Color(white: 0.06) : Color.white)
+            (isDark ? Color(white: 0.06) : BK.paper)
                 .ignoresSafeArea()
                 .animation(.easeInOut(duration: 0.4), value: isDark)
 
@@ -107,8 +107,8 @@ struct OnboardingStageHeader: View {
                     pill(label: label, index: idx)
                     if idx < stages.count - 1 {
                         Rectangle()
-                            .fill(Color(white: 0.85))
-                            .frame(width: 14, height: 1)
+                            .fill(idx < activeStage ? BK.ink : BK.ink.opacity(0.2))
+                            .frame(width: 12, height: 2)
                     }
                 }
                 Spacer(minLength: 0)
@@ -118,7 +118,7 @@ struct OnboardingStageHeader: View {
                     .font(.system(size: 11, weight: .medium, design: .monospaced))
                     .textCase(.uppercase)
                     .kerning(1.4)
-                    .foregroundStyle(Color(white: 0.6))
+                    .foregroundStyle(BK.muted)
             }
         }
     }
@@ -134,23 +134,20 @@ struct OnboardingStageHeader: View {
             }
             Text(label)
         }
-        .font(.system(size: 11.5, weight: .medium))
-        .foregroundStyle(isCurrent ? .white : Color(white: isDone ? 0.45 : 0.65))
-        .padding(.horizontal, 11)
-        .padding(.vertical, 5)
-        .background(
-            Capsule().fill(
-                isCurrent ? Color(white: 0.07)
-                    : isDone ? Color(white: 0.92)
-                    : Color(white: 0.96)
-            )
+        .font(.system(size: 11, weight: .semibold))
+        .foregroundStyle(isCurrent ? BK.cream : isDone ? BK.ink : Color(hex: "A6A092"))
+        .padding(.horizontal, 9)
+        .padding(.vertical, 4)
+        .background(isCurrent ? BK.ink : isDone ? BK.ochre : BK.card)
+        .overlay(
+            Rectangle().stroke(isDone || isCurrent ? BK.ink : BK.ink.opacity(0.25), lineWidth: 2)
         )
     }
 }
 
 // MARK: - Shared light-theme components
 
-/// Dark pill CTA on the light onboarding background.
+/// Crimson CTA plate on the paper onboarding ground.
 struct OnboardingPrimaryButton: View {
     let title: String
     var isLoading: Bool = false
@@ -161,7 +158,7 @@ struct OnboardingPrimaryButton: View {
         Button(action: action) {
             ZStack {
                 if isLoading {
-                    ProgressView().tint(.white)
+                    ProgressView().tint(BK.cream)
                 } else {
                     HStack(spacing: 8) {
                         Text(title)
@@ -171,46 +168,15 @@ struct OnboardingPrimaryButton: View {
                     .font(.system(size: 14.5, weight: .semibold))
                 }
             }
-            .foregroundStyle(.white)
+            .foregroundStyle(BK.cream)
             .frame(maxWidth: .infinity)
             .frame(height: 52)
-            .background(Color(white: 0.07), in: Capsule())
-            .opacity(isEnabled ? 1 : 0.38)
+            .opacity(isEnabled ? 1 : 0.45)
         }
-        .buttonStyle(ScaleButtonStyle())
+        .buttonStyle(BrutalButtonStyle(fill: BK.crimson, borderWidth: 2))
         .disabled(!isEnabled || isLoading)
         .animation(.easeInOut(duration: 0.18), value: isEnabled)
         .animation(.easeInOut(duration: 0.18), value: isLoading)
-    }
-}
-
-/// Selectable chip used for genres.
-struct OnboardingChip: View {
-    let label: String
-    let isOn: Bool
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 5) {
-                if isOn {
-                    Image(systemName: "checkmark")
-                        .font(.system(size: 9, weight: .bold))
-                }
-                Text(label)
-                    .font(.system(size: 13.5, weight: .medium))
-            }
-            .foregroundStyle(isOn ? .white : Color(white: 0.25))
-            .padding(.horizontal, 14)
-            .padding(.vertical, 9)
-            .background(
-                Capsule().fill(isOn ? Color(white: 0.07) : Color(white: 0.96))
-            )
-            .overlay(
-                Capsule().stroke(Color(white: isOn ? 0.07 : 0.88), lineWidth: 1)
-            )
-        }
-        .buttonStyle(ScaleButtonStyle())
     }
 }
 
@@ -219,5 +185,5 @@ func onboardingFieldLabel(_ text: String) -> some View {
         .font(.system(size: 11, weight: .medium, design: .monospaced))
         .textCase(.uppercase)
         .kerning(1.2)
-        .foregroundStyle(Color(white: 0.6))
+        .foregroundStyle(BK.muted)
 }

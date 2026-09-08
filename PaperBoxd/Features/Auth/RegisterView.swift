@@ -37,9 +37,9 @@ struct RegisterView: View {
                     .foregroundStyle(BK.ink)
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 14)
-            .background(BK.paper2)
-            .overlay(Rectangle().stroke(BK.ink, lineWidth: 1.5))
+            .padding(.vertical, 13)
+            .background(BK.card)
+            .overlay(Rectangle().stroke(BK.ink, lineWidth: 2))
         }
         .buttonStyle(ScaleButtonStyle())
         .disabled(viewModel.isLoading || !acceptedTerms)
@@ -50,10 +50,19 @@ struct RegisterView: View {
     var body: some View {
         VStack(spacing: 0) {
             topBar
-            Spacer()
+            BookShelfHero(
+                spines: ShelfSpine.register,
+                height: 196,
+                rowHeight: 158,
+                leadingPad: 26,
+                duration: 96,
+                titleSize: 10,
+                maxTitleRun: 92,
+                spinePadding: 8
+            )
             glassCard
-                .padding(.horizontal, 18)
-                .padding(.bottom, 32)
+                .padding(.horizontal, 20)
+                .padding(.bottom, 24)
         }
         .environment(\.openURL, OpenURLAction { url in
             switch url.absoluteString {
@@ -76,16 +85,18 @@ struct RegisterView: View {
                 .foregroundStyle(BK.ink)
             Spacer()
             Text("register")
-                .font(.system(size: 9.5, design: .monospaced))
+                .font(.system(size: 9.5, weight: .medium, design: .monospaced))
                 .textCase(.uppercase)
                 .kerning(1.6)
-                .foregroundStyle(BK.muted)
+                .foregroundStyle(BK.ink)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 5)
-                .overlay(Rectangle().stroke(BK.muted.opacity(0.7), lineWidth: 1))
+                .background(BK.ochre)
+                .overlay(Rectangle().stroke(BK.ink, lineWidth: 2))
         }
         .padding(.horizontal, 26)
         .padding(.top, 20)
+        .padding(.bottom, 12)
     }
 
     // MARK: - Glass card
@@ -108,7 +119,7 @@ struct RegisterView: View {
         .scrollBounceBehavior(.basedOnSize)
         .scrollDismissesKeyboard(.interactively)
         .clipShape(Rectangle())
-        .background(BrutalCard())
+        .background(BrutalCard(echo: BK.forest))
     }
 
     // MARK: - Card sections
@@ -122,7 +133,7 @@ struct RegisterView: View {
                 .foregroundStyle(BK.ink)
             Text("Track every book worth remembering.")
                 .font(.system(size: 14, design: .serif).italic())
-                .foregroundStyle(BK.muted)
+                .foregroundStyle(BK.sepia)
                 .lineSpacing(2)
         }
         .padding(.bottom, 24)
@@ -191,7 +202,7 @@ struct RegisterView: View {
         let strength = PasswordStrength.from(viewModel.password)
         return HStack(spacing: 6) {
             ForEach(0..<3, id: \.self) { idx in
-                Capsule()
+                Rectangle()
                     .fill(idx <= strength.rawValue ? strength.color : BK.ink.opacity(0.18))
                     .frame(height: 3)
             }
@@ -218,12 +229,13 @@ struct RegisterView: View {
             } label: {
                 ZStack {
                     Rectangle()
-                        .stroke(BK.ink, lineWidth: 1.5)
+                        .fill(acceptedTerms ? BK.crimson : BK.card)
                         .frame(width: 20, height: 20)
+                        .overlay(Rectangle().stroke(BK.ink, lineWidth: 2))
                     if acceptedTerms {
                         Image(systemName: "checkmark")
                             .font(.system(size: 12, weight: .bold))
-                            .foregroundStyle(BK.ink)
+                            .foregroundStyle(BK.cream)
                     }
                 }
             }
@@ -232,7 +244,7 @@ struct RegisterView: View {
             Text("I agree to the [Terms of Service](paperboxd://terms) and [Privacy Policy](paperboxd://privacy).")
                 .font(.system(size: 12.5))
                 .foregroundStyle(BK.muted)
-                .tint(BK.accent)
+                .tint(BK.crimson)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding(.top, 16)
@@ -244,25 +256,22 @@ struct RegisterView: View {
         } label: {
             ZStack {
                 if viewModel.isLoading {
-                    ProgressView().tint(BK.paper)
+                    ProgressView().tint(BK.cream)
                 } else {
                     HStack(spacing: 8) {
                         Text("Create Account")
                         Image(systemName: "arrow.right")
-                            .font(.system(size: 13, weight: .semibold))
+                            .font(.system(size: 13, weight: .bold))
                     }
                     .font(.system(size: 14.5, weight: .semibold))
                 }
             }
-            .foregroundStyle(BK.paper)
+            .foregroundStyle(BK.cream)
             .frame(maxWidth: .infinity)
             .frame(height: 52)
-            .background(BK.ink)
-            .overlay(Rectangle().stroke(BK.ink, lineWidth: 2))
-            .shadow(color: BK.ink.opacity(0.25), radius: 0, x: 4, y: 4)
             .opacity(canSubmit ? 1 : 0.45)
         }
-        .buttonStyle(ScaleButtonStyle())
+        .buttonStyle(BrutalButtonStyle(fill: BK.crimson, borderWidth: 2))
         .disabled(!canSubmit || viewModel.isLoading)
         .padding(.top, 18)
         .animation(.easeInOut(duration: 0.18), value: viewModel.isLoading)

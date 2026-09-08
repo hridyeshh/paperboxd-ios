@@ -65,6 +65,21 @@ final class BookDetailViewModel: ObservableObject {
         isLoading = false
     }
 
+    /// Pages a reader must log before they can rate or review. Mirrors
+    /// MinPagesToRate in the Go backend, which enforces the same rule.
+    static let minPagesToRate = 20
+
+    /// Whether the viewer has read far enough to rate or review. Finishing the
+    /// book counts on its own — a book with no known page count can never
+    /// accumulate logged pages. A reader who already rated keeps their entry
+    /// editable so the gate can't strand an existing review.
+    var canRate: Bool {
+        if (myReview?.rating ?? 0) > 0 || !(myReview?.review ?? "").isEmpty { return true }
+        guard let progress, progress.onShelf else { return false }
+        if progress.status == "read" { return true }
+        return (progress.currentPage ?? 0) >= Self.minPagesToRate
+    }
+
     /// The viewer's own review, if they've rated or reviewed this book.
     var myReview: BookReview? {
         guard let uname = user.username?.lowercased() else { return nil }
@@ -184,24 +199,16 @@ final class BookDetailViewModel: ObservableObject {
         if let s = resp?.streak { CelebrationCenter.shared.checkStreak(s) }
     }
 
-    /// Posts the viewer's rating + optional review. The backend stores reviews
-    /// on the bookshelf entry, so the book is added to the shelf first if needed.
-    /// Returns true on success so the sheet can dismiss.
+    /// Posts the viewer's rating + optional review. Reviews live on the bookshelf
+    /// entry, which only exists once the reader has logged progress — rating no
+    /// longer silently shelves the book, so `canRate` gates the call site.
+    /// Returns true on success so the panel can close.
     func submitReview(rating: Int, review: String?) async -> Bool {
         guard let uname = user.username else { return false }
         isSubmittingReview = true
         defer { isSubmittingReview = false }
 
         do {
-            if !bookState.isOnShelf {
-                let _: Empty = try await APIClient.shared.request(
-                    path: Endpoints.addToBookshelf(username: uname),
-                    method: .post,
-                    body: ["book_id": bookId, "status": "reading"],
-                    requiresAuth: true
-                )
-                bookState.isOnShelf = true
-            }
             let _: ReviewUpdateResponse = try await APIClient.shared.request(
                 path: Endpoints.updateBookshelfRating(username: uname, bookId: bookId),
                 method: .patch,

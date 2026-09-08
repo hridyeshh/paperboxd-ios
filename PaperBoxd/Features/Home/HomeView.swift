@@ -5,6 +5,8 @@ struct HomeView: View {
     @StateObject private var viewModel: HomeViewModel
     @State private var showNotifications = false
     @State private var showWrite = false
+    @State private var previewActivity: FriendActivity?
+    @State private var path = NavigationPath()
 
     // Home is light-mode only. The app window is globally forced dark
     // (UIWindow.appearance().overrideUserInterfaceStyle = .dark) and the asset
@@ -30,7 +32,7 @@ struct HomeView: View {
     #endif
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             ZStack {
                 hlBg.ignoresSafeArea()
                 dotGrid.ignoresSafeArea()
@@ -46,10 +48,26 @@ struct HomeView: View {
                     }
                 }
             }
+            .overlay {
+                if let activity = previewActivity {
+                    FriendActivityPopup(
+                        activity: activity,
+                        onOpenBook: { bookId in
+                            previewActivity = nil
+                            path.append(bookId)
+                        },
+                        onDismiss: { previewActivity = nil }
+                    )
+                    .id(activity.id)
+                    .transition(.opacity)
+                }
+            }
+            .animation(.easeInOut(duration: 0.16), value: previewActivity?.id)
             .navigationBarHidden(true)
             .navigationDestination(for: String.self) { bookId in
                 BookDetailView(bookId: bookId, user: user)
             }
+            .navigationDestination(for: AuthorNav.self) { AuthorDetailView(nav: $0) }
             .sheet(isPresented: $showNotifications) {
                 NotificationsView(
                     activities: viewModel.friendsActivities,
@@ -195,7 +213,16 @@ struct HomeView: View {
     }
 
     // Brutalist friend card — always light, ink border + hard offset shadow.
+    //
+    // Fixed width *and* height: the activity line runs 1–2 lines depending on
+    // the title, and letting the height follow it left the rail ragged. Long
+    // text truncates instead; the tap opens the book preview.
     private func friendCard(_ a: FriendActivity) -> some View {
+        Button { previewActivity = a } label: { friendCardFace(a) }
+            .buttonStyle(.plain)
+    }
+
+    private func friendCardFace(_ a: FriendActivity) -> some View {
         let card = Color(red: 0.992, green: 0.984, blue: 0.965)
         return VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
@@ -232,13 +259,21 @@ struct HomeView: View {
                     .foregroundStyle(BK.ink)
             }
             .lineLimit(2)
+            .truncationMode(.tail)
+            .multilineTextAlignment(.leading)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            // Holds the timestamp on the bottom edge whether the line above
+            // wrapped to one row or two.
+            Spacer(minLength: 0)
 
             Text(a.relativeTime)
                 .font(PB.mono(9.5)).tracking(0.5)
                 .foregroundStyle(BK.muted)
         }
         .padding(12)
-        .frame(width: 162)
+        .frame(width: 162, height: 120, alignment: .topLeading)
         .background(card)
         .overlay(Rectangle().strokeBorder(BK.ink, lineWidth: 1.5))
         .background(alignment: .topLeading) {

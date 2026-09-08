@@ -18,24 +18,29 @@ struct PaperTextField: View {
             .focused($isFocused)
             .padding(.horizontal, 14)
             .frame(height: 52)
-            .background(isFocused ? BK.paper2 : BK.paper2.opacity(0.55), in: Rectangle())
+            .background(BK.field, in: Rectangle())
             .overlay(
                 Rectangle()
-                    .stroke(isFocused ? BK.ink : BK.ink.opacity(0.28), lineWidth: 1)
+                    .stroke(isFocused ? BK.ink : BK.ink.opacity(0.32), lineWidth: 1.5)
             )
             .animation(.easeInOut(duration: 0.18), value: isFocused)
     }
 }
 
 /// Brutalist auth-card backing: a flat, opaque card-face panel with hard 90° corners,
-/// a heavy ink border, and an offset "echo" frame standing in for a drop shadow.
+/// a heavy ink border, and an offset "echo" plate standing in for a drop shadow.
 /// No glass, no blur, no shimmer. Sits on the paper ground.
 struct BrutalCard: View {
+    /// Fill of the offset plate behind the card — ochre on sign in, forest on
+    /// register, so the two screens read apart at a glance.
+    var echo: Color = BK.ochre
+
     var body: some View {
         ZStack {
-            // Offset echo — the hard, blur-free brutalist shadow.
+            // Offset plate — the hard, blur-free brutalist shadow.
             Rectangle()
-                .stroke(BK.ink.opacity(0.25), lineWidth: 2)
+                .fill(echo)
+                .overlay(Rectangle().stroke(BK.ink, lineWidth: 2))
                 .offset(x: 7, y: 7)
             // Opaque panel: fully hides the background behind the card (readable, raw).
             Rectangle()
@@ -70,10 +75,10 @@ struct PaperSecureField: View {
         .padding(.horizontal, 14)
         .padding(.trailing, 40)
         .frame(height: 52)
-        .background(isFocused ? BK.paper2 : BK.paper2.opacity(0.55), in: Rectangle())
+        .background(BK.field, in: Rectangle())
         .overlay(
             Rectangle()
-                .stroke(isFocused ? BK.ink : BK.ink.opacity(0.28), lineWidth: 1)
+                .stroke(isFocused ? BK.ink : BK.ink.opacity(0.32), lineWidth: 1.5)
         )
         .animation(.easeInOut(duration: 0.18), value: isFocused)
     }

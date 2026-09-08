@@ -1,7 +1,12 @@
 import SwiftUI
 
-/// Settings screen, presented as a sheet from the profile header's gear icon.
-/// Grouped list matching the app's dark aesthetic (Color("Background"), etc.).
+/// Settings screen, presented as a sheet from the profile header's hamburger.
+///
+/// Brutalist paper aesthetic (see `BrutalKit`): every section is a hard 2pt ink
+/// frame with an offset shadow on `BK.paper`, matching `ReadingHeatmapView` and
+/// the profile's brutal pill buttons. The palette is monochrome — paper, ink,
+/// muted, and `BK.paper2` for chips — so rank reads from fill and pattern, not
+/// hue: destructive controls are hazard-hatched rather than red.
 ///
 /// Sign out routes through `onSignOut` (wired to `AppState.signOut()` by the
 /// presenter). Account deletion calls `DELETE /api/v1/users/me`. "Free Scans
@@ -21,32 +26,30 @@ struct SettingsView: View {
 
     var body: some View {
         NavigationStack {
-            List {
-                privacySection
-                accountSection
-                scanSection
-                dataSection
-                discoverSection
-                aboutSection
-                signOutSection
-                dangerZoneSection
-            }
-            .listStyle(.insetGrouped)
-            .scrollContentBackground(.hidden)
-            .background(Color("Background").ignoresSafeArea())
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .principal) {
-                    Text("Settings")
-                        .font(PB.serif(18))
-                        .foregroundStyle(Color("TextPrimary"))
-                }
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Done") { dismiss() }
-                        .font(PB.mono(13, .medium))
-                        .foregroundStyle(Color("Accent"))
+            ZStack {
+                BK.paper.ignoresSafeArea()
+
+                VStack(spacing: 0) {
+                    header
+
+                    ScrollView {
+                        VStack(spacing: 24) {
+                            privacySection
+                            accountSection
+                            scanSection
+                            dataSection
+                            discoverSection
+                            aboutSection
+                            signOutButton
+                            dangerZone
+                        }
+                        .padding(.horizontal, 20)
+                        .padding(.top, 24)
+                        .padding(.bottom, 44)
+                    }
                 }
             }
+            .toolbar(.hidden, for: .navigationBar)
             .sheet(item: $shareItem) { item in
                 ShareSheet(items: [item.url])
                     .presentationDetents([.medium, .large])
@@ -56,54 +59,138 @@ struct SettingsView: View {
                     .presentationDetents([.large])
                     .presentationDragIndicator(.hidden)
             }
+            .alert("Rate PaperBoxd", isPresented: $showRateAlert) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text("We'll enable ratings once we're live on the App Store. Thank you for your support!")
+            }
         }
+        .environment(\.colorScheme, .light)
+        .preferredColorScheme(.light)
+    }
+
+    // MARK: - Header (grabber + serif title + Done chip)
+
+    private var header: some View {
+        VStack(spacing: 0) {
+            Rectangle()
+                .fill(BK.ink)
+                .frame(width: 44, height: 4)
+                .padding(.top, 9)
+                .padding(.bottom, 7)
+
+            HStack {
+                Color.clear.frame(width: 62, height: 1)
+                Spacer()
+                Text("Settings")
+                    .font(PB.serif(19))
+                    .foregroundStyle(BK.ink)
+                Spacer()
+                Button { dismiss() } label: {
+                    Text("DONE")
+                        .font(PB.mono(12, .medium))
+                        .tracking(0.5)
+                        .foregroundStyle(BK.paper)
+                        .padding(.horizontal, 11)
+                        .padding(.vertical, 6)
+                }
+                .buttonStyle(BrutalButtonStyle(fill: BK.ink, borderWidth: 2, offset: 3))
+                .frame(width: 62, alignment: .trailing)
+            }
+            .frame(height: 50)
+            .padding(.horizontal, 20)
+        }
+        .background(alignment: .bottom) { Rectangle().fill(BK.ink).frame(height: 2) }
     }
 
     // MARK: - Private profile
 
     private var privacySection: some View {
-        Section {
-            Toggle(isOn: Binding(
-                get: { !isPublic },
-                set: { newValue in setPublic(!newValue) }
-            )) {
-                VStack(alignment: .leading, spacing: 2) {
-                    SettingsRow(icon: "lock", label: "Private account")
+        SettingsSection(title: "Privacy") {
+            HStack(spacing: 12) {
+                Image(systemName: "lock")
+                    .font(.system(size: 16, weight: .regular))
+                    .frame(width: 22)
+                    .foregroundStyle(BK.ink)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Private account")
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundStyle(BK.ink)
                     Text(isPublic
                          ? "Anyone can see your shelves, diary and lists."
                          : "Only followers you approve can see your shelves.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .font(.system(size: 12))
+                        .foregroundStyle(BK.muted)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
+                Spacer(minLength: 8)
+                BrutalSwitch(isOn: !isPublic) { setPublic(!$0) }
             }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 14)
 
             // Only meaningful while private; going public auto-accepts everyone
             // who was waiting, so the list empties itself.
-            ForEach(followRequests) { request in
-                HStack {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(request.name.isEmpty ? request.username : request.name)
-                            .font(.body)
-                        Text("@\(request.username)")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    Spacer()
-                    Button("Confirm") { respond(to: request.username, accept: true) }
-                        .buttonStyle(.borderless)
-                    Button("Decline") { respond(to: request.username, accept: false) }
-                        .buttonStyle(.borderless)
-                        .foregroundStyle(.secondary)
+            if !isPublic && !followRequests.isEmpty {
+                Rectangle().fill(BK.ink).frame(height: 2)
+
+                Text(followRequests.count == 1 ? "1 FOLLOW REQUEST" : "\(followRequests.count) FOLLOW REQUESTS")
+                    .font(PB.mono(9.5, .medium))
+                    .tracking(1.8)
+                    .foregroundStyle(BK.paper)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 7)
+                    .background(BK.ink)
+
+                ForEach(followRequests) { request in
+                    Rectangle().fill(BK.ink.opacity(0.16)).frame(height: 1)
+                    followRequestRow(request)
                 }
             }
-        } header: {
-            Eyebrow(text: "Privacy")
         }
-        .listRowBackground(Color("Surface"))
         .task {
             isPublic = profile.isPublic
             if !profile.isPublic { await loadFollowRequests() }
         }
+    }
+
+    private func followRequestRow(_ request: FollowRequestUser) -> some View {
+        HStack(spacing: 11) {
+            Rectangle()
+                .fill(LinearGradient(colors: [BK.muted, BK.ink],
+                                     startPoint: .topLeading, endPoint: .bottomTrailing))
+                .frame(width: 32, height: 32)
+                .overlay(Rectangle().strokeBorder(BK.ink, lineWidth: 2))
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(request.name.isEmpty ? request.username : request.name)
+                    .font(.system(size: 14))
+                    .foregroundStyle(BK.ink)
+                Text("@\(request.username)")
+                    .font(PB.mono(11))
+                    .foregroundStyle(BK.muted)
+            }
+            Spacer(minLength: 8)
+
+            Button { respond(to: request.username, accept: true) } label: {
+                Text("Confirm")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(BK.paper)
+                    .padding(.horizontal, 10).padding(.vertical, 6)
+            }
+            .buttonStyle(BrutalButtonStyle(fill: BK.ink, borderWidth: 2, offset: 2))
+
+            Button { respond(to: request.username, accept: false) } label: {
+                Text("Decline")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(BK.ink)
+                    .padding(.horizontal, 10).padding(.vertical, 6)
+            }
+            .buttonStyle(BrutalButtonStyle(fill: BK.paper, borderWidth: 2, offset: 2))
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 11)
     }
 
     private func setPublic(_ newValue: Bool) {
@@ -160,54 +247,48 @@ struct SettingsView: View {
     // MARK: - Section 1: Account
 
     private var accountSection: some View {
-        Section {
+        SettingsSection(title: "Account") {
             NavigationLink {
                 ChangePasswordView(email: appState.currentUser?.email)
             } label: {
                 SettingsRow(icon: "lock", label: "Change Password")
             }
-        } header: {
-            Eyebrow(text: "Account")
+            .buttonStyle(.plain)
         }
-        .listRowBackground(Color("Surface"))
     }
 
     // MARK: - Section 2: Scan & Know
 
     private var scanSection: some View {
-        Section {
-            HStack {
-                SettingsRow(icon: "barcode.viewfinder", label: "Free Scans Remaining")
-                Spacer()
-                Text(scansRemaining == 0 ? "None remaining" : "\(scansRemaining) remaining")
-                    .foregroundColor(scansRemaining == 0 ? .red.opacity(0.8) : .secondary)
-                    .font(.body)
+        SettingsSection(title: "Scan & Know") {
+            SettingsRow(icon: "barcode.viewfinder", label: "Free Scans Remaining") {
+                Text(scansRemaining == 0 ? "NONE LEFT" : "\(scansRemaining) LEFT")
+                    .font(PB.mono(12, .medium))
+                    .foregroundStyle(BK.ink)
+                    .padding(.horizontal, 8).padding(.vertical, 3)
+                    .background(BK.paper2)
+                    .overlay(Rectangle().strokeBorder(BK.ink, lineWidth: 2))
             }
-        } header: {
-            Eyebrow(text: "Scan & Know")
         }
-        .listRowBackground(Color("Surface"))
     }
 
     // MARK: - Section 3: Your Data
 
     private var dataSection: some View {
-        Section {
+        SettingsSection(title: "Your Data") {
             NavigationLink {
                 GoodreadsImportView()
             } label: {
                 SettingsRow(icon: "square.and.arrow.down", label: "Import from Goodreads")
             }
-        } header: {
-            Eyebrow(text: "Your Data")
+            .buttonStyle(.plain)
         }
-        .listRowBackground(Color("Surface"))
     }
 
     // MARK: - Section 4: Discover
 
     private var discoverSection: some View {
-        Section {
+        SettingsSection(title: "Discover") {
             Button {
                 if let url = URL(string: "https://paperboxd.in") {
                     shareItem = ShareItem(url: url)
@@ -215,107 +296,166 @@ struct SettingsView: View {
             } label: {
                 SettingsRow(icon: "person.badge.plus", label: "Invite Friends")
             }
+            .buttonStyle(.plain)
+
+            Rectangle().fill(BK.ink.opacity(0.16)).frame(height: 1)
+
             Button {
                 // TODO: Replace with SKStoreReviewController after App Store submission
                 showRateAlert = true
             } label: {
                 SettingsRow(icon: "star.fill", label: "Rate PaperBoxd")
             }
-            .alert("Rate PaperBoxd", isPresented: $showRateAlert) {
-                Button("OK", role: .cancel) {}
-            } message: {
-                Text("We'll enable ratings once we're live on the App Store. Thank you for your support!")
-            }
-        } header: {
-            Eyebrow(text: "Discover")
+            .buttonStyle(.plain)
         }
-        .listRowBackground(Color("Surface"))
     }
 
     // MARK: - Section 5: About
 
     private var aboutSection: some View {
-        Section {
+        SettingsSection(title: "About") {
             NavigationLink {
                 LegalView(content: .privacyPolicy)
             } label: {
                 SettingsRow(icon: "hand.raised", label: "Privacy Policy")
             }
+            .buttonStyle(.plain)
+
+            Rectangle().fill(BK.ink.opacity(0.16)).frame(height: 1)
+
             NavigationLink {
                 LegalView(content: .termsOfService)
             } label: {
                 SettingsRow(icon: "doc.text", label: "Terms of Service")
             }
-            HStack {
-                SettingsRow(icon: "info.circle", label: "Version")
-                Spacer()
+            .buttonStyle(.plain)
+
+            Rectangle().fill(BK.ink.opacity(0.16)).frame(height: 1)
+
+            SettingsRow(icon: "info.circle", label: "Version") {
                 Text(Bundle.main.appVersionString)
                     .font(PB.mono(12))
-                    .foregroundStyle(Color("TextSecondary"))
+                    .foregroundStyle(BK.muted)
             }
-        } header: {
-            Eyebrow(text: "About")
         }
-        .listRowBackground(Color("Surface"))
     }
 
     // MARK: - Section 6: Sign Out
 
-    private var signOutSection: some View {
-        Section {
-            Button {
-                onSignOut()
-            } label: {
-                HStack {
-                    Spacer()
-                    Text("Sign Out")
-                        .font(PB.mono(13, .medium))
-                        .foregroundStyle(Color("Error"))
-                    Spacer()
-                }
-            }
+    private var signOutButton: some View {
+        Button(action: onSignOut) {
+            Text("SIGN OUT")
+                .font(PB.mono(13, .medium))
+                .tracking(1.4)
+                .foregroundStyle(BK.paper)
+                .frame(maxWidth: .infinity, minHeight: 50)
         }
-        .listRowBackground(Color("Surface"))
+        .buttonStyle(BrutalButtonStyle(fill: BK.ink, borderWidth: 2, offset: 5))
+        .padding(.top, 8)
     }
 
     // MARK: - Section 7: Danger Zone
 
-    private var dangerZoneSection: some View {
-        Section {
-            Button {
-                showDeleteSheet = true
-            } label: {
-                HStack {
-                    Spacer()
-                    Text("Delete Account")
-                        .font(PB.mono(11))
-                        .tracking(0.5)
-                        .foregroundStyle(Color("Error").opacity(0.7))
-                    Spacer()
-                }
+    /// Hatched rather than red — the palette is monochrome, so the hazard reads
+    /// from the stripe pattern.
+    private var dangerZone: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            Button { showDeleteSheet = true } label: {
+                Text("DELETE ACCOUNT")
+                    .font(PB.mono(12, .medium))
+                    .tracking(1.2)
+                    .foregroundStyle(BK.ink)
+                    .frame(maxWidth: .infinity, minHeight: 46)
+                    .background(HatchFill(ink: BK.paper, stripe: BK.paper2, period: 14))
             }
+            .buttonStyle(BrutalButtonStyle(fill: .clear, borderWidth: 2, offset: 5))
         }
-        .listRowBackground(Color.clear)
+    }
+
+    private func sectionEyebrow(_ title: String) -> some View {
+        HStack(spacing: 8) {
+            Rectangle().fill(BK.ink).frame(width: 7, height: 7)
+            Eyebrow(text: title, color: BK.ink)
+        }
+    }
+}
+
+// MARK: - Section plate
+
+/// Eyebrow + a hard ink plate holding the section's rows.
+struct SettingsSection<Content: View>: View {
+    let title: String
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            HStack(spacing: 8) {
+                Rectangle().fill(BK.ink).frame(width: 7, height: 7)
+                Eyebrow(text: title, color: BK.ink)
+            }
+            VStack(spacing: 0) { content }
+                .brutalPlate()
+        }
     }
 }
 
 // MARK: - Reusable row
 
-struct SettingsRow: View {
+/// Icon + label, with either a trailing accessory or the default "→" affordance.
+struct SettingsRow<Accessory: View>: View {
     let icon: String
     let label: String
+    @ViewBuilder var accessory: Accessory
 
     var body: some View {
-        HStack(spacing: 13) {
+        HStack(spacing: 12) {
             Image(systemName: icon)
-                .font(.system(size: 15, weight: .regular))
-                .frame(width: 24)
-                .foregroundStyle(Color("TextPrimary").opacity(0.55))
+                .font(.system(size: 16, weight: .regular))
+                .frame(width: 22)
+                .foregroundStyle(BK.ink)
             Text(label)
                 .font(.system(size: 15))
-                .foregroundStyle(Color("TextPrimary"))
+                .foregroundStyle(BK.ink)
+            Spacer(minLength: 8)
+            accessory
         }
-        .padding(.vertical, 2)
+        .padding(.horizontal, 16)
+        .frame(height: 54)
+        .contentShape(Rectangle())
+    }
+}
+
+extension SettingsRow where Accessory == Text {
+    /// Default row: the mono arrow standing in for the list chevron.
+    init(icon: String, label: String) {
+        self.icon = icon
+        self.label = label
+        self.accessory = Text("→").font(PB.mono(15)).foregroundStyle(BK.ink)
+    }
+}
+
+// MARK: - Square switch
+
+/// Hard-edged twin of `Toggle` — a 52×30 ink frame whose knob steps across.
+struct BrutalSwitch: View {
+    let isOn: Bool
+    let onChange: (Bool) -> Void
+
+    var body: some View {
+        Button { onChange(!isOn) } label: {
+            Rectangle()
+                .fill(isOn ? BK.ink : BK.paper)
+                .frame(width: 52, height: 30)
+                .overlay(Rectangle().strokeBorder(BK.ink, lineWidth: 2))
+                .overlay(alignment: isOn ? .trailing : .leading) {
+                    Rectangle()
+                        .fill(isOn ? BK.paper : BK.ink)
+                        .frame(width: 22, height: 22)
+                        .padding(.horizontal, 2)
+                }
+        }
+        .buttonStyle(.plain)
+        .animation(.easeInOut(duration: 0.14), value: isOn)
     }
 }
 
@@ -331,49 +471,82 @@ struct ChangePasswordView: View {
     @State private var isError = false
 
     var body: some View {
-        VStack(spacing: 20) {
-            Image(systemName: "lock.rotation")
-                .font(.largeTitle)
-                .foregroundStyle(Color("Accent"))
-            Text("Reset your password")
-                .font(PB.serif(22))
-                .foregroundStyle(Color("TextPrimary"))
-            Text(email.map { "We'll email a reset link to \($0)." }
-                 ?? "We'll email you a password reset link.")
-                .font(.system(size: 14))
-                .foregroundStyle(Color("TextSecondary"))
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 32)
+        VStack(alignment: .leading, spacing: 22) {
+            VStack(alignment: .leading, spacing: 14) {
+                Image(systemName: "lock.rotation")
+                    .font(.system(size: 26, weight: .regular))
+                    .foregroundStyle(BK.paper)
+                    .frame(width: 52, height: 52)
+                    .background(BK.ink)
+                    .overlay(Rectangle().strokeBorder(BK.ink, lineWidth: 2))
+
+                Text("Reset your password")
+                    .font(PB.serif(24))
+                    .foregroundStyle(BK.ink)
+
+                Text("We'll email a reset link to the address on your account. It works once and expires in 30 minutes.")
+                    .font(.system(size: 14))
+                    .foregroundStyle(BK.muted)
+                    .lineSpacing(3)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                if let email {
+                    Text(email)
+                        .font(PB.mono(12))
+                        .foregroundStyle(BK.ink)
+                        .lineLimit(1)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 12).padding(.vertical, 10)
+                        .background(BK.paper2)
+                        .overlay(Rectangle().strokeBorder(BK.ink, lineWidth: 2))
+                }
+            }
+            .padding(20)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .brutalPlate()
 
             Button {
                 Task { await sendReset() }
             } label: {
-                HStack {
-                    if isSending { ProgressView().tint(.white) }
-                    Text(isSending ? "Sending…" : "Send reset link")
-                        .fontWeight(.semibold)
+                HStack(spacing: 9) {
+                    if isSending { ProgressView().tint(BK.paper).scaleEffect(0.8) }
+                    Text(isSending ? "SENDING…" : "SEND RESET LINK")
+                        .font(PB.mono(13, .medium))
+                        .tracking(1.4)
                 }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 14)
-                .background(Color("Accent"))
-                .foregroundStyle(.white)
-                .clipShape(Capsule())
+                .foregroundStyle(BK.paper)
+                .frame(maxWidth: .infinity, minHeight: 52)
             }
+            .buttonStyle(BrutalButtonStyle(fill: BK.ink, borderWidth: 2, offset: 5))
             .disabled(isSending || email == nil)
-            .padding(.horizontal, 32)
+            .opacity(email == nil ? 0.5 : 1)
 
             if let message {
-                Text(message)
-                    .font(.system(size: 13))
-                    .foregroundStyle(isError ? .red : Color("TextSecondary"))
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, 32)
+                HStack(spacing: 10) {
+                    Image(systemName: isError ? "exclamationmark.triangle" : "checkmark")
+                        .font(.system(size: 14, weight: .bold))
+                    Text(message)
+                        .font(.system(size: 13.5, weight: .medium))
+                    Spacer(minLength: 0)
+                }
+                .foregroundStyle(BK.paper)
+                .padding(.horizontal, 14).padding(.vertical, 12)
+                .background(BK.ink)
+                .overlay(Rectangle().strokeBorder(BK.ink, lineWidth: 2))
             }
+
             Spacer()
+
+            Text("NO IN-APP CHANGE · RESET BY EMAIL")
+                .font(PB.mono(10))
+                .tracking(2)
+                .foregroundStyle(BK.muted)
         }
-        .padding(.top, 48)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color("Background").ignoresSafeArea())
+        .padding(.horizontal, 20)
+        .padding(.top, 32)
+        .padding(.bottom, 30)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(BK.paper.ignoresSafeArea())
         .navigationTitle("Change Password")
         .navigationBarTitleDisplayMode(.inline)
     }
@@ -463,19 +636,25 @@ struct LegalView: View {
             VStack(alignment: .leading, spacing: 20) {
                 Text(content.body)
                     .font(.system(size: 15))
-                    .foregroundStyle(Color("TextPrimary").opacity(0.85))
-                    .lineSpacing(4)
+                    .foregroundStyle(BK.ink)
+                    .lineSpacing(5)
                     .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(20)
+                    .brutalPlate()
 
                 Link(destination: content.url) {
-                    Text("Read the full \(content.title) →")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(Color("Accent"))
+                    Text("READ THE FULL \(content.title.uppercased()) →")
+                        .font(PB.mono(12, .medium))
+                        .tracking(1.2)
+                        .foregroundStyle(BK.paper)
+                        .frame(maxWidth: .infinity, minHeight: 50)
+                        .brutalPlate(fill: BK.ink)
                 }
             }
-            .padding(20)
+            .padding(.horizontal, 20)
+            .padding(.vertical, 24)
         }
-        .background(Color("Background").ignoresSafeArea())
+        .background(BK.paper.ignoresSafeArea())
         .navigationTitle(content.title)
         .navigationBarTitleDisplayMode(.inline)
     }

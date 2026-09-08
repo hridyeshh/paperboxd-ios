@@ -360,68 +360,6 @@ struct ShowMoreButton: View {
     }
 }
 
-// MARK: - Authors tab (3-col grid, same format as the bookshelf)
-
-struct AuthorsGridView: View {
-    let authors: [AuthorSummary]
-    let isLoading: Bool
-    /// Same semantics as `ShelfGridView.limit` — 3×3 cap on the profile tab.
-    var limit: Int? = nil
-    var onShowMore: (() -> Void)? = nil
-
-    private let columns = Array(repeating: GridItem(.flexible(), spacing: 8), count: 3)
-
-    var body: some View {
-        if authors.isEmpty && !isLoading {
-            EmptyTabState(icon: "person.2", message: "No authors yet")
-        } else {
-            VStack(spacing: 0) {
-                LazyVGrid(columns: columns, spacing: 8) {
-                    ForEach(limit.map { Array(authors.prefix($0)) } ?? authors) { author in
-                        AuthorGridCell(author: author)
-                    }
-                    if isLoading {
-                        ForEach(0..<6, id: \.self) { _ in
-                            RoundedRectangle(cornerRadius: 6)
-                                .fill(Color("Surface"))
-                                .aspectRatio(2/3, contentMode: .fit)
-                                .pbShimmer()
-                        }
-                    }
-                }
-                if let limit, let onShowMore, authors.count > limit {
-                    ShowMoreButton(action: onShowMore)
-                        .padding(.top, 16)
-                }
-            }
-            .padding(.horizontal, 20)
-            .padding(.top, 16)
-        }
-    }
-}
-
-/// One author: a representative book cover with the author's name and book
-/// count beneath — matches the bookshelf cover cells' footprint.
-struct AuthorGridCell: View {
-    let author: AuthorSummary
-
-    var body: some View {
-        VStack(spacing: 6) {
-            GridCoverCell(url: author.coverURL)
-            VStack(spacing: 1) {
-                Text(author.name)
-                    .font(PB.serif(12.5))
-                    .foregroundStyle(Color("TextPrimary"))
-                    .lineLimit(1)
-                Text("\(author.bookCount) book\(author.bookCount == 1 ? "" : "s")")
-                    .font(PB.mono(8.5))
-                    .foregroundStyle(Color("TextSecondary"))
-            }
-            .frame(maxWidth: .infinity)
-        }
-    }
-}
-
 // MARK: - Likes tab (3-col grid)
 
 struct LikesGridView: View {

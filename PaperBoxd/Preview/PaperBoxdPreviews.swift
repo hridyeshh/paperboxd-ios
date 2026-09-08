@@ -122,7 +122,7 @@ import SwiftUI
             onFollowing: {}
         )
     }
-    .background(Color("Background"))
+    .background(Color("Backgroundha"))
 }
 
 #Preview("Currently reading card") {

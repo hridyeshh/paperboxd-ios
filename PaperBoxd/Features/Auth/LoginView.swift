@@ -13,13 +13,16 @@ struct LoginView: View {
     var body: some View {
         VStack(spacing: 0) {
             topBar
-            Spacer()
+            BookShelfHero()
             glassCard
                 .padding(.horizontal, 20)
                 .padding(.bottom, 28)
                 .offset(y: cardIn ? 0 : 420)
                 .opacity(cardIn ? 1 : 0)
                 .animation(.spring(response: 0.62, dampingFraction: 0.84), value: cardIn)
+                // Sized before the shelf, so the headline keeps both its lines
+                // and the shelf takes whatever band is left.
+                .layoutPriority(1)
         }
         .onAppear {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
@@ -52,16 +55,18 @@ struct LoginView: View {
                 .foregroundStyle(BK.ink)
             Spacer()
             Text("sign in")
-                .font(.system(size: 9.5, design: .monospaced))
+                .font(.system(size: 9.5, weight: .medium, design: .monospaced))
                 .textCase(.uppercase)
                 .kerning(1.6)
-                .foregroundStyle(BK.muted)
+                .foregroundStyle(BK.ink)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 5)
-                .overlay(Rectangle().stroke(BK.muted.opacity(0.7), lineWidth: 1))
+                .background(BK.ochre)
+                .overlay(Rectangle().stroke(BK.ink, lineWidth: 2))
         }
-        .padding(.horizontal, 26)
-        .padding(.top, 20)
+        .padding(.horizontal, 24)
+        .padding(.top, 18)
+        .padding(.bottom, 14)
     }
 
     // MARK: - Glass card
@@ -96,7 +101,7 @@ struct LoginView: View {
                 .foregroundStyle(BK.ink)
             Text("Your shelves are right where you left them.")
                 .font(.system(size: 14, design: .serif).italic())
-                .foregroundStyle(BK.muted)
+                .foregroundStyle(BK.sepia)
                 .lineSpacing(2)
         }
         .padding(.bottom, 24)
@@ -132,8 +137,8 @@ struct LoginView: View {
                     }
                 } label: {
                     Text("Forgot?")
-                        .font(.system(size: 11.5))
-                        .foregroundStyle(BK.muted)
+                        .font(.system(size: 11.5, weight: .semibold))
+                        .foregroundStyle(BK.crimson)
                 }
                 .padding(.bottom, 6)
             }
@@ -182,30 +187,22 @@ struct LoginView: View {
         } label: {
             ZStack {
                 if viewModel.isLoading {
-                    ProgressView().tint(BK.paper)
+                    ProgressView().tint(BK.cream)
                 } else {
                     HStack(spacing: 8) {
                         Text("Sign in")
                         Image(systemName: "arrow.right")
-                            .font(.system(size: 13, weight: .semibold))
+                            .font(.system(size: 13, weight: .bold))
                     }
-                    .font(.system(size: 14.5, weight: .semibold))
+                    .font(.system(size: 15, weight: .bold))
                 }
             }
-            .foregroundStyle(BK.paper)
+            .foregroundStyle(BK.cream)
             .frame(maxWidth: .infinity)
             .frame(height: 52)
-            // Shadow lives on the fill rect, not the label — otherwise the hard
-            // white offset shadow casts a ghost copy of "Sign in" onto the side.
-            .background(
-                Rectangle()
-                    .fill(BK.ink)
-                    .shadow(color: BK.ink.opacity(0.25), radius: 0, x: 4, y: 4)
-            )
-            .overlay(Rectangle().stroke(BK.ink, lineWidth: 2))
             .opacity(enabled ? 1 : 0.45)
         }
-        .buttonStyle(ScaleButtonStyle())
+        .buttonStyle(BrutalButtonStyle(fill: BK.crimson, borderWidth: 2))
         .disabled(!enabled || viewModel.isLoading)
         .padding(.top, 18)
         .animation(.easeInOut(duration: 0.18), value: viewModel.isLoading)
@@ -235,9 +232,9 @@ struct LoginView: View {
                     .foregroundStyle(BK.ink)
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 14)
-            .background(BK.paper2)
-            .overlay(Rectangle().stroke(BK.ink, lineWidth: 1.5))
+            .padding(.vertical, 13)
+            .background(BK.card)
+            .overlay(Rectangle().stroke(BK.ink, lineWidth: 2))
         }
         .buttonStyle(ScaleButtonStyle())
         .disabled(viewModel.isLoading)
@@ -257,13 +254,12 @@ struct LoginView: View {
             Button("Create an account") {
                 viewModel.switchTo(.register)
             }
-            .foregroundStyle(BK.ink)
-            .fontWeight(.semibold)
-            .underline(color: BK.muted.opacity(0.7))
+            .foregroundStyle(BK.crimson)
+            .fontWeight(.bold)
         }
         .font(.system(size: 13))
         .frame(maxWidth: .infinity)
-        .padding(.top, 18)
+        .padding(.top, 16)
     }
 
     // MARK: - Helpers

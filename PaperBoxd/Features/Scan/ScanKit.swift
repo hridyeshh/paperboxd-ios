@@ -8,17 +8,20 @@ import Combine
 /// frames, mono readouts and hard offset shadows give way to whitespace, hairlines
 /// and serif. Monochrome by system — the book cover is the only color.
 enum SK {
-    // Paper backgrounds, softening across the arc (analyze → reveal → breakdown).
-    static let bg       = Color(hex: 0xF4F3F0)
-    static let bgSoft   = Color(hex: 0xF8F7F5)
+    // One kit for the whole Ask Jazy feature — vibe search AND Scan & Know.
+    // These are the app's own light tokens (asset catalog / BrutalKit), not a
+    // third palette: paper #F2EDE1, card #FDFBF6, ink #151513, accent #D23B26.
+    // The old #F4F3F0/#141414/green set and the Jazy-only JZ set are both gone.
+    static let bg       = Color(hex: 0xF2EDE1)
+    static let bgSoft   = Color(hex: 0xF8F6EF)
     static let bgSofter = Color(hex: 0xFCFBFA)
-    static let panel    = Color.white
-    static let ink      = Color(hex: 0x141414)
-    static let sub      = Color(hex: 0x6A665E)
-    static let faint    = Color(hex: 0xA6A299)
-    static let line     = Color(hex: 0x141414)
-    /// Cover-green accent — pulled straight from the book cover.
-    static let accent   = Color(hex: 0x5B8A4E)
+    static let panel    = Color(hex: 0xFDFBF6)
+    static let ink      = Color(hex: 0x151513)
+    static let sub      = Color(hex: 0x6A6456)
+    static let faint    = Color(hex: 0xB3AB99)
+    static let line     = Color(hex: 0x151513)
+    static let accent   = Color(hex: 0xD23B26)
+
     /// Game canvas paper.
     static let gameBg   = Color(hex: 0xFCFBF7)
 

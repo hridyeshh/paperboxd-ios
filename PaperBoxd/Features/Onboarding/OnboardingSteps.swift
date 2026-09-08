@@ -25,7 +25,7 @@ struct UsernameStepView: View {
                 if let err = viewModel.errorMessage {
                     Text(err)
                         .font(.system(size: 12))
-                        .foregroundStyle(Color(red: 0.82, green: 0.22, blue: 0.22))
+                        .foregroundStyle(BK.crimson)
                         .padding(.top, 10)
                 }
 
@@ -40,7 +40,7 @@ struct UsernameStepView: View {
 
                 Text("You can change this any time.")
                     .font(.system(size: 13))
-                    .foregroundStyle(Color(white: 0.65))
+                    .foregroundStyle(Color(hex: "A6A092"))
                     .frame(maxWidth: .infinity)
                     .multilineTextAlignment(.center)
                     .padding(.top, 12)
@@ -65,11 +65,11 @@ struct UsernameStepView: View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Choose your name\non the shelves.")
                 .font(.system(size: 28, weight: .bold, design: .serif))
-                .foregroundStyle(Color(white: 0.07))
+                .foregroundStyle(BK.ink)
                 .lineSpacing(2)
             Text("This is how readers will find and follow you.")
                 .font(.system(size: 13.5))
-                .foregroundStyle(Color(white: 0.53))
+                .foregroundStyle(BK.muted)
                 .lineSpacing(2)
         }
         .padding(.bottom, 24)
@@ -85,10 +85,10 @@ struct UsernameStepView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(viewModel.avatarImage == nil && viewModel.avatarURL == nil ? "Add a picture" : "Change picture")
                         .font(.system(size: 13.5, weight: .semibold))
-                        .foregroundStyle(Color(white: 0.07))
+                        .foregroundStyle(BK.ink)
                     Text("Optional · square, 400px+")
                         .font(.system(size: 12))
-                        .foregroundStyle(Color(white: 0.6))
+                        .foregroundStyle(BK.muted)
                 }
             }
         }
@@ -114,13 +114,13 @@ struct UsernameStepView: View {
                     gradientFill
                 }
             }
-            .frame(width: 64, height: 64)
+            .frame(width: 76, height: 76)
             .clipShape(Circle())
             .overlay(
                 Circle().strokeBorder(
                     style: StrokeStyle(lineWidth: 1.5, dash: viewModel.avatarImage == nil && viewModel.avatarURL == nil ? [4, 3] : [])
                 )
-                .foregroundStyle(Color(white: 0.78))
+                .foregroundStyle(BK.ink.opacity(0.28))
             )
             .overlay {
                 if viewModel.isUploadingAvatar {
@@ -128,25 +128,24 @@ struct UsernameStepView: View {
                         Circle().fill(.black.opacity(0.45))
                         ProgressView().tint(.white)
                     }
-                    .frame(width: 64, height: 64)
+                    .frame(width: 76, height: 76)
                 }
             }
 
             Circle()
-                .fill(Color(white: 0.07))
-                .frame(width: 22, height: 22)
+                .fill(BK.crimson)
+                .frame(width: 24, height: 24)
                 .overlay(
                     Image(systemName: "plus")
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(.system(size: 12, weight: .bold))
                         .foregroundStyle(.white)
                 )
-                .offset(x: 2, y: 2)
         }
     }
 
     private var gradientFill: some View {
         LinearGradient(
-            colors: [Color(red: 0.95, green: 0.82, blue: 0.62), Color(red: 0.48, green: 0.32, blue: 0.72)],
+            colors: [Color(hex: "F2D19E"), Color(hex: "7A52B8")],
             startPoint: .topLeading, endPoint: .bottomTrailing
         )
     }
@@ -155,12 +154,12 @@ struct UsernameStepView: View {
         HStack(spacing: 0) {
             Text("@")
                 .font(.system(size: 14, weight: .medium))
-                .foregroundStyle(Color(white: 0.4))
+                .foregroundStyle(BK.muted)
                 .padding(.leading, 14)
                 .padding(.trailing, 2)
             TextField("yourname", text: $viewModel.username)
                 .font(.system(size: 14))
-                .foregroundStyle(Color(white: 0.07))
+                .foregroundStyle(BK.ink)
                 .autocorrectionDisabled(true)
                 .textInputAutocapitalization(.never)
                 .keyboardType(.asciiCapable)
@@ -172,19 +171,17 @@ struct UsernameStepView: View {
                 .padding(.trailing, 8)
             availabilityIcon.padding(.trailing, 14)
         }
-        .overlay(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .stroke(usernameBorderColor, lineWidth: 1)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .frame(height: 48)
+        .background(BK.card)
+        .overlay(Rectangle().stroke(usernameBorderColor, lineWidth: 2))
     }
 
     private var usernameBorderColor: Color {
         switch viewModel.availability {
-        case .available:     return Color(red: 0.18, green: 0.68, blue: 0.3)
-        case .taken, .error: return Color(red: 0.82, green: 0.22, blue: 0.22)
-        case .checking:      return Color(white: 0.6)
-        case .idle:          return Color(white: 0.88)
+        case .available:     return BK.sage
+        case .taken, .error: return BK.crimson
+        case .checking:      return BK.ink.opacity(0.45)
+        case .idle:          return BK.ink.opacity(0.30)
         }
     }
 
@@ -195,15 +192,17 @@ struct UsernameStepView: View {
             Color.clear.frame(width: 18, height: 18)
         case .checking:
             ProgressView().progressViewStyle(.circular)
-                .tint(Color(white: 0.55)).scaleEffect(0.72)
+                .tint(BK.muted).scaleEffect(0.72)
                 .frame(width: 18, height: 18)
         case .available:
-            Image(systemName: "checkmark.circle.fill")
-                .foregroundStyle(Color(red: 0.18, green: 0.68, blue: 0.3))
+            Image(systemName: "checkmark")
+                .font(.system(size: 13, weight: .bold))
+                .foregroundStyle(BK.sage)
                 .frame(width: 18, height: 18)
         case .taken, .error:
-            Image(systemName: "xmark.circle.fill")
-                .foregroundStyle(Color(red: 0.82, green: 0.22, blue: 0.22))
+            Image(systemName: "xmark")
+                .font(.system(size: 13, weight: .bold))
+                .foregroundStyle(BK.crimson)
                 .frame(width: 18, height: 18)
         }
     }
@@ -213,94 +212,185 @@ struct UsernameStepView: View {
         switch viewModel.availability {
         case .idle, .checking:
             Text("Letters, numbers, _ or -")
-                .font(.system(size: 12)).foregroundStyle(Color(white: 0.65))
+                .font(.system(size: 12.5)).foregroundStyle(BK.muted)
         case .available:
-            Text("@\(viewModel.username) is available ✓")
-                .font(.system(size: 12)).foregroundStyle(Color(red: 0.18, green: 0.68, blue: 0.3))
+            Text("@\(viewModel.username) is available")
+                .font(.system(size: 12.5)).foregroundStyle(BK.sage)
         case .taken(let reason):
             Text(reason ?? "@\(viewModel.username) is taken")
-                .font(.system(size: 12)).foregroundStyle(Color(red: 0.82, green: 0.22, blue: 0.22))
+                .font(.system(size: 12.5)).foregroundStyle(BK.crimson)
         case .error(let msg):
             Text(msg)
-                .font(.system(size: 12)).foregroundStyle(Color(red: 0.82, green: 0.22, blue: 0.22))
+                .font(.system(size: 12.5)).foregroundStyle(BK.crimson)
         }
     }
 
     private var displayNameField: some View {
         TextField("Your name", text: $viewModel.displayName)
             .font(.system(size: 14))
-            .foregroundStyle(Color(white: 0.07))
+            .foregroundStyle(BK.ink)
             .autocorrectionDisabled(true)
             .textInputAutocapitalization(.words)
             .focused($focused, equals: .displayName)
             .submitLabel(.done)
             .padding(.horizontal, 14)
             .frame(height: 48)
-            .overlay(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .stroke(Color(white: 0.88), lineWidth: 1)
-            )
-            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .background(BK.card)
+            .overlay(Rectangle().stroke(BK.ink.opacity(0.30), lineWidth: 2))
     }
 }
 
-// MARK: - Step 2: Genres
+// MARK: - Step 2: Genres — pull them off the shelf
+
+/// Cloth and foil for each genre, plus how tall its board stands. Same shelf
+/// language as the sign-in hero, so the metaphor carries from the first screen
+/// into the first task. Keyed by `Genre.id`.
+private let genreBoards: [String: (cloth: String, foil: String, height: CGFloat)] = [
+    "fiction":         ("6A2350", "EDD9A8", 112),
+    "mystery":         ("23304F", "D8B45C", 122),
+    "thriller":        ("C0271C", "FFF0CC", 106),
+    "romance":         ("B5456B", "FFF0CC", 118),
+    "science-fiction": ("14595E", "E7C77A", 110),
+    "fantasy":         ("33306B", "D8B45C", 124),
+    "horror":          ("23211E", "D8B45C", 104),
+    "historical":      ("C9962B", "3A2C1C", 120),
+    "biography":       ("7A2E1B", "E7C77A", 114),
+    "self-help":       ("4F7A1E", "F2EDE1", 108),
+    "business":        ("2A3A5A", "C9962B", 116),
+    "non-fiction":     ("1B4B3C", "EDD9A8", 122),
+    "young-adult":     ("B5642A", "2A1C0E", 110),
+    "classics":        ("8C2B22", "E7C77A", 126),
+    "poetry":          ("2F7D5A", "FFF0CC", 106),
+]
 
 struct GenresStepView: View {
     @ObservedObject var viewModel: OnboardingViewModel
 
     private var remaining: Int { max(0, 3 - viewModel.selectedGenres.count) }
 
+    /// Fifteen boards across three shelves.
+    private var shelves: [[Genre]] {
+        stride(from: 0, to: Genre.all.count, by: 5).map {
+            Array(Genre.all[$0 ..< min($0 + 5, Genre.all.count)])
+        }
+    }
+
     var body: some View {
         VStack(spacing: 0) {
+            VStack(alignment: .leading, spacing: 7) {
+                Text("Pull the ones\nyou'd reread.")
+                    .font(.system(size: 28, weight: .bold, design: .serif))
+                    .foregroundStyle(BK.ink)
+                    .lineSpacing(2)
+                Text("Tap a spine to pull it off the shelf. Three or more and we can start.")
+                    .font(.system(size: 13.5))
+                    .foregroundStyle(BK.muted)
+                    .lineSpacing(2)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 26)
+            .padding(.top, 22)
+            .padding(.bottom, 14)
+
             ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("What lives on\nyour shelves?")
-                            .font(.system(size: 28, weight: .bold, design: .serif))
-                            .foregroundStyle(Color(white: 0.07))
-                            .lineSpacing(2)
-                        Text("Pick at least three. Your recs are built on these — you can tune later.")
-                            .font(.system(size: 13.5))
-                            .foregroundStyle(Color(white: 0.53))
-                            .lineSpacing(2)
+                VStack(spacing: 0) {
+                    ForEach(shelves.indices, id: \.self) { i in
+                        shelf(shelves[i])
                     }
-                    .padding(.bottom, 22)
-
-                    FlowLayout(spacing: 8, lineSpacing: 8) {
-                        ForEach(Genre.all) { genre in
-                            OnboardingChip(
-                                label: genre.label,
-                                isOn: viewModel.selectedGenres.contains(genre.id)
-                            ) {
-                                viewModel.toggleGenre(genre.id)
-                            }
-                        }
-                    }
-
-                    Text(remaining == 0
-                         ? "\(viewModel.selectedGenres.count) selected · Ready"
-                         : "\(viewModel.selectedGenres.count) selected · Pick \(remaining) more")
-                        .font(.system(size: 11, weight: .medium, design: .monospaced))
-                        .textCase(.uppercase)
-                        .kerning(0.8)
-                        .foregroundStyle(Color(white: 0.55))
-                        .padding(.top, 18)
                 }
-                .padding(.horizontal, 26)
-                .padding(.top, 28)
-                .padding(.bottom, 24)
+                .padding(.horizontal, 20)
             }
             .scrollBounceBehavior(.basedOnSize)
 
-            OnboardingPrimaryButton(
-                title: "Continue",
-                isEnabled: viewModel.selectedGenres.count >= 3
-            ) {
-                viewModel.continueFromGenres()
+            VStack(spacing: 12) {
+                tallyRow
+                OnboardingPrimaryButton(
+                    title: remaining == 0 ? "Continue" : "Pull \(remaining) more",
+                    isEnabled: remaining == 0
+                ) {
+                    viewModel.continueFromGenres()
+                }
             }
-            .padding(.horizontal, 26)
-            .padding(.bottom, 16)
+            .padding(.horizontal, 20)
+            .padding(.top, 10)
+            .padding(.bottom, 20)
+        }
+    }
+
+    private func shelf(_ books: [Genre]) -> some View {
+        VStack(spacing: 0) {
+            HStack(alignment: .bottom, spacing: 5) {
+                ForEach(books) { genre in
+                    board(genre)
+                }
+            }
+            .frame(height: 128, alignment: .bottom)
+            Rectangle().fill(BK.plank).frame(height: 5)
+            LinearGradient(colors: [BK.plank.opacity(0.26), BK.plank.opacity(0)],
+                           startPoint: .top, endPoint: .bottom)
+                .frame(height: 14)
+        }
+        .padding(.top, 14)
+    }
+
+    private func board(_ genre: Genre) -> some View {
+        let spec = genreBoards[genre.id] ?? ("23211E", "D8B45C", 114)
+        let pulled = viewModel.selectedGenres.contains(genre.id)
+        return Button {
+            viewModel.toggleGenre(genre.id)
+        } label: {
+            VStack(spacing: 0) {
+                foilRule(Color(hex: spec.foil))
+                Spacer(minLength: 0)
+                SpineTitle(
+                    text: genre.label,
+                    size: 12,
+                    weight: .bold,
+                    kerning: 0.3,
+                    color: Color(hex: spec.foil),
+                    run: spec.height - 36
+                )
+                Spacer(minLength: 0)
+                foilRule(Color(hex: spec.foil))
+            }
+            .padding(.vertical, 8)
+            .frame(width: 61, height: spec.height)
+            .background(Color(hex: spec.cloth))
+            // Untouched boards sit back under a shadow veil; a pulled one is
+            // lifted out of the row and into the light.
+            .overlay(pulled ? Color.clear : Color(hex: "1A140C").opacity(0.30))
+            .overlay(Rectangle().strokeBorder(BK.ink, lineWidth: 2))
+            .shadow(color: BK.plank.opacity(pulled ? 0.38 : 0), radius: 7, y: 8)
+            .offset(y: pulled ? -14 : 0)
+        }
+        .buttonStyle(.plain)
+        .animation(.spring(response: 0.32, dampingFraction: 0.7), value: pulled)
+        .accessibilityLabel(genre.label)
+        .accessibilityAddTraits(pulled ? [.isButton, .isSelected] : .isButton)
+    }
+
+    private func foilRule(_ color: Color) -> some View {
+        Rectangle().fill(color).frame(width: 61 * 0.66, height: 2)
+    }
+
+    private var tallyRow: some View {
+        HStack(spacing: 8) {
+            Text("Pulled")
+                .font(.system(size: 10, design: .monospaced))
+                .textCase(.uppercase)
+                .kerning(1.6)
+                .foregroundStyle(BK.muted)
+            HStack(spacing: 4) {
+                ForEach(0 ..< 3, id: \.self) { i in
+                    Rectangle()
+                        .fill(i < viewModel.selectedGenres.count ? BK.crimson : BK.card)
+                        .frame(height: 8)
+                        .overlay(Rectangle().stroke(BK.ink, lineWidth: 1.5))
+                }
+            }
+            Text("\(viewModel.selectedGenres.count)/\(Genre.all.count)")
+                .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                .foregroundStyle(BK.ink)
         }
     }
 }
@@ -310,6 +400,12 @@ struct GenresStepView: View {
 struct TempoStepView: View {
     @ObservedObject var viewModel: OnboardingViewModel
 
+    /// Each tempo carries a step of the reading-heatmap ramp, so the choice
+    /// previews the colour the user will live with on their profile.
+    private static let ramp: [String: String] = [
+        "casual": "E7A87D", "regular": "D97A4A", "voracious": "C0271C",
+    ]
+
     var body: some View {
         VStack(spacing: 0) {
             ScrollView {
@@ -317,14 +413,14 @@ struct TempoStepView: View {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Set a tempo,\nnot a target.")
                             .font(.system(size: 28, weight: .bold, design: .serif))
-                            .foregroundStyle(Color(white: 0.07))
+                            .foregroundStyle(BK.ink)
                             .lineSpacing(2)
                         Text("Helps us pace recommendations. No streaks, no pressure.")
                             .font(.system(size: 13.5))
-                            .foregroundStyle(Color(white: 0.53))
+                            .foregroundStyle(BK.muted)
                             .lineSpacing(2)
                     }
-                    .padding(.bottom, 22)
+                    .padding(.bottom, 24)
 
                     VStack(spacing: 10) {
                         ForEach(ReadingTempo.all) { option in
@@ -342,86 +438,38 @@ struct TempoStepView: View {
                 viewModel.continueFromTempo()
             }
             .padding(.horizontal, 26)
-            .padding(.bottom, 16)
+            .padding(.bottom, 20)
         }
     }
 
     private func tempoRow(_ option: ReadingTempo) -> some View {
         let active = viewModel.tempo == option.id
+        let ramp = Color(hex: Self.ramp[option.id] ?? "D97A4A")
         return Button {
             viewModel.tempo = option.id
         } label: {
-            HStack {
+            HStack(spacing: 13) {
+                Rectangle()
+                    .fill(active ? Color.white.opacity(0.75) : ramp)
+                    .frame(width: 6, height: 34)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(option.label)
                         .font(.system(size: 14.5, weight: .semibold))
-                        .foregroundStyle(active ? .white : Color(white: 0.12))
+                        .foregroundStyle(active ? .white : BK.ink)
                     Text(option.sub)
                         .font(.system(size: 12.5))
-                        .foregroundStyle(active ? .white.opacity(0.7) : Color(white: 0.5))
+                        .foregroundStyle(active ? .white.opacity(0.78) : BK.muted)
                 }
-                Spacer()
-                if active {
-                    Image(systemName: "checkmark")
-                        .font(.system(size: 13, weight: .bold))
-                        .foregroundStyle(.white)
-                }
+                Spacer(minLength: 0)
+                Image(systemName: "checkmark")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(active ? .white : .clear)
             }
-            .padding(.horizontal, 18)
+            .padding(.horizontal, 16)
             .padding(.vertical, 15)
-            .background(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(active ? Color(white: 0.07) : Color(white: 0.97))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .stroke(Color(white: active ? 0.07 : 0.9), lineWidth: 1)
-            )
+            .background(active ? ramp : BK.card)
+            .overlay(Rectangle().stroke(active ? ramp : BK.ink.opacity(0.14), lineWidth: 2))
         }
         .buttonStyle(ScaleButtonStyle())
-    }
-}
-
-// MARK: - Flow layout (wrapping chips)
-
-struct FlowLayout: Layout {
-    var spacing: CGFloat = 8
-    var lineSpacing: CGFloat = 8
-
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        let maxWidth = proposal.width ?? .infinity
-        var x: CGFloat = 0
-        var y: CGFloat = 0
-        var lineHeight: CGFloat = 0
-
-        for subview in subviews {
-            let size = subview.sizeThatFits(.unspecified)
-            if x + size.width > maxWidth, x > 0 {
-                x = 0
-                y += lineHeight + lineSpacing
-                lineHeight = 0
-            }
-            x += size.width + spacing
-            lineHeight = max(lineHeight, size.height)
-        }
-        return CGSize(width: maxWidth == .infinity ? x : maxWidth, height: y + lineHeight)
-    }
-
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        var x = bounds.minX
-        var y = bounds.minY
-        var lineHeight: CGFloat = 0
-
-        for subview in subviews {
-            let size = subview.sizeThatFits(.unspecified)
-            if x + size.width > bounds.maxX, x > bounds.minX {
-                x = bounds.minX
-                y += lineHeight + lineSpacing
-                lineHeight = 0
-            }
-            subview.place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(size))
-            x += size.width + spacing
-            lineHeight = max(lineHeight, size.height)
-        }
     }
 }

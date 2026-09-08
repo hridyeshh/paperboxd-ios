@@ -61,6 +61,7 @@ struct NotificationsView: View {
             .navigationDestination(for: String.self) { bookId in
                 BookDetailView(bookId: bookId, user: user)
             }
+            .navigationDestination(for: AuthorNav.self) { AuthorDetailView(nav: $0) }
         }
         .environment(\.colorScheme, .light)
         .preferredColorScheme(.light)

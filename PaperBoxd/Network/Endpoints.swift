@@ -53,6 +53,22 @@ enum Endpoints {
         "/api/v1/users/\(username)/bookshelf/\(bookId)"
     }
 
+    // Authors — the same two endpoints the web author page uses.
+    static func authorInfo(name: String) -> String {
+        var comps = URLComponents(string: "/api/v1/authors/info")!
+        comps.queryItems = [URLQueryItem(name: "name", value: name)]
+        return comps.string ?? "/api/v1/authors/info"
+    }
+
+    static func booksByAuthor(name: String, limit: Int = 30) -> String {
+        var comps = URLComponents(string: "/api/v1/books/by-author")!
+        comps.queryItems = [
+            URLQueryItem(name: "author", value: name),
+            URLQueryItem(name: "page_size", value: String(limit)),
+        ]
+        return comps.string ?? "/api/v1/books/by-author"
+    }
+
     // Books
     static func book(_ id: String) -> String { "/api/v1/books/\(id)" }
     static func likeBook(_ id: String) -> String { "/api/v1/books/\(id)/like" }
@@ -83,7 +99,6 @@ enum Endpoints {
     static func userLikes(username: String) -> String { "/api/v1/users/\(username)/likes" }
     static func userTBR(username: String) -> String { "/api/v1/users/\(username)/tbr" }
     static func userDNF(username: String) -> String { "/api/v1/users/\(username)/dnf" }
-    static func userAuthors(username: String) -> String { "/api/v1/users/\(username)/authors" }
     static func userStreak(username: String) -> String { "/api/v1/users/\(username)/streak" }
     static func userLists(username: String) -> String { "/api/v1/users/\(username)/lists" }
     static func listDetail(username: String, listId: String) -> String { "/api/v1/users/\(username)/lists/\(listId)" }

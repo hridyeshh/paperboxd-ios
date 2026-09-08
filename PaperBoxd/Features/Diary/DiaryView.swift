@@ -28,6 +28,7 @@ struct DiaryView: View {
             .navigationDestination(for: String.self) { bookId in
                 BookDetailView(bookId: bookId, user: vm.user)
             }
+            .navigationDestination(for: AuthorNav.self) { AuthorDetailView(nav: $0) }
             .sheet(item: $diarySheet) { nav in
                 DiaryEntryDetailView(entry: nav.entry, viewer: vm.user)
             }

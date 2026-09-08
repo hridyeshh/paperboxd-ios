@@ -1,32 +1,22 @@
 import Combine
 import SwiftUI
 
-/// Ask Jazy — the merged vibe-search + Scan & Know entry.
+/// Ask Jazy — the merged vibe-search + Scan & Know entry, as a shelf.
 ///
-/// A quiet page: vibe phrases drift up through the background behind hand-drawn
-/// doodles; one hairline bar with the camera parked at its side. Typing slides the
-/// camera away and a send arrow takes its place. Submitting raises the results deck
-/// (one match card at a time). Tapping the camera raises the untouched brutalist
-/// Scan & Know flow.
+/// The feature runs the same four beats the Scan flow already runs, so the two
+/// halves read as one thing rather than two design systems behind one bar:
 ///
-/// Design source: `Paperboxd design elements/ask-jazy/v3.jsx`.
+///   01 raw      Shelf label  — write a feeling on a label, hard ink frames
+///   02 machine  Pulling      — the shelf runs past, log, marquee
+///   03 hinge    The pull     — one spine turns face-out, borders thin
+///   04 calm     The match    — whitespace, hairlines, serif  (JazyResultsDeck)
+///
+/// One kit: `SK`, which is the app's own light palette. There is no `JZ`.
 enum JZ {
-    static let bg     = Color(hex: 0xFBFAF7)
-    static let card   = Color.white
-    static let ink    = Color(hex: 0x37352F)
-    static let sub    = Color(hex: 0x9B9891)
-    static let faint  = Color(hex: 0xC4C1B8)
-    static let accent = Color(hex: 0xB85C38)
-    static let line   = Color(hex: 0x37352F).opacity(0.14)
-
-    static let prompts = [
-        "a cosy autumn mystery…",
-        "something that will wreck me…",
-        "found family in space…",
-        "smart, but under 200 pages…",
-        "like a warm hug…",
-    ]
-    static let chips = ["cosy", "will wreck me", "found family", "slow burn", "gothic"]
+    /// The five phrases behind the tabs clipped to the shelf label.
+    /// ponytail: four fit the card edge at 390pt; the fifth lives here for the
+    /// day someone makes the row scroll.
+    static let tabs = ["cosy", "wreck me", "found family", "gothic"]
 }
 
 struct JazyView: View {
@@ -37,227 +27,246 @@ struct JazyView: View {
 
     @State private var query = ""
     @FocusState private var focused: Bool
-    @State private var promptIndex = 0
     @State private var showScan = false
-    /// Pip startles for a beat before the scanner rises (design: `camTap`).
-    @State private var camTapped = false
     @State private var matches: [VibeMatch] = []
     @State private var isSearching = false
     @State private var errorMessage: String?
     @State private var showResults = false
-
-    private let promptTimer = Timer.publish(every: 3, on: .main, in: .common).autoconnect()
+    /// Bookshelf + TBR size, loaded once per open. Nil = unknown, and unknown
+    /// always lets the scan through.
+    @State private var shelfSize: Int?
+    @State private var showTasteGate = false
 
     private var hasText: Bool { !query.trimmingCharacters(in: .whitespaces).isEmpty }
-    private var dimmed: Bool { focused || showResults || isSearching }
 
-    /// The searching page holds for at least this long even when the backend
-    /// answers sooner — a 300ms flash of book covers reads as a glitch.
-    private static let minSearchDisplay: TimeInterval = 2.0
+    /// Not thinking-theatre: the shelf has to be on screen long enough to read
+    /// as a shelf. Under this it flashes and looks like a glitch.
+    private static let minPullDisplay: TimeInterval = 0.8
 
     var body: some View {
         ZStack {
-            JZ.bg.ignoresSafeArea()
-            JazyDriftField().opacity(dimmed ? 0.35 : 1)
-            JazyDoodleField().opacity(dimmed ? 0.3 : 1)
-
-            entryLayer
-                .opacity(showResults || isSearching ? 0 : 1)
-                .offset(y: showResults ? -36 : 0)
-
-            if isSearching {
-                JazySearchingView(query: query)
-                    .transition(.opacity)
-            }
+            SK.bg.ignoresSafeArea()
 
             if showResults {
                 JazyResultsDeck(query: query, matches: matches, user: user) {
-                    withAnimation(.easeInOut(duration: 0.45)) { showResults = false }
+                    withAnimation(.easeInOut(duration: 0.4)) { showResults = false }
                 }
-                .transition(.move(edge: .bottom))
+                .transition(.opacity)
+            } else if isSearching {
+                JazyPullingView(query: query)
+                    .transition(.opacity)
+            } else {
+                entryLayer
+                    .transition(.opacity)
             }
         }
-        .animation(.easeInOut(duration: 0.45), value: dimmed)
+        .overlay {
+            if showTasteGate {
+                JazyTasteGateSheet(shelfSize: shelfSize ?? 0) {
+                    withAnimation(.easeInOut(duration: 0.2)) { showTasteGate = false }
+                }
+                .transition(.opacity)
+            }
+        }
         .preferredColorScheme(.light)
         .fullScreenCover(isPresented: $showScan) { ScanFlowView() }
-        .onReceive(promptTimer) { _ in
-            guard !hasText else { return }
-            withAnimation(.easeInOut(duration: 0.4)) {
-                promptIndex = (promptIndex + 1) % JZ.prompts.count
-            }
+        // Loaded up front so tapping the camera never waits on the network.
+        .task { shelfSize = await JazyTaste.shelfSize(username: user.username) }
+    }
+
+    /// Scan & Know scores a book against what you already read, so it needs a
+    /// shelf to score against. Under `JazyTaste.minimumShelf` the camera asks
+    /// for a few books first. Unknown shelf size (offline, request failed)
+    /// always lets the scan through — a hiccup must not remove a feature.
+    private func openScan() {
+        if let shelfSize, shelfSize < JazyTaste.minimumShelf {
+            withAnimation(.easeInOut(duration: 0.2)) { showTasteGate = true }
+        } else {
+            showScan = true
         }
     }
 
-    // MARK: - Entry layer
+    // MARK: - 01 · Shelf label
 
     private var entryLayer: some View {
-        VStack(spacing: 0) {
-            HStack {
-                Spacer()
-                Button { dismiss() } label: {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(JZ.ink)
-                        .frame(width: 34, height: 34)
-                        .background(JZ.card)
-                        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(JZ.line))
-                        .clipShape(RoundedRectangle(cornerRadius: 10))
+        ZStack(alignment: .bottom) {
+            // The wall at rest: context, not the reading surface.
+            JazyShelfWall(running: false)
+                .frame(height: 470)
+                .opacity(0.30)
+                .saturation(0.55)
+                .allowsHitTesting(false)
+
+            VStack(spacing: 0) {
+                header
+                    .padding(.horizontal, 20)
+                    .padding(.top, 12)
+
+                Rectangle().fill(SK.ink).frame(height: 2)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 14)
+
+                tabRow
+                    .padding(.horizontal, 20)
+                    .padding(.top, focused ? 18 : 34)
+
+                shelfLabel
+                    .padding(.horizontal, 20)
+
+                actions
+                    .padding(.horizontal, 20)
+                    .padding(.top, 16)
+
+                if let errorMessage {
+                    Text(errorMessage)
+                        .font(PB.mono(10.5))
+                        .tracking(1.2)
+                        .textCase(.uppercase)
+                        .foregroundStyle(SK.accent)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 24)
+                        .padding(.top, 14)
+                }
+
+                Spacer(minLength: 0)
+
+                HStack {
+                    MonoLabel(text: "\(scansRemaining) free scans left", size: 9.5, tracking: 1.8, color: SK.sub)
+                    Spacer()
+                    MonoLabel(text: "01 / label", size: 9.5, tracking: 1.8, color: SK.faint)
+                }
+                .padding(.horizontal, 20)
+                .padding(.bottom, 8)
+            }
+        }
+        .animation(.easeInOut(duration: 0.28), value: focused)
+    }
+
+    private var header: some View {
+        HStack {
+            MonoLabel(text: "Ask Jazy", size: 10, tracking: 2.4, color: SK.ink, weight: .semibold)
+            Spacer()
+            Button { dismiss() } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(SK.ink)
+                    .frame(width: 44, height: 44)
+            }
+            .buttonStyle(BrutalButtonStyle(fill: SK.panel, shadowColor: SK.ink, border: SK.ink,
+                                           borderWidth: 2, offset: 3))
+            .accessibilityLabel("Close Ask Jazy")
+        }
+    }
+
+    /// The old suggestion chips, re-read as index-card dividers clipped to the
+    /// top edge of the label. Same job, none of the chat-assistant reading.
+    private var tabRow: some View {
+        HStack(spacing: 6) {
+            ForEach(JZ.tabs, id: \.self) { tab in
+                Button {
+                    let trimmed = query.trimmingCharacters(in: .whitespaces)
+                    query = trimmed.isEmpty ? tab : trimmed + " " + tab
+                    focused = true
+                } label: {
+                    MonoLabel(text: tab, size: 9.5, tracking: 1.2, color: SK.ink)
+                        .padding(.horizontal, 10)
+                        // The bottom 14pt tuck behind the label card, so the tap
+                        // target stays 44 while only the tab reads as visible.
+                        .frame(height: 44, alignment: .top)
+                        .padding(.top, 8)
+                        .background(Color(hex: 0xE9E2D1))
+                        .overlay(Rectangle().strokeBorder(SK.ink, lineWidth: 2))
                 }
                 .buttonStyle(.plain)
             }
-            .padding(.horizontal, 22)
-
-            // Both spacers have to be greedy for the block to sit centred. A
-            // bare Spacer below a `maxHeight: .infinity` one loses the split,
-            // and the whole page slides to the bottom of the screen.
             Spacer(minLength: 0)
-                .frame(maxHeight: focused ? 60 : .infinity)
-
-            VStack(spacing: 6) {
-                PipFace(thinking: focused && hasText, excited: camTapped)
-                    .scaleEffect(1.4)
-                    .frame(width: 62, height: 62)
-
-                Text(focused && hasText ? "Jazy is reading…" : "What are you in the mood for?")
-                    .font(PB.serif(24, .semibold))
-                    .foregroundStyle(JZ.ink)
-                    .multilineTextAlignment(.center)
-                    .padding(.top, 10)
-
-                if !focused {
-                    Text("Describe a feeling — or scan a cover in the store.")
-                        .font(.system(size: 13))
-                        .foregroundStyle(JZ.sub)
-                        .multilineTextAlignment(.center)
-                }
-            }
-            .padding(.horizontal, 24)
-
-            searchBar
-                .padding(.horizontal, 24)
-                .padding(.top, 24)
-
-            chipRow
-                .padding(.horizontal, 24)
-                .padding(.top, 16)
-
-            if let errorMessage {
-                Text(errorMessage)
-                    .font(.system(size: 12.5))
-                    .foregroundStyle(JZ.accent)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, 24)
-                    .padding(.top, 12)
-            }
-
-            Spacer(minLength: 0)
-                .frame(maxHeight: .infinity)
-
-            Text("\(scansRemaining) free scans left")
-                .font(.system(size: 11.5))
-                .foregroundStyle(JZ.faint)
-                .padding(.bottom, 26)
         }
-        .padding(.top, 18)
+        .padding(.leading, 4)
+        .padding(.bottom, -14)
     }
 
-    private var searchBar: some View {
-        HStack(spacing: 10) {
-            HStack(spacing: 4) {
+    private var shelfLabel: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .top) {
+                MonoLabel(text: "Shelf label", size: 9.5, tracking: 2.2, color: SK.faint)
+                Spacer()
+                PipFace(thinking: hasText)
+                    .frame(width: 30, height: 32)
+                    .offset(x: 2, y: -4)
+            }
+
+            Text("What shelf are you\nlooking for?")
+                .font(PB.serif(25, .semibold))
+                .foregroundStyle(SK.ink)
+                .lineSpacing(2)
+                .padding(.top, 8)
+
+            HStack(spacing: 2) {
                 ZStack(alignment: .leading) {
                     if !hasText {
-                        Text(JZ.prompts[promptIndex])
-                            .font(.system(size: 15))
-                            .foregroundStyle(JZ.faint)
+                        Text("a cosy autumn mystery…")
+                            .font(PB.serifItalic(16))
+                            .foregroundStyle(SK.faint)
                             .lineLimit(1)
-                            .id(promptIndex)
-                            .transition(.opacity)
                     }
                     TextField("", text: $query)
                         .focused($focused)
-                        .font(.system(size: 15))
-                        .foregroundStyle(JZ.ink)
-                        .tint(JZ.accent)
+                        .font(PB.serifItalic(16))
+                        .foregroundStyle(SK.ink)
+                        .tint(SK.accent)
                         .autocorrectionDisabled()
                         .submitLabel(.search)
                         .onSubmit(submit)
                 }
                 .frame(height: 24)
+            }
+            .padding(.top, 18)
+            .padding(.bottom, 9)
+            .overlay(alignment: .bottom) { Rectangle().fill(SK.ink).frame(height: 2) }
 
-                Button(action: submit) {
-                    Image(systemName: isSearching ? "ellipsis" : "arrow.right")
+            MonoLabel(text: "Write a feeling, not a title", size: 9, tracking: 1.6, color: SK.faint)
+                .padding(.top, 9)
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(SK.panel)
+        .overlay(Rectangle().strokeBorder(SK.ink, lineWidth: 2))
+        .background(Rectangle().fill(SK.ink).offset(x: 4, y: 4))
+        .padding(.trailing, 4)
+        .padding(.bottom, 4)
+    }
+
+    /// Vibe search and Scan are siblings — same frame, same height, same weight.
+    /// The camera no longer hides behind a soft glyph at the side of a pill.
+    private var actions: some View {
+        HStack(spacing: 10) {
+            Button(action: submit) {
+                HStack(spacing: 8) {
+                    MonoLabel(text: "Pull the shelf", size: 12.5, tracking: 1.4,
+                              color: SK.panel, weight: .semibold)
+                    Image(systemName: "arrow.right")
                         .font(.system(size: 15, weight: .bold))
-                        .foregroundStyle(.white)
-                        .frame(width: 32, height: 32)
-                        .background(JZ.accent)
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                        .foregroundStyle(SK.panel)
                 }
-                .buttonStyle(.plain)
-                .disabled(isSearching)
-                .frame(width: hasText ? 32 : 0)
-                .opacity(hasText ? 1 : 0)
-                .clipped()
+                .frame(maxWidth: .infinity, minHeight: 56)
             }
-            .padding(.leading, 16)
-            .padding(.trailing, 6)
-            .padding(.vertical, 11)
-            .background(JZ.card)
-            .overlay(
-                RoundedRectangle(cornerRadius: 12)
-                    .strokeBorder(focused ? Color(hex: 0x37352F).opacity(0.28) : JZ.line)
-            )
-            .clipShape(RoundedRectangle(cornerRadius: 12))
-            .shadow(color: .black.opacity(focused ? 0.08 : 0.04), radius: focused ? 9 : 1, y: focused ? 4 : 1)
+            .buttonStyle(BrutalButtonStyle(fill: SK.ink, shadowColor: SK.ink.opacity(0.78),
+                                           border: SK.ink, borderWidth: 2, offset: 4))
+            .disabled(!hasText || isSearching)
+            .opacity(hasText ? 1 : 0.45)
 
-            // The camera — slides away the moment typing starts.
-            Button {
-                camTapped = true
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.28) {
-                    camTapped = false
-                    showScan = true
-                }
-            } label: {
-                Image(systemName: "camera")
-                    .font(.system(size: 19, weight: .regular))
-                    .foregroundStyle(JZ.ink)
-                    .frame(width: 48, height: 48)
-                    .background(JZ.card)
-                    .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(JZ.line))
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
+            Button(action: openScan) {
+                Image(systemName: "viewfinder")
+                    .font(.system(size: 22, weight: .regular))
+                    .foregroundStyle(SK.ink)
+                    .frame(width: 56, height: 56)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(BrutalButtonStyle(fill: SK.panel, shadowColor: SK.ink,
+                                           border: SK.ink, borderWidth: 2, offset: 4))
             .accessibilityLabel("Scan a cover")
-            .frame(width: hasText ? 0 : 48)
-            .opacity(hasText ? 0 : 1)
-            .clipped()
         }
-        .animation(.spring(response: 0.35, dampingFraction: 0.85), value: hasText)
-    }
-
-    private var chipRow: some View {
-        // ponytail: fixed two-row layout — the chip set is a constant five.
-        VStack(spacing: 8) {
-            HStack(spacing: 8) { ForEach(JZ.chips.prefix(3), id: \.self, content: chip) }
-            HStack(spacing: 8) { ForEach(JZ.chips.dropFirst(3), id: \.self, content: chip) }
-        }
-        .opacity(showResults ? 0 : 1)
-    }
-
-    private func chip(_ text: String) -> some View {
-        Button {
-            query = query.isEmpty ? text : query.trimmingCharacters(in: .whitespaces) + " " + text
-            focused = true
-        } label: {
-            Text(text)
-                .font(.system(size: 12.5))
-                .foregroundStyle(JZ.sub)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .background(JZ.card)
-                .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(JZ.line))
-                .clipShape(RoundedRectangle(cornerRadius: 8))
-        }
-        .buttonStyle(.plain)
+        .padding(.trailing, 4)
+        .padding(.bottom, 4)
     }
 
     // MARK: - Search
@@ -272,282 +281,291 @@ struct JazyView: View {
         Task {
             do {
                 let items = try await JazyService.vibeSearch(q)
-                await holdSearchingPage(since: startedAt)
+                await holdPullingPage(since: startedAt)
                 await MainActor.run {
-                    withAnimation(.easeInOut(duration: 0.3)) { isSearching = false }
                     guard !items.isEmpty else {
-                        errorMessage = "Jazy couldn't find anything for that. Try another vibe."
+                        withAnimation(.easeInOut(duration: 0.3)) { isSearching = false }
+                        errorMessage = "Nothing on this shelf — try dropping a word"
                         return
                     }
                     matches = items
-                    withAnimation(.easeInOut(duration: 0.45)) { showResults = true }
+                    withAnimation(.easeInOut(duration: 0.45)) {
+                        isSearching = false
+                        showResults = true
+                    }
                 }
             } catch {
-                await holdSearchingPage(since: startedAt)
+                await holdPullingPage(since: startedAt)
                 await MainActor.run {
                     withAnimation(.easeInOut(duration: 0.3)) { isSearching = false }
-                    errorMessage = (error as? APIError)?.errorDescription
-                        ?? "Jazy is unavailable right now. Try again."
+                    errorMessage = (error as? APIError)?.errorDescription ?? "Shelf jammed — try again"
                 }
             }
         }
     }
 
-    private func holdSearchingPage(since startedAt: Date) async {
-        let remaining = Self.minSearchDisplay - Date().timeIntervalSince(startedAt)
+    private func holdPullingPage(since startedAt: Date) async {
+        let remaining = Self.minPullDisplay - Date().timeIntervalSince(startedAt)
         guard remaining > 0 else { return }
         try? await Task.sleep(nanoseconds: UInt64(remaining * 1_000_000_000))
     }
 }
 
-// MARK: - Searching
+// MARK: - 02 · Pulling the shelf
 
-/// The wait while the backend embeds the query and Claude writes the reasons —
-/// a couple of seconds, so it gets a page rather than a spinner. Covers riffle
-/// off the top of a stack while the caption walks through what Jazy is doing.
-private struct JazySearchingView: View {
+/// The wait, as a machine at work rather than a thinking indicator: the shelf
+/// runs past under a fixed reading rule, and the log says what is actually
+/// happening. No skeleton covers, no "weighing the vibe…".
+private struct JazyPullingView: View {
     let query: String
-
-    /// One cover's full trip from the back of the stack to off-screen.
-    private static let tripDuration = 3.2
-    private static let coverCount = 5
-
-    private static let captions = [
-        "Reading the shelves…",
-        "Weighing the vibe…",
-        "Writing your reasons…",
-    ]
 
     var body: some View {
         VStack(spacing: 0) {
+            VStack(spacing: 0) {
+                HStack {
+                    MonoLabel(text: "Pulling the shelf", size: 10, tracking: 2.4,
+                              color: SK.ink, weight: .semibold)
+                    Spacer()
+                    MonoLabel(text: "02 / pull", size: 9.5, tracking: 1.8, color: SK.faint)
+                }
+                Rectangle().fill(SK.ink).frame(height: 2).padding(.top, 14)
+
+                HStack(spacing: 11) {
+                    PaperBoxdMark()
+                        .fill(SK.ink, style: FillStyle(eoFill: true))
+                        .frame(width: 25, height: 18)
+                    Text("“\(query)”")
+                        .font(PB.serifItalic(15))
+                        .foregroundStyle(SK.ink)
+                        .lineLimit(1)
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, 13)
+                .padding(.vertical, 11)
+                .background(SK.panel)
+                .overlay(Rectangle().strokeBorder(SK.ink, lineWidth: 2))
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 12)
+
+            JazyShelfWall(running: true)
+                .frame(height: 246)
+                .padding(.top, 26)
+
+            log.padding(.horizontal, 20).padding(.top, 22)
+
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text("\(JazyShelfWall.flaggedCount)")
+                    .font(PB.mono(30, .medium))
+                    .foregroundStyle(SK.ink)
+                MonoLabel(text: "spines flagged", size: 9.5, tracking: 2, color: SK.sub)
+                Spacer()
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 20)
+
             Spacer(minLength: 0)
 
-            TimelineView(.animation(minimumInterval: 1.0 / 30)) { timeline in
-                let now = timeline.date.timeIntervalSinceReferenceDate
-                ZStack {
-                    ForEach(0..<Self.coverCount, id: \.self) { i in
-                        cover(at: tripProgress(now: now, index: i))
-                    }
-                }
-                .frame(width: 200, height: 190)
-                .overlay(alignment: .bottom) { caption(now: now) }
-            }
-
-            Text("“\(query)”")
-                .font(PB.serifItalic(15))
-                .foregroundStyle(JZ.sub)
-                .multilineTextAlignment(.center)
-                .lineLimit(2)
-                .padding(.horizontal, 40)
-                .padding(.top, 34)
-
-            Spacer(minLength: 0)
+            ScanMarquee(text: "Pulling —")
+                .padding(.bottom, 8)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    /// 0 = just joined the back of the stack, 1 = gone. Staggered per cover so
-    /// the five are evenly spaced around the loop.
-    private func tripProgress(now: TimeInterval, index: Int) -> Double {
-        let offset = Double(index) / Double(Self.coverCount)
-        return ((now / Self.tripDuration) + offset).truncatingRemainder(dividingBy: 1)
+    private var log: some View {
+        VStack(spacing: 0) {
+            HStack {
+                MonoLabel(text: "Log", size: 9, tracking: 1.8, color: SK.sub)
+                Spacer()
+                MonoLabel(text: "live", size: 9, tracking: 1.8, color: SK.faint)
+            }
+            .padding(.horizontal, 11)
+            .padding(.vertical, 7)
+            .overlay(alignment: .bottom) { Rectangle().fill(SK.ink).frame(height: 2) }
+
+            VStack(alignment: .leading, spacing: 4) {
+                logLine("> embedding query", color: SK.faint)
+                logLine("> reading the shelves", color: SK.sub)
+                logLine("> scoring pace · tone · length", color: SK.ink, caret: true)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 11)
+            .padding(.top, 11)
+            .padding(.bottom, 13)
+        }
+        .background(SK.panel)
+        .overlay(Rectangle().strokeBorder(SK.ink, lineWidth: 2))
     }
 
-    /// The last quarter of the trip is the flick off to the left; before that
-    /// the cover is climbing the stack.
-    private func cover(at t: Double) -> some View {
-        let leaving = max(0, (t - 0.75) / 0.25)
-        let climb = min(t, 0.75) / 0.75          // 0 at the back, 1 at the front
-
-        return JazyLoadingCover()
-            .frame(width: 96, height: 144)
-            .scaleEffect(0.9 + 0.1 * climb)
-            .rotationEffect(.degrees(-5 + 5 * climb - 24 * leaving))
-            .offset(x: -190 * leaving, y: 22 * (1 - climb))
-            .opacity(min(climb * 4, 1) * (1 - leaving))
-            .zIndex(t)
-    }
-
-    private func caption(now: TimeInterval) -> some View {
-        // One caption per third of the loop, so the words change with the covers.
-        let slot = Int(now / Self.tripDuration * 3) % Self.captions.count
-        return Text(Self.captions[slot])
-            .font(.system(size: 13))
-            .foregroundStyle(JZ.sub)
-            .id(slot)
-            .transition(.opacity)
-            .offset(y: 34)
+    private func logLine(_ text: String, color: Color, caret: Bool = false) -> some View {
+        HStack(spacing: 3) {
+            Text(text).font(PB.mono(11)).foregroundStyle(color)
+            if caret { Rectangle().fill(SK.ink).frame(width: 7, height: 12) }
+        }
     }
 }
 
-/// A blank cover in the Ask Jazy palette — ruled lines standing in for a title.
-private struct JazyLoadingCover: View {
-    var body: some View {
-        RoundedRectangle(cornerRadius: 8)
-            .fill(JZ.card)
-            .overlay(alignment: .leading) {
-                Rectangle().fill(JZ.accent.opacity(0.5)).frame(width: 5)
-            }
-            .overlay(alignment: .topLeading) {
-                VStack(alignment: .leading, spacing: 7) {
-                    Capsule().fill(JZ.ink.opacity(0.16)).frame(width: 46, height: 6)
-                    Capsule().fill(JZ.ink.opacity(0.16)).frame(width: 32, height: 6)
-                    Capsule().fill(JZ.ink.opacity(0.09)).frame(width: 40, height: 5)
-                }
-                .padding(.leading, 18)
-                .padding(.top, 22)
-            }
-            .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(JZ.line))
-            .shadow(color: .black.opacity(0.12), radius: 14, y: 10)
-    }
-}
+// MARK: - The shelf
 
-// MARK: - Background: drifting vibe phrases
+/// Two ranks of spines running at different speeds. The speed difference is the
+/// whole effect — it reads as a deep shelf being gone through, not a strip
+/// sliding sideways. Nothing here loads: it is geometry, so the wait costs
+/// nothing and cannot itself be slow.
+struct JazyShelfWall: View {
+    /// False on the entry screen — the same wall, parked.
+    var running: Bool = true
 
-private struct JazyDriftField: View {
-    private struct Phrase {
-        let text: String, x: CGFloat, y: CGFloat, size: CGFloat, duration: Double, delay: Double
+    private struct Spine {
+        let width: CGFloat, height: CGFloat, color: Color, flagged: Bool
     }
 
-    private static let phrases: [Phrase] = [
-        .init(text: "a gothic house", x: 0.06, y: 0.16, size: 21, duration: 17, delay: 0),
-        .init(text: "slow burn, high stakes", x: 0.52, y: 0.11, size: 17, duration: 14, delay: 3.5),
-        .init(text: "like a warm hug", x: 0.14, y: 0.38, size: 24, duration: 19, delay: 7),
-        .init(text: "an unreliable narrator", x: 0.44, y: 0.52, size: 18, duration: 15, delay: 1.8),
-        .init(text: "found family", x: 0.62, y: 0.31, size: 20, duration: 16, delay: 9.5),
-        .init(text: "will wreck me", x: 0.10, y: 0.62, size: 19, duration: 18, delay: 5.2),
-        .init(text: "under 200 pages", x: 0.48, y: 0.72, size: 17, duration: 14, delay: 11),
-        .init(text: "cosy autumn mystery", x: 0.18, y: 0.84, size: 22, duration: 20, delay: 2.6),
-    ]
+    private struct Rank {
+        let spines: [Spine]
+        /// Points per second. Fast enough to read as a lot of books going by.
+        let speed: CGFloat
+        let opacity: Double
+        /// How far above the shelf board this rank stands.
+        let lift: CGFloat
+        let border: CGFloat
+
+        var cellWidth: CGFloat { spines.reduce(0) { $0 + $1.width } }
+    }
+
+    static let flaggedCount = 5
+
+    /// Deterministic — the shelf is the same shelf every time it opens.
+    private static func rank(count: Int,
+                             widths: ClosedRange<CGFloat>,
+                             heights: ClosedRange<CGFloat>,
+                             flagEvery: Int?,
+                             seed: UInt64) -> [Spine] {
+        var state = seed
+        func next(_ range: ClosedRange<CGFloat>) -> CGFloat {
+            state = state &* 6364136223846793005 &+ 1442695040888963407
+            let unit = CGFloat((state >> 33) % 1000) / 1000
+            return (range.lowerBound + unit * (range.upperBound - range.lowerBound)).rounded()
+        }
+        return (0..<count).map { i in
+            Spine(width: next(widths),
+                  height: next(heights),
+                  color: SK.spines[i % SK.spines.count],
+                  flagged: flagEvery.map { i % $0 == 1 } ?? false)
+        }
+    }
+
+    private static let near = Rank(
+        spines: rank(count: 26, widths: 14...36, heights: 150...220, flagEvery: 5, seed: 20260905),
+        speed: 150, opacity: 1, lift: 0, border: 2
+    )
+    private static let far = Rank(
+        spines: rank(count: 30, widths: 10...22, heights: 92...138, flagEvery: nil, seed: 77),
+        speed: 46, opacity: 0.28, lift: 30, border: 1.5
+    )
 
     var body: some View {
-        GeometryReader { geo in
-            TimelineView(.animation(minimumInterval: 1.0 / 20)) { timeline in
-                let now = timeline.date.timeIntervalSinceReferenceDate
-                ForEach(Array(Self.phrases.enumerated()), id: \.offset) { _, p in
-                    // 0…1 progress through this phrase's own loop.
-                    let t = ((now + p.delay).truncatingRemainder(dividingBy: p.duration)) / p.duration
-                    Text(p.text)
-                        .font(PB.serifItalic(p.size))
-                        .foregroundStyle(JZ.ink.opacity(0.09))
-                        .fixedSize()
-                        .position(x: geo.size.width * p.x, y: geo.size.height * p.y)
-                        .offset(y: 30 - 68 * t)
-                        .opacity(t < 0.2 ? t / 0.2 : (t > 0.68 ? (1 - t) / 0.32 : 1))
+        TimelineView(.animation(paused: !running)) { timeline in
+            let t = timeline.date.timeIntervalSinceReferenceDate
+            Canvas { ctx, size in
+                draw(Self.far, in: ctx, size: size, t: t)
+                draw(Self.near, in: ctx, size: size, t: t)
+            }
+            .overlay(alignment: .bottom) {
+                Rectangle().fill(SK.ink).frame(height: 3).padding(.bottom, 13)
+            }
+            .overlay(alignment: .top) { if running { readingRule } }
+            .overlay(alignment: .leading) { edgeFade(.leading) }
+            .overlay(alignment: .trailing) { edgeFade(.trailing) }
+            .clipped()
+        }
+    }
+
+    /// The shelf moves; the scanner does not.
+    private var readingRule: some View {
+        ZStack(alignment: .topTrailing) {
+            Rectangle().fill(SK.accent)
+                .frame(height: 3)
+                .padding(.top, 104)
+            MonoLabel(text: "reading", size: 9, tracking: 1.6, color: SK.panel)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 3)
+                .background(SK.accent)
+                .padding(.top, 82)
+        }
+    }
+
+    private func edgeFade(_ edge: HorizontalAlignment) -> some View {
+        LinearGradient(colors: [SK.bg, SK.bg.opacity(0)],
+                       startPoint: edge == .leading ? .leading : .trailing,
+                       endPoint: edge == .leading ? .trailing : .leading)
+            .frame(width: 40)
+    }
+
+    private func draw(_ rank: Rank, in ctx: GraphicsContext, size: CGSize, t: TimeInterval) {
+        let base = size.height - 13 - rank.lift
+        // Rank opacity rides on the colours rather than the shared context, so
+        // the near rank can't inherit the far rank's fade.
+        let a = rank.opacity
+        // One cell scrolls fully out, then repeats — so the loop has no seam.
+        var x = -CGFloat((t * Double(rank.speed)).truncatingRemainder(dividingBy: Double(rank.cellWidth)))
+        while x < size.width {
+            for spine in rank.spines {
+                defer { x += spine.width }
+                guard x + spine.width > 0, x < size.width else { continue }
+
+                let rect = CGRect(x: x, y: base - spine.height, width: spine.width, height: spine.height)
+                ctx.fill(Path(rect), with: .color(spine.color.opacity(a)))
+                ctx.stroke(Path(rect), with: .color(SK.ink.opacity(a)), lineWidth: rank.border)
+
+                // Head and tail bands — what makes a coloured bar read as a spine.
+                for inset in [CGFloat(13), spine.height - 17] {
+                    ctx.fill(Path(CGRect(x: rect.minX, y: rect.minY + inset,
+                                         width: rect.width, height: 1)),
+                             with: .color(.white.opacity(0.24 * a)))
+                }
+
+                if spine.flagged {
+                    ctx.stroke(Path(rect.insetBy(dx: 1.5, dy: 1.5)),
+                               with: .color(SK.accent.opacity(a)), lineWidth: 3)
+                    ctx.fill(Path(CGRect(x: rect.midX - 3.5, y: rect.minY - 9, width: 7, height: 7)),
+                             with: .color(SK.accent.opacity(a)))
                 }
             }
         }
-        .allowsHitTesting(false)
     }
 }
 
-// MARK: - Background: hand-drawn doodles
+// MARK: - The mark
 
-/// ponytail: static ink doodles with a slow bob — the design's ~5fps line-boil
-/// (re-jittering every path every frame) isn't worth the redraw cost on device.
-private struct JazyDoodleField: View {
-    private struct Doodle {
-        let kind: JazyDoodle.Kind, x: CGFloat, y: CGFloat, scale: CGFloat, rotation: Double, duration: Double
-    }
-
-    private static let doodles: [Doodle] = [
-        .init(kind: .openBook, x: 0.06, y: 0.09, scale: 1.15, rotation: -9,  duration: 8),
-        .init(kind: .sparkle,  x: 0.78, y: 0.13, scale: 0.7,  rotation: 12,  duration: 6),
-        .init(kind: .moon,     x: 0.86, y: 0.30, scale: 0.85, rotation: 14,  duration: 9),
-        .init(kind: .glasses,  x: 0.10, y: 0.28, scale: 0.95, rotation: 6,   duration: 7),
-        .init(kind: .squiggle, x: 0.40, y: 0.21, scale: 0.8,  rotation: -4,  duration: 8),
-        .init(kind: .cup,      x: 0.82, y: 0.56, scale: 1.0,  rotation: -7,  duration: 7),
-        .init(kind: .heart,    x: 0.05, y: 0.52, scale: 0.75, rotation: -12, duration: 6),
-        .init(kind: .bookmark, x: 0.30, y: 0.66, scale: 0.85, rotation: 8,   duration: 9),
-        .init(kind: .asterisk, x: 0.68, y: 0.74, scale: 0.65, rotation: 0,   duration: 6),
-        .init(kind: .openBook, x: 0.58, y: 0.88, scale: 0.9,  rotation: 7,   duration: 8),
-        .init(kind: .sparkle,  x: 0.12, y: 0.80, scale: 0.6,  rotation: -15, duration: 7),
-    ]
-
-    var body: some View {
-        GeometryReader { geo in
-            TimelineView(.animation(minimumInterval: 1.0 / 12)) { timeline in
-                let now = timeline.date.timeIntervalSinceReferenceDate
-                ForEach(Array(Self.doodles.enumerated()), id: \.offset) { _, d in
-                    let phase = (now.truncatingRemainder(dividingBy: d.duration)) / d.duration
-                    JazyDoodle(kind: d.kind)
-                        .stroke(JZ.ink.opacity(0.11),
-                                style: StrokeStyle(lineWidth: 1.7, lineCap: .round, lineJoin: .round))
-                        .frame(width: 54 * d.scale, height: 54 * d.scale)
-                        .rotationEffect(.degrees(d.rotation))
-                        .position(x: geo.size.width * d.x, y: geo.size.height * d.y)
-                        .offset(y: -7 * sin(phase * 2 * .pi))
-                }
-            }
-        }
-        .allowsHitTesting(false)
-    }
-}
-
-/// The doodle glyph set, drawn on the design's 48×48 canvas and scaled to fit.
-private struct JazyDoodle: Shape {
-    enum Kind { case openBook, sparkle, asterisk, moon, cup, heart, squiggle, glasses, bookmark }
-    let kind: Kind
-
+/// The PaperBoxd mark, traced from `public/paperboxd.svg` (viewBox 276.08×199.6).
+struct PaperBoxdMark: Shape {
     func path(in rect: CGRect) -> Path {
-        let s = min(rect.width, rect.height) / 48
-        var p = Path()
+        let s = min(rect.width / 276.08, rect.height / 199.6)
+        let dx = (rect.width - 276.08 * s) / 2, dy = (rect.height - 199.6 * s) / 2
+        func p(_ x: CGFloat, _ y: CGFloat) -> CGPoint { CGPoint(x: dx + x * s, y: dy + y * s) }
 
-        func line(_ pts: [(CGFloat, CGFloat)], close: Bool = false) {
-            guard let first = pts.first else { return }
-            p.move(to: CGPoint(x: first.0 * s, y: first.1 * s))
-            for pt in pts.dropFirst() { p.addLine(to: CGPoint(x: pt.0 * s, y: pt.1 * s)) }
-            if close { p.closeSubpath() }
-        }
-        // Quadratic smoothing through the midpoints — the design's a3Path().
-        func curve(_ pts: [(CGFloat, CGFloat)]) {
-            guard pts.count > 2 else { return line(pts) }
-            p.move(to: CGPoint(x: pts[0].0 * s, y: pts[0].1 * s))
-            for i in 1..<(pts.count - 1) {
-                let c = CGPoint(x: pts[i].0 * s, y: pts[i].1 * s)
-                let mid = CGPoint(x: (pts[i].0 + pts[i + 1].0) / 2 * s,
-                                  y: (pts[i].1 + pts[i + 1].1) / 2 * s)
-                p.addQuadCurve(to: mid, control: c)
-            }
-            let last = pts[pts.count - 1]
-            p.addLine(to: CGPoint(x: last.0 * s, y: last.1 * s))
-        }
-        func circle(_ cx: CGFloat, _ cy: CGFloat, _ r: CGFloat) {
-            p.addEllipse(in: CGRect(x: (cx - r) * s, y: (cy - r) * s, width: r * 2 * s, height: r * 2 * s))
-        }
+        var path = Path()
+        // Outer body: the two overlapping rounded boxes, as one silhouette.
+        path.move(to: p(200.95, 79.8))
+        path.addCurve(to: p(204.01, 67.11), control1: p(202.97, 75.7), control2: p(204.01, 71.46))
+        path.addCurve(to: p(167.39, 39.17), control1: p(204.01, 50.76), control2: p(192.38, 39.17))
+        path.addLine(to: p(111.71, 39.17))
+        path.addCurve(to: p(50.46, 88.74), control1: p(66.48, 39.17), control2: p(50.46, 59.31))
+        path.addCurve(to: p(110.62, 137.84), control1: p(50.46, 118.17), control2: p(66.23, 137.52))
+        path.addLine(to: p(110.62, 142.58))
+        path.addCurve(to: p(127.91, 159.87), control1: p(110.62, 153.82), control2: p(116.67, 159.87))
+        path.addLine(to: p(189.72, 159.87))
+        path.addCurve(to: p(239.72, 118.19), control1: p(224.07, 159.87), control2: p(239.72, 143.01))
+        path.addCurve(to: p(200.95, 79.8), control1: p(239.72, 96.48), control2: p(223.38, 81.23))
+        path.closeSubpath()
 
-        switch kind {
-        case .openBook:
-            curve([(4, 16), (13, 11), (23, 14)])
-            curve([(23, 14), (33, 11), (42, 16)])
-            curve([(4, 16), (4, 34), (13, 30), (23, 33)])
-            curve([(42, 16), (42, 34), (33, 30), (23, 33)])
-            line([(23, 14), (23, 33)])
-        case .sparkle:
-            line([(24, 10), (24, 38)])
-            line([(10, 24), (38, 24)])
-        case .asterisk:
-            line([(24, 12), (24, 36)])
-            line([(15, 18), (33, 32)])
-            line([(33, 18), (15, 32)])
-        case .moon:
-            curve([(30, 8), (20, 12), (16, 24), (20, 36), (30, 40), (24, 33), (22, 24), (24, 15), (30, 8)])
-        case .cup:
-            curve([(13, 18), (15, 36), (31, 36), (33, 18)])
-            line([(11, 18), (35, 18)])
-            line([(20, 13), (23, 8)])
-            line([(27, 13), (30, 8)])
-        case .heart:
-            curve([(24, 38), (10, 24), (12, 14), (20, 12), (24, 18), (28, 12), (36, 14), (38, 24), (24, 38)])
-        case .squiggle:
-            curve([(6, 24), (14, 18), (22, 28), (30, 18), (38, 26)])
-        case .glasses:
-            circle(13, 26, 7)
-            circle(35, 26, 7)
-            curve([(20, 25), (24, 23), (28, 25)])
-        case .bookmark:
-            line([(18, 8), (30, 8), (30, 36), (24, 28), (18, 36)], close: true)
+        // The two punched circles. They only read as holes under an even-odd
+        // fill — draw this with `.fill(colour, style: FillStyle(eoFill: true))`.
+        func hole(_ cx: CGFloat, _ cy: CGFloat, _ rx: CGFloat, _ ry: CGFloat) {
+            let origin = p(cx - rx, cy - ry)
+            path.addEllipse(in: CGRect(origin: origin,
+                                       size: CGSize(width: rx * 2 * s, height: ry * 2 * s)))
         }
-        return p
+        hole(93.73, 95.67, 15.41, 14.63)
+        hole(196.79, 132.77, 14.05, 13.33)
+        return path
     }
 }
