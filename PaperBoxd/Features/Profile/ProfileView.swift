@@ -15,6 +15,7 @@ struct ProfileView: View {
     @State private var fullList: FullList?
     @State private var diarySheet: DiaryNavItem?
     @State private var showWrapped = false
+    @State private var showLevelSheet = false
     @State private var showReportUser = false
     @State private var showBlockConfirm = false
     @Environment(\.dismiss) private var dismiss
@@ -52,6 +53,11 @@ struct ProfileView: View {
         }
         .sheet(item: $diarySheet) { nav in
             DiaryEntryDetailView(entry: nav.entry, viewer: vm.viewerUser)
+        }
+        .sheet(isPresented: $showLevelSheet) {
+            if let progress = vm.progress {
+                ProfileLevelSheet(progress: progress, isOwnProfile: vm.isOwnProfile)
+            }
         }
         .onReceive(NotificationCenter.default.publisher(for: .diaryEntryDeleted)) { note in
             if let id = note.object as? String { vm.handleDeletedEntry(id) }
@@ -230,6 +236,7 @@ struct ProfileView: View {
                         isOwnProfile: vm.isOwnProfile,
                         isFollowLoading: vm.isFollowLoading,
                         streak: vm.streak,
+                        progress: vm.progress,
                         bannerCovers: bannerCoverURLs,
                         onFollow: { Task { await vm.toggleFollow() } },
                         onEdit: { showEdit = true },
@@ -239,7 +246,8 @@ struct ProfileView: View {
                         onShare: { shareProfile() },
                         onEditBanner: vm.isOwnProfile ? { showBannerPicker = true } : nil,
                         onReport: { showReportUser = true },
-                        onBlock: { showBlockConfirm = true }
+                        onBlock: { showBlockConfirm = true },
+                        onAvatarTap: { showLevelSheet = true }
                     )
 
                     // Private account: the gated endpoints already return nothing,

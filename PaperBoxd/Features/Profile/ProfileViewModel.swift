@@ -68,6 +68,11 @@ final class ProfileViewModel: ObservableObject {
     // Reading streak (server-computed)
     @Published var streak: Int?
 
+    /// XP standing behind the avatar ring and the level sheet. Stays nil on
+    /// other people's profiles — the backend only exposes /users/me stats — and
+    /// the ring then simply doesn't draw. See `XPRingAvatar`.
+    @Published var progress: ReaderProgress?
+
     // Reading heatmap (GitHub-style per-day page log)
     @Published var activity: ReadingActivity?
     @Published var activityYear: Int = Calendar(identifier: .gregorian).component(.year, from: Date())
@@ -98,6 +103,7 @@ final class ProfileViewModel: ObservableObject {
         async let lastBookTask: LastLoggedBookResponse? = loadLastLoggedBook()
         async let favoritesTask: [FavoriteBook]? = loadFavorites()
         async let streakTask: Int? = loadStreak()
+        async let progressTask: ReaderProgress? = loadProgress()
         async let activityTask: ReadingActivity? = loadActivity(year: activityYear)
         do {
             profile = try await profileTask
@@ -111,6 +117,7 @@ final class ProfileViewModel: ObservableObject {
         if let resp = await lastBookTask { lastLoggedBook = resp.lastBook }
         if let favs = await favoritesTask { favoriteBooks = favs }
         if let s = await streakTask { streak = s }
+        if let p = await progressTask { progress = p }
         if let act = await activityTask { activity = act }
         isLoading = false
         await refreshShelf()
@@ -218,6 +225,19 @@ final class ProfileViewModel: ObservableObject {
             requiresAuth: true
         )
         return resp?.streak
+    }
+
+    /// The viewer's own XP standing. The backend has no per-username stats
+    /// route, so this only runs on your own profile; elsewhere the ring is
+    /// absent rather than wrong.
+    private func loadProgress() async -> ReaderProgress? {
+        guard isOwnProfile else { return nil }
+        let resp: LeaderboardEntry? = try? await APIClient.shared.request(
+            path: Endpoints.myLeaderboardStats,
+            method: .get,
+            requiresAuth: true
+        )
+        return resp.map(ReaderProgress.init(entry:))
     }
 
     private func loadActivity(year: Int) async -> ReadingActivity? {

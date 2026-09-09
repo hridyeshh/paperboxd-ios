@@ -31,8 +31,20 @@ struct LegalSheetView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                LegalMarkdownView(text: kind.text)
-                    .padding(20)
+                VStack(alignment: .leading, spacing: 16) {
+                    // Mirrors the banner on paperboxd.in/privacy. No effective
+                    // date is set yet, so the text must not read as binding.
+                    Text("Draft — not yet in effect. This document is under review and is not legally binding until an effective date is published.")
+                        .font(.system(size: 13))
+                        .foregroundStyle(BK.ink)
+                        .padding(12)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(BK.accent.opacity(0.12))
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
+
+                    LegalMarkdownView(text: kind.text)
+                }
+                .padding(20)
             }
             .background(BK.paper.ignoresSafeArea())
             .navigationTitle(kind.title)

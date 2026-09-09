@@ -77,25 +77,38 @@ struct ListDetailView: View {
         .task { await load() }
     }
 
+    // Eyebrow over serif title over serif-italic body — the same voice the
+    // profile header and section headers use. The eyebrow carries the private
+    // state, so the lock glyph that used to sit by the count is gone.
     private func header(_ d: ListDetailResponse) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 0) {
+            Eyebrow(text: d.isPrivate ? "Private list" : "List")
+
             Text(d.title)
-                .font(PB.serif(24))
+                .font(PB.serif(26))
                 .foregroundStyle(Color("TextPrimary"))
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, 6)
+
             if let desc = d.description, !desc.isEmpty {
                 Text(desc)
-                    .font(PB.serif(14))
-                    .foregroundStyle(Color("TextSecondary"))
+                    .font(PB.serifItalic(15))
+                    .foregroundStyle(Color("TextPrimary").opacity(0.78))
+                    .lineSpacing(2)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 10)
             }
-            HStack(spacing: 6) {
-                if d.isPrivate {
-                    Image(systemName: "lock.fill").font(.system(size: 9))
-                        .foregroundStyle(Color("TextSecondary"))
-                }
-                Text("\(d.bookCount) books")
-                    .font(PB.mono(10))
-                    .foregroundStyle(Color("TextSecondary"))
-            }
+
+            Text("\(d.bookCount) \(d.bookCount == 1 ? "book" : "books")")
+                .font(PB.mono(10))
+                .tracking(1.6)
+                .foregroundStyle(Color("TextSecondary"))
+                .padding(.top, 14)
+
+            Rectangle()
+                .fill(Color("Border"))
+                .frame(height: 1)
+                .padding(.top, 16)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 20)
@@ -129,45 +142,140 @@ struct CreateListSheet: View {
     @State private var errorMessage: String?
 
     var body: some View {
-        NavigationStack {
-            Form {
-                Section {
-                    TextField("List name", text: $title)
-                        .font(PB.serif(16))
-                    TextField("Description (optional)", text: $description, axis: .vertical)
-                        .lineLimit(2...4)
-                        .font(PB.serif(14))
-                } footer: {
-                    Text("\(title.count)/50")
-                        .font(PB.mono(10))
-                        .foregroundStyle(title.count > 50 ? .red : Color("TextSecondary"))
+        ScrollView {
+            VStack(alignment: .leading, spacing: 22) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Eyebrow(text: "New list")
+                    Text("What are you collecting?")
+                        .font(PB.serif(24))
+                        .foregroundStyle(Color("TextPrimary"))
+                        .fixedSize(horizontal: false, vertical: true)
                 }
-                Section {
-                    Toggle(isOn: $isPrivate) {
-                        Label("Private", systemImage: isPrivate ? "lock.fill" : "lock.open")
+
+                section("The list") {
+                    stackedRow("Name", counter: "\(title.count)/50", over: title.count > 50) {
+                        TextField("Books that ruined me", text: $title)
+                            .textFieldStyle(.plain)
+                            .font(PB.serif(16))
+                            .foregroundStyle(Color("TextPrimary"))
                     }
-                } footer: {
-                    Text(isPrivate
-                         ? "Only you (and people you grant access) can see this list."
-                         : "Anyone can see this list on your profile.")
-                        .font(PB.mono(10))
+                    rowDivider
+                    stackedRow("Description", counter: "\(description.count)/200", over: description.count > 200) {
+                        TextField("Optional", text: $description, axis: .vertical)
+                            .textFieldStyle(.plain)
+                            .lineLimit(2...4)
+                            .font(PB.serifItalic(15))
+                            .foregroundStyle(Color("TextPrimary"))
+                    }
                 }
+
+                section("Who can see it") {
+                    // The whole row is the target, not just the switch.
+                    Button { isPrivate.toggle() } label: {
+                        HStack(alignment: .center, spacing: 12) {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Private")
+                                    .font(.system(size: 15, weight: .semibold))
+                                    .foregroundStyle(Color("TextPrimary"))
+                                Text(isPrivate
+                                     ? "Only you, and anyone you grant access."
+                                     : "Anyone can see this list on your profile.")
+                                    .font(PB.mono(10))
+                                    .foregroundStyle(Color("TextSecondary"))
+                                    .fixedSize(horizontal: false, vertical: true)
+                                    .multilineTextAlignment(.leading)
+                            }
+                            Spacer(minLength: 8)
+                            Toggle("", isOn: $isPrivate)
+                                .labelsHidden()
+                                .tint(Color("TextPrimary"))
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 13)
+                    }
+                    .buttonStyle(.plain)
+                }
+
                 if let errorMessage {
-                    Text(errorMessage).foregroundStyle(.red).font(PB.serif(13))
+                    Text(errorMessage)
+                        .font(PB.mono(11))
+                        .foregroundStyle(PB.likeRed)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                HStack(spacing: 10) {
+                    PillButton(title: "Cancel", style: .brutalGhost) { dismiss() }
+                    PillButton(
+                        title: isSaving ? "Creating…" : "Create list",
+                        style: .brutalPrimary,
+                        loading: isSaving
+                    ) {
+                        Task { await save() }
+                    }
+                    .opacity(canSave ? 1 : 0.45)
+                    .disabled(!canSave || isSaving)
                 }
             }
-            .navigationTitle("New list")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Create") { Task { await save() } }
-                        .disabled(!canSave || isSaving)
-                }
-            }
+            .padding(.horizontal, 20)
+            // 20 clears the drag indicator, which floats over the content.
+            .padding(.top, 20)
+            .padding(.bottom, 32)
         }
+        .background(Color("Background"))
+        // A sheet gets its own presentation context and does NOT inherit the
+        // profile tab's forced light mode, so the asset colours resolve dark
+        // and snap light on drag. Same pair every light-only screen uses.
+        .environment(\.colorScheme, .light)
+        .preferredColorScheme(.light)
+        .presentationDetents([.height(560), .large])
+        .presentationDragIndicator(.visible)
+    }
+
+    // MARK: - Form chrome
+    //
+    // Same anatomy as EditProfileView's sections — mono eyebrow over a Surface
+    // card, stacked rows with a mono field label — so the two forms read as one
+    // app rather than one bespoke sheet and one stock iOS Form.
+
+    private func section<Content: View>(_ title: String, @ViewBuilder _ content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(title.uppercased())
+                .font(PB.mono(10.5)).tracking(2)
+                .foregroundStyle(Color("TextSecondary").opacity(0.7))
+                .padding(.leading, 6)
+            VStack(spacing: 0) { content() }
+                .background(Color("Surface"), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .strokeBorder(Color("Border").opacity(0.55), lineWidth: 1))
+        }
+    }
+
+    private var rowDivider: some View {
+        Rectangle().fill(Color("Border").opacity(0.45)).frame(height: 1).padding(.leading, 16)
+    }
+
+    @ViewBuilder
+    private func stackedRow<Control: View>(
+        _ label: String,
+        counter: String,
+        over: Bool,
+        @ViewBuilder control: () -> Control
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 7) {
+            HStack {
+                Text(label.uppercased())
+                    .font(PB.mono(9.5)).tracking(1.5)
+                    .foregroundStyle(Color("TextSecondary"))
+                Spacer()
+                Text(counter)
+                    .font(PB.mono(9.5))
+                    .foregroundStyle(over ? PB.likeRed : Color("TextSecondary").opacity(0.7))
+            }
+            control()
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 16).padding(.vertical, 13)
     }
 
     private var canSave: Bool {

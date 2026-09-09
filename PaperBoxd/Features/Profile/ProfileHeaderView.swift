@@ -6,6 +6,8 @@ struct ProfileHeaderView: View {
     let isOwnProfile: Bool
     let isFollowLoading: Bool
     let streak: Int?
+    /// Drives the avatar's XP ring. Nil → plain avatar, no ring, no tap.
+    var progress: ReaderProgress? = nil
     let bannerCovers: [String]
     let onFollow: () -> Void
     let onEdit: () -> Void
@@ -16,6 +18,7 @@ struct ProfileHeaderView: View {
     var onEditBanner: (() -> Void)? = nil
     var onReport: () -> Void = {}
     var onBlock: () -> Void = {}
+    var onAvatarTap: () -> Void = {}
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -54,21 +57,7 @@ struct ProfileHeaderView: View {
     // MARK: - Avatar
 
     private var avatar: some View {
-        ZStack {
-            if let urlStr = profile.avatarURL, let url = URL(string: urlStr) {
-                AsyncImage(url: url) { img in
-                    img.resizable().scaledToFill()
-                } placeholder: {
-                    PB.avatarGradient
-                }
-            } else {
-                PB.avatarGradient
-            }
-        }
-        .frame(width: 88, height: 88)
-        .clipShape(Circle())
-        .overlay(Circle().strokeBorder(Color("Background"), lineWidth: 3))
-        .shadow(color: .black.opacity(0.25), radius: 12, y: 6)
+        XPRingAvatar(avatarURL: profile.avatarURL, progress: progress, onTap: onAvatarTap)
     }
 
     // MARK: - Handle row
