@@ -32,6 +32,14 @@ struct JazyView: View {
     @State private var isSearching = false
     @State private var errorMessage: String?
     @State private var showResults = false
+    /// Conversation state. The session lets "shorter" refine the last ask; the
+    /// pending question is what Jazy wants settled before answering it.
+    @State private var sessionId: String?
+    @State private var pendingQuestion: (text: String, options: [String])?
+    @State private var deckIntro: String?
+    /// What the deck header quotes: the raw ask, or on a refinement the
+    /// accumulated one — "shorter" alone would read as a search for that word.
+    @State private var deckAsk = ""
     /// Bookshelf + TBR size, loaded once per open. Nil = unknown, and unknown
     /// always lets the scan through.
     @State private var shelfSize: Int?
@@ -48,7 +56,7 @@ struct JazyView: View {
             SK.bg.ignoresSafeArea()
 
             if showResults {
-                JazyResultsDeck(query: query, matches: matches, user: user) {
+                JazyResultsDeck(query: deckAsk.isEmpty ? query : deckAsk, intro: deckIntro, matches: matches, user: user) {
                     withAnimation(.easeInOut(duration: 0.4)) { showResults = false }
                 }
                 .transition(.opacity)
@@ -126,6 +134,33 @@ struct JazyView: View {
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 24)
                         .padding(.top, 14)
+                }
+
+                // Jazy's one question. Two taps, no form. Tapping an option
+                // re-sends the same ask with the answer attached; Jazy never
+                // asks a second time.
+                if let pendingQuestion {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text(pendingQuestion.text)
+                            .font(PB.serif(17))
+                            .foregroundStyle(SK.ink)
+                            .fixedSize(horizontal: false, vertical: true)
+                        HStack(spacing: 8) {
+                            ForEach(pendingQuestion.options, id: \.self) { option in
+                                Button { submit(answer: option) } label: {
+                                    MonoLabel(text: option, size: 9.5, tracking: 1.2, color: SK.ink)
+                                        .padding(.horizontal, 12)
+                                        .padding(.vertical, 9)
+                                        .frame(maxWidth: .infinity)
+                                }
+                                .buttonStyle(BrutalButtonStyle(fill: SK.panel, shadowColor: SK.ink,
+                                                               border: SK.ink, borderWidth: 2, offset: 3))
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.top, 18)
+                    .transition(.opacity)
                 }
 
                 Spacer(minLength: 0)
@@ -216,7 +251,7 @@ struct JazyView: View {
                         .tint(SK.accent)
                         .autocorrectionDisabled()
                         .submitLabel(.search)
-                        .onSubmit(submit)
+                        .onSubmit { submit() }
                 }
                 .frame(height: 24)
             }
@@ -240,7 +275,7 @@ struct JazyView: View {
     /// The camera no longer hides behind a soft glyph at the side of a pill.
     private var actions: some View {
         HStack(spacing: 10) {
-            Button(action: submit) {
+            Button(action: { submit() }) {
                 HStack(spacing: 8) {
                     MonoLabel(text: "Pull the shelf", size: 12.5, tracking: 1.4,
                               color: SK.panel, weight: .semibold)
@@ -271,24 +306,35 @@ struct JazyView: View {
 
     // MARK: - Search
 
-    private func submit() {
+    private func submit(answer: String? = nil) {
         let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !q.isEmpty, !isSearching else { return }
         focused = false
         errorMessage = nil
+        pendingQuestion = nil
         withAnimation(.easeInOut(duration: 0.3)) { isSearching = true }
         let startedAt = Date()
         Task {
             do {
-                let items = try await JazyService.vibeSearch(q)
+                let turn = try await JazyService.ask(q, sessionId: sessionId, answer: answer)
                 await holdPullingPage(since: startedAt)
                 await MainActor.run {
-                    guard !items.isEmpty else {
+                    sessionId = turn.sessionId
+                    // One question, then an answer. Jazy never asks twice in a
+                    // row — the second ask always sends the reply along.
+                    if turn.isQuestion, let question = turn.question, answer == nil {
+                        withAnimation(.easeInOut(duration: 0.3)) { isSearching = false }
+                        pendingQuestion = (question, turn.options ?? [])
+                        return
+                    }
+                    guard !turn.items.isEmpty else {
                         withAnimation(.easeInOut(duration: 0.3)) { isSearching = false }
                         errorMessage = "Nothing on this shelf — try dropping a word"
                         return
                     }
-                    matches = items
+                    matches = turn.items
+                    deckIntro = turn.intro
+                    deckAsk = (turn.refined ? turn.understood : nil) ?? q
                     withAnimation(.easeInOut(duration: 0.45)) {
                         isSearching = false
                         showResults = true

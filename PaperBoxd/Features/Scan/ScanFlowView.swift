@@ -56,6 +56,9 @@ struct ScanFlowView: View {
         loadError = nil
         loadErrorExhausted = false
         go(.analyzing)
+        // scan_succeeded / scan_failed are emitted server-side; only the start
+        // is visible from here, and it is what makes the drop-off measurable.
+        Analytics.track("scan_started", metadata: ["isbn": code])
         Task {
             do {
                 let r = try await ScanService.analyze(isbn: code)

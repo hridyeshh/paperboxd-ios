@@ -293,9 +293,19 @@ struct BookDetailView: View {
 
     private func statStrip(_ book: Book) -> some View {
         HStack(spacing: 0) {
-            statCell(book.averageRating.map { String(format: "%.1f", $0) } ?? "—", "Rating")
+            // Paperboxd's own average once readers have rated it; the
+            // publisher's number, labelled as such, until then.
+            if let r = viewModel.readerStats?.rating {
+                statCell(String(format: "%.1f", r), "Paperboxd")
+            } else {
+                statCell(book.averageRating.map { String(format: "%.1f", $0) } ?? "—", "Publisher")
+            }
             Rectangle().fill(line).frame(width: 2)
-            statCell(readingTime(book), "Time to read")
+            if let reads = viewModel.readerStats?.reads, reads > 0 {
+                statCell("\(reads)", "Finished")
+            } else {
+                statCell(readingTime(book), "Time to read")
+            }
             Rectangle().fill(line).frame(width: 2)
             statCell(book.pageCount.map { "\($0)" } ?? "—", "Pages")
         }
@@ -492,7 +502,7 @@ struct BookDetailView: View {
             VStack(alignment: .leading, spacing: 12) {
                 brutalSectionHeader("02", "Readers also enjoyed")
                 ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 12) {
+                    HStack(alignment: .top, spacing: 12) {
                         ForEach(viewModel.similarBooks) { item in
                             NavigationLink(value: item.id) {
                                 VStack(alignment: .leading, spacing: 5) {

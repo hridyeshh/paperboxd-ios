@@ -166,14 +166,53 @@ struct HomeView: View {
                 }
 
                 if !viewModel.friendsActivities.isEmpty {
-                    friendsRail
+                    activityRail(eyebrow: "Your friends", title: "Between covers.",
+                                 activities: viewModel.friendsActivities)
+                } else if viewModel.showsCommunityRail {
+                    activityRail(eyebrow: "Around Paperboxd", title: "What readers are into.",
+                                 activities: viewModel.communityActivities)
+                }
+
+                // Server-assembled modules first: each carries its own title
+                // and a reason on every book. The legacy rails below are
+                // deduped against them.
+                ForEach(viewModel.feedModules) { module in
+                    carouselSection(
+                        eyebrow: Self.eyebrow(for: module.kind),
+                        title: module.title,
+                        items: module.books
+                    )
                 }
 
                 if !viewModel.pickedForYou.isEmpty {
                     carouselSection(
                         eyebrow: "For you",
-                        title: "Your friends are liking these.",
+                        title: "Picked from what you read.",
                         items: viewModel.pickedForYou
+                    )
+                }
+
+                if !viewModel.trending.isEmpty {
+                    carouselSection(
+                        eyebrow: "This week",
+                        title: "Trending on Paperboxd.",
+                        items: viewModel.trending
+                    )
+                }
+
+                if !viewModel.rising.isEmpty {
+                    carouselSection(
+                        eyebrow: "Rising",
+                        title: "Picking up speed.",
+                        items: viewModel.rising
+                    )
+                }
+
+                if !viewModel.mostTBR.isEmpty {
+                    carouselSection(
+                        eyebrow: "Most saved",
+                        title: "Going onto TBRs.",
+                        items: viewModel.mostTBR
                     )
                 }
 
@@ -192,18 +231,18 @@ struct HomeView: View {
 
     // MARK: - Friends rail
 
-    private var friendsRail: some View {
+    private func activityRail(eyebrow: String, title: String, activities: [FriendActivity]) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             VStack(alignment: .leading, spacing: 3) {
-                Eyebrow(text: "Your friends").padding(.horizontal, 20)
-                Text("Between covers.")
+                Eyebrow(text: eyebrow).padding(.horizontal, 20)
+                Text(title)
                     .font(PB.serif(18)).foregroundStyle(hlInk)
                     .padding(.horizontal, 20)
             }
 
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 10) {
-                    ForEach(viewModel.friendsActivities.prefix(6)) { activity in
+                HStack(alignment: .top, spacing: 10) {
+                    ForEach(activities.prefix(6)) { activity in
                         friendCard(activity)
                     }
                 }
@@ -284,9 +323,28 @@ struct HomeView: View {
 
     // MARK: - Greeting
 
+    /// Short caps label per module kind; the title itself is the server's.
+    private static func eyebrow(for kind: String) -> String {
+        switch kind {
+        case "continue_reading":            return "Right now"
+        case "next_read":                   return "Next"
+        case "picked_for_you", "ready_for": return "For you"
+        case "because_you_loved":           return "Because"
+        case "your_people":                 return "Your friends"
+        case "people_like_you", "taste_twin", "trending_like_you": return "Readers like you"
+        case "from_your_tbr":               return "Your pile"
+        case "hidden_gem":                  return "Hidden gem"
+        case "wild_card":                   return "Wild card"
+        default:                            return "For you"
+        }
+    }
+
     private var greetingBlock: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text("Hello, \(user.username ?? "reader")")
+            // Server greeting is time-of-day in the reader's zone; drop its
+            // full stop so it reads "Good evening, maya".
+            let hello = viewModel.greeting.map { $0.hasSuffix(".") ? String($0.dropLast()) : $0 } ?? "Hello"
+            Text("\(hello), \(user.username ?? "reader")")
                 .font(PB.serif(26))
                 .foregroundStyle(hlInk)
             Text("what are you reading?")
@@ -302,12 +360,26 @@ struct HomeView: View {
             SectionHeader(eyebrow: eyebrow, title: title, titleColor: hlInk, eyebrowColor: hlMuted)
                 .padding(.horizontal, 20)
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 10) {
+                // Top-aligned: cards differ in height (a one-line title, no
+                // reason line), and HStack's default centres them so the
+                // covers drift up and down along the rail.
+                HStack(alignment: .top, spacing: 10) {
                     ForEach(items) { item in
                         NavigationLink(value: item.id) {
                             CarouselCoverCard(item: item)
                         }
                         .buttonStyle(.plain)
+                        // Long-press to answer without opening. Verdict only —
+                        // the "why" chips are a second screen and this is the
+                        // one tap that has to be cheap. Reason codes come from
+                        // the book page.
+                        .contextMenu {
+                            ForEach(HomeViewModel.Verdict.allCases, id: \.self) { v in
+                                Button { viewModel.giveVerdict(v, on: item) } label: {
+                                    Label(v.label, systemImage: v.symbol)
+                                }
+                            }
+                        }
                     }
                 }
                 .padding(.horizontal, 20)
@@ -371,6 +443,21 @@ private struct CarouselCoverCard: View {
                     Text(item.authorLine)
                         .font(.system(size: 11))
                         .foregroundStyle(BK.muted)
+                        .lineLimit(1)
+                }
+                // The pool has always shipped a server-authored reason
+                // ("Maya read this"); until now only web displayed it.
+                if let reason = item.reason, !reason.isEmpty {
+                    Text(reason)
+                        .font(PB.mono(9))
+                        .foregroundStyle(BK.muted)
+                        .lineLimit(2)
+                        .padding(.top, 2)
+                }
+                if let confidence = item.confidence, !confidence.isEmpty {
+                    Text(confidence)
+                        .font(.system(size: 9).italic())
+                        .foregroundStyle(BK.ink.opacity(0.6))
                         .lineLimit(1)
                 }
             }

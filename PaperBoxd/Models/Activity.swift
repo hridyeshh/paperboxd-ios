@@ -13,32 +13,41 @@ struct FriendActivity: Codable, Identifiable {
     let listID: String?
     let listTitle: String?
     let createdAt: String
+    /// Per-type extras from the Go row; `rating` on "rated" / "finished_reading".
+    var metadata: ActivityMetadata? = nil
+    /// Only the community feed sends a cover inline.
+    var bookCover: String? = nil
 
     enum CodingKeys: String, CodingKey {
-        case id, username, name
+        case id, username, name, metadata
         case userID = "user_id"
         case avatarURL = "avatar_url"
         case activityType = "activity_type"
         case bookID = "book_id"
         case bookTitle = "book_title"
         case bookSlug = "book_slug"
+        case bookCover = "book_cover"
         case listID = "list_id"
         case listTitle = "list_title"
         case createdAt = "created_at"
     }
 
+    /// Verb for "<name> <verb> <title>". Types are the ones the Go backend
+    /// writes (handler/bookshelf.go shelfActivityType, diary.go, lists.go);
+    /// the fallback turns any newer type into readable words.
     var verbPhrase: String {
+        let stars = metadata?.rating.map { " " + String(repeating: "★", count: min(5, max(0, $0))) } ?? ""
         switch activityType {
-        case "book_read":        return "finished"
-        case "book_shelved":     return "shelved"
-        case "book_reading":     return "started reading"
-        case "book_tbr":         return "wants to read"
-        case "diary_entry":      return "wrote about"
-        case "book_liked":       return "liked"
-        case "list_created":     return "made a list"
-        case "list_saved":       return "saved a list"
-        case "follow":           return "followed"
-        default:                 return activityType.replacingOccurrences(of: "_", with: " ")
+        case "finished_reading":     return "finished" + stars
+        case "started_reading":      return "started reading"
+        case "wants_to_read":        return "wants to read"
+        case "rated":                return "rated" + stars
+        case "added_book":           return "shelved"
+        case "created_diary_entry":  return "wrote about"
+        case "created_list":         return "made a list"
+        case "shared_list":          return "shared a list"
+        case "shared_book":          return "shared"
+        default:                     return activityType.replacingOccurrences(of: "_", with: " ")
         }
     }
 
@@ -61,6 +70,10 @@ struct FriendActivity: Codable, Identifiable {
         if diff < 86400 { return "\(Int(diff / 3600))h" }
         return "\(Int(diff / 86400))d"
     }
+}
+
+struct ActivityMetadata: Codable {
+    let rating: Int?
 }
 
 /// Shared ISO8601 parser that tolerates fractional seconds, which Go's

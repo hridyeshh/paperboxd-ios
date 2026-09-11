@@ -189,6 +189,18 @@ struct AhaRevealView: View {
             }
             .buttonStyle(ScaleButtonStyle())
             .disabled(viewModel.isAddingBook)
+
+            Button {
+                viewModel.skipAha()
+            } label: {
+                Text("Skip to home")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(Color(white: 0.55))
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 36)
+            }
+            .buttonStyle(ScaleButtonStyle())
+            .disabled(viewModel.isAddingBook)
         }
     }
 }

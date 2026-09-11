@@ -26,18 +26,36 @@ struct Genre: Identifiable, Hashable {
     ]
 }
 
-/// Reading tempo option. Cosmetic for now — the backend has no tempo column, so
-/// like the web flow we collect it but don't persist it yet.
-struct ReadingTempo: Identifiable, Hashable {
-    let id: String
-    let label: String
-    let sub: String
+/// Backend cap on favourites (Top 4). The "books you love" step reuses it so a
+/// pick never fails on the favourites write.
+let onboardingMaxPicks = 4
 
-    static let all: [ReadingTempo] = [
-        ReadingTempo(id: "casual", label: "Casual", sub: "1–3 books / month"),
-        ReadingTempo(id: "regular", label: "Regular", sub: "About 1 / week"),
-        ReadingTempo(id: "voracious", label: "Voracious", sub: "Multiple per week"),
-    ]
+/// One row of GET /api/v1/users/suggested. `reason` is authored by the server
+/// so web, iOS and Android show the same explanation.
+struct SuggestedReader: Decodable, Identifiable, Equatable {
+    let id: String
+    let username: String
+    let name: String?
+    let avatarURL: String?
+    let bio: String?
+    let booksReadCount: Int
+    let followersCount: Int
+    let sharedGenres: [String]
+    let reason: String
+
+    enum CodingKeys: String, CodingKey {
+        case id, username, name, bio, reason
+        case avatarURL = "avatar_url"
+        case booksReadCount = "books_read_count"
+        case followersCount = "followers_count"
+        case sharedGenres = "shared_genres"
+    }
+
+    var displayName: String { (name?.isEmpty == false ? name : nil) ?? username }
+}
+
+struct SuggestedReadersResponse: Decodable {
+    let users: [SuggestedReader]
 }
 
 /// One recommended book from GET /api/v1/recommendations/home. Mirrors the Go
@@ -56,6 +74,23 @@ struct RecBook: Decodable, Identifiable, Equatable {
 
     var authorLine: String {
         authors.isEmpty ? "Unknown author" : authors.joined(separator: ", ")
+    }
+
+    /// A search hit (Google-volumes shape) as a pick candidate.
+    init(searchResult book: Book) {
+        self.id = book.id
+        self.title = book.volumeInfo.title
+        self.authors = book.volumeInfo.authors ?? []
+        self.coverURL = book.coverURL
+        self.reason = nil
+    }
+
+    init(id: String, title: String, authors: [String], coverURL: String?, reason: String?) {
+        self.id = id
+        self.title = title
+        self.authors = authors
+        self.coverURL = coverURL
+        self.reason = reason
     }
 }
 

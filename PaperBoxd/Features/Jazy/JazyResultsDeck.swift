@@ -13,6 +13,10 @@ import SwiftUI
 /// shadow is gone; so is `JZ`.
 struct JazyResultsDeck: View {
     let query: String
+    /// Jazy's one-line framing of the deck ("Three quiet ones, since Stoner
+    /// landed"). Was decoded and never drawn — the librarian's voice with
+    /// the sound off.
+    var intro: String? = nil
     let matches: [VibeMatch]
     let user: User
     let onClose: () -> Void
@@ -78,6 +82,13 @@ struct JazyResultsDeck: View {
                     .foregroundStyle(SK.sub)
                     .lineLimit(1)
                     .padding(.top, 11)
+                if index == 0, let intro, !intro.isEmpty {
+                    Text(intro)
+                        .font(.system(size: 12))
+                        .foregroundStyle(SK.faint)
+                        .lineLimit(2)
+                        .padding(.top, 6)
+                }
             }
             .padding(.horizontal, 20)
             .padding(.top, 12)

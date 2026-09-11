@@ -395,81 +395,320 @@ struct GenresStepView: View {
     }
 }
 
-// MARK: - Step 3: Tempo
+// MARK: - Step 3: Books you love
 
-struct TempoStepView: View {
+/// Up to four books the reader already loves. Search on top, a suggestion
+/// grid underneath; picks sit in a tray of four slots so the cap is visible
+/// before it bites.
+struct BooksStepView: View {
     @ObservedObject var viewModel: OnboardingViewModel
+    @FocusState private var searchFocused: Bool
 
-    /// Each tempo carries a step of the reading-heatmap ramp, so the choice
-    /// previews the colour the user will live with on their profile.
-    private static let ramp: [String: String] = [
-        "casual": "E7A87D", "regular": "D97A4A", "voracious": "C0271C",
-    ]
+    private let columns = Array(repeating: GridItem(.flexible(), spacing: 8), count: 4)
 
     var body: some View {
         VStack(spacing: 0) {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Set a tempo,\nnot a target.")
-                            .font(.system(size: 28, weight: .bold, design: .serif))
-                            .foregroundStyle(BK.ink)
-                            .lineSpacing(2)
-                        Text("Helps us pace recommendations. No streaks, no pressure.")
-                            .font(.system(size: 13.5))
-                            .foregroundStyle(BK.muted)
-                            .lineSpacing(2)
-                    }
-                    .padding(.bottom, 24)
+            VStack(alignment: .leading, spacing: 7) {
+                Text("Books you\nalready love.")
+                    .font(.system(size: 28, weight: .bold, design: .serif))
+                    .foregroundStyle(BK.ink)
+                    .lineSpacing(2)
+                Text("Pick up to \(onboardingMaxPicks). They become your Top 4 and teach us your taste.")
+                    .font(.system(size: 13.5))
+                    .foregroundStyle(BK.muted)
+                    .lineSpacing(2)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 26)
+            .padding(.top, 22)
+            .padding(.bottom, 14)
 
-                    VStack(spacing: 10) {
-                        ForEach(ReadingTempo.all) { option in
-                            tempoRow(option)
-                        }
-                    }
-                }
+            tray
                 .padding(.horizontal, 26)
-                .padding(.top, 28)
-                .padding(.bottom, 24)
+                .padding(.bottom, 12)
+
+            searchField
+                .padding(.horizontal, 26)
+                .padding(.bottom, 12)
+
+            ScrollView {
+                grid.padding(.horizontal, 26).padding(.bottom, 16)
             }
             .scrollBounceBehavior(.basedOnSize)
+            .scrollDismissesKeyboard(.immediately)
 
-            OnboardingPrimaryButton(title: "Get my recommendations") {
-                viewModel.continueFromTempo()
+            VStack(spacing: 8) {
+                if let err = viewModel.errorMessage {
+                    Text(err)
+                        .font(.system(size: 12))
+                        .foregroundStyle(BK.crimson)
+                        .frame(maxWidth: .infinity)
+                }
+                OnboardingPrimaryButton(title: viewModel.picks.isEmpty ? "Skip for now" : "Continue") {
+                    viewModel.continueFromBooks()
+                }
             }
             .padding(.horizontal, 26)
+            .padding(.top, 8)
             .padding(.bottom, 20)
         }
     }
 
-    private func tempoRow(_ option: ReadingTempo) -> some View {
-        let active = viewModel.tempo == option.id
-        let ramp = Color(hex: Self.ramp[option.id] ?? "D97A4A")
-        return Button {
-            viewModel.tempo = option.id
-        } label: {
-            HStack(spacing: 13) {
-                Rectangle()
-                    .fill(active ? Color.white.opacity(0.75) : ramp)
-                    .frame(width: 6, height: 34)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(option.label)
-                        .font(.system(size: 14.5, weight: .semibold))
-                        .foregroundStyle(active ? .white : BK.ink)
-                    Text(option.sub)
-                        .font(.system(size: 12.5))
-                        .foregroundStyle(active ? .white.opacity(0.78) : BK.muted)
+    private var tray: some View {
+        HStack(spacing: 8) {
+            ForEach(0 ..< onboardingMaxPicks, id: \.self) { i in
+                if i < viewModel.picks.count {
+                    let book = viewModel.picks[i]
+                    Button { viewModel.togglePick(book) } label: {
+                        PickCover(url: book.coverURL, title: book.title)
+                            .frame(width: 48, height: 72)
+                            .overlay(Rectangle().stroke(BK.ink, lineWidth: 2))
+                            .shadow(color: BK.plank.opacity(0.35), radius: 6, y: 5)
+                    }
+                    .buttonStyle(ScaleButtonStyle())
+                    .accessibilityLabel("Remove \(book.title)")
+                } else {
+                    Rectangle()
+                        .fill(BK.card)
+                        .frame(width: 48, height: 72)
+                        .overlay(Rectangle().stroke(BK.ink.opacity(0.22), style: StrokeStyle(lineWidth: 1.5, dash: [4, 3])))
                 }
-                Spacer(minLength: 0)
-                Image(systemName: "checkmark")
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(active ? .white : .clear)
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 15)
-            .background(active ? ramp : BK.card)
-            .overlay(Rectangle().stroke(active ? ramp : BK.ink.opacity(0.14), lineWidth: 2))
+            Spacer(minLength: 0)
         }
-        .buttonStyle(ScaleButtonStyle())
+        .animation(.spring(response: 0.32, dampingFraction: 0.75), value: viewModel.picks)
+    }
+
+    private var searchField: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(BK.muted)
+            TextField("Search a title or author", text: $viewModel.searchQuery)
+                .font(.system(size: 15))
+                .foregroundStyle(BK.ink)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .focused($searchFocused)
+                .onChange(of: viewModel.searchQuery) { _, q in viewModel.searchChanged(q) }
+            if viewModel.isSearching {
+                ProgressView().tint(BK.muted).scaleEffect(0.8)
+            } else if !viewModel.searchQuery.isEmpty {
+                Button { viewModel.searchQuery = "" } label: {
+                    Image(systemName: "xmark.circle.fill").foregroundStyle(BK.muted)
+                }
+            }
+        }
+        .padding(.horizontal, 14)
+        .frame(height: 48)
+        .background(BK.card)
+        .overlay(Rectangle().stroke(searchFocused ? BK.ink : BK.ink.opacity(0.25), lineWidth: 2))
+    }
+
+    @ViewBuilder
+    private var grid: some View {
+        let items = viewModel.pickGrid
+        if viewModel.isLoadingSuggestions && items.isEmpty {
+            LazyVGrid(columns: columns, spacing: 8) {
+                ForEach(0 ..< 8, id: \.self) { _ in
+                    Rectangle().fill(BK.paper2).aspectRatio(2 / 3, contentMode: .fit)
+                        .overlay(Rectangle().stroke(BK.ink.opacity(0.12), lineWidth: 1.5))
+                }
+            }
+        } else if items.isEmpty {
+            Text(viewModel.searchQuery.count >= 2 ? "Nothing found — try another title." : "Search for a book you love.")
+                .font(.system(size: 13))
+                .foregroundStyle(BK.muted)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 28)
+        } else {
+            LazyVGrid(columns: columns, spacing: 8) {
+                ForEach(items) { book in
+                    let picked = viewModel.isPicked(book)
+                    Button { viewModel.togglePick(book) } label: {
+                        PickCover(url: book.coverURL, title: book.title)
+                            .aspectRatio(2 / 3, contentMode: .fit)
+                            .overlay(picked ? BK.ink.opacity(0.35) : Color.clear)
+                            .overlay(alignment: .center) {
+                                if picked {
+                                    Image(systemName: "checkmark")
+                                        .font(.system(size: 18, weight: .bold))
+                                        .foregroundStyle(BK.cream)
+                                }
+                            }
+                            .overlay(Rectangle().stroke(picked ? BK.ink : BK.ink.opacity(0.18), lineWidth: picked ? 2.5 : 1.5))
+                            .scaleEffect(picked ? 0.96 : 1)
+                    }
+                    .buttonStyle(ScaleButtonStyle())
+                    .animation(.spring(response: 0.28, dampingFraction: 0.7), value: picked)
+                    .accessibilityLabel(book.title)
+                    .accessibilityAddTraits(picked ? [.isButton, .isSelected] : .isButton)
+                }
+            }
+        }
+    }
+}
+
+/// Cover with a titled fallback, so a book with no image is still pickable.
+struct PickCover: View {
+    let url: String?
+    let title: String
+
+    var body: some View {
+        ZStack {
+            BK.paper2
+            if let url, let u = URL(string: url) {
+                AsyncImage(url: u) { phase in
+                    if let image = phase.image {
+                        image.resizable().scaledToFill()
+                    } else {
+                        fallback
+                    }
+                }
+            } else {
+                fallback
+            }
+        }
+        .clipped()
+    }
+
+    private var fallback: some View {
+        Text(title)
+            .font(.system(size: 9, weight: .semibold))
+            .foregroundStyle(BK.muted)
+            .multilineTextAlignment(.center)
+            .lineLimit(4)
+            .padding(4)
+    }
+}
+
+// MARK: - Step 4: Readers to follow
+
+/// The home feed is empty until you follow someone. Suggestions come with a
+/// server-authored reason, so the same line shows on every platform.
+struct ReadersStepView: View {
+    @ObservedObject var viewModel: OnboardingViewModel
+
+    var body: some View {
+        VStack(spacing: 0) {
+            VStack(alignment: .leading, spacing: 7) {
+                Text("Readers\nto follow.")
+                    .font(.system(size: 28, weight: .bold, design: .serif))
+                    .foregroundStyle(BK.ink)
+                    .lineSpacing(2)
+                Text("Your home fills up with what they read, finish and write.")
+                    .font(.system(size: 13.5))
+                    .foregroundStyle(BK.muted)
+                    .lineSpacing(2)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 26)
+            .padding(.top, 22)
+            .padding(.bottom, 18)
+
+            ScrollView {
+                VStack(spacing: 8) {
+                    if viewModel.isLoadingReaders && viewModel.readers.isEmpty {
+                        ForEach(0 ..< 4, id: \.self) { _ in
+                            Rectangle().fill(BK.paper2).frame(height: 62)
+                                .overlay(Rectangle().stroke(BK.ink.opacity(0.12), lineWidth: 1.5))
+                        }
+                    } else if viewModel.readers.isEmpty {
+                        Text("You're early — no readers to suggest yet. You can find people from search any time.")
+                            .font(.system(size: 13))
+                            .foregroundStyle(BK.muted)
+                            .multilineTextAlignment(.center)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 28)
+                    } else {
+                        ForEach(viewModel.readers) { reader in
+                            readerRow(reader)
+                        }
+                    }
+                }
+                .padding(.horizontal, 26)
+                .padding(.bottom, 16)
+            }
+            .scrollBounceBehavior(.basedOnSize)
+
+            VStack(spacing: 8) {
+                if let err = viewModel.errorMessage {
+                    Text(err)
+                        .font(.system(size: 12))
+                        .foregroundStyle(BK.crimson)
+                        .frame(maxWidth: .infinity)
+                }
+                OnboardingPrimaryButton(title: viewModel.followed.isEmpty ? "Skip for now" : "Get my recommendations") {
+                    viewModel.continueFromReaders()
+                }
+            }
+            .padding(.horizontal, 26)
+            .padding(.top, 8)
+            .padding(.bottom, 20)
+        }
+    }
+
+    private func readerRow(_ reader: SuggestedReader) -> some View {
+        let done = viewModel.followed.contains(reader.username)
+        return HStack(spacing: 12) {
+            avatar(reader)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(reader.displayName)
+                    .font(.system(size: 14.5, weight: .semibold))
+                    .foregroundStyle(BK.ink)
+                    .lineLimit(1)
+                Text(reader.booksReadCount > 0 ? "\(reader.reason) · \(reader.booksReadCount) read" : reader.reason)
+                    .font(.system(size: 12))
+                    .foregroundStyle(BK.muted)
+                    .lineLimit(1)
+            }
+            Spacer(minLength: 8)
+            Button { viewModel.follow(reader) } label: {
+                HStack(spacing: 5) {
+                    Image(systemName: done ? "checkmark" : "plus")
+                        .font(.system(size: 11, weight: .bold))
+                    Text(done ? "Following" : "Follow")
+                        .font(.system(size: 12, weight: .semibold))
+                }
+                .foregroundStyle(done ? BK.ink : BK.cream)
+                .padding(.horizontal, 12)
+                .frame(height: 32)
+                .background(done ? BK.ochre : BK.ink)
+                .overlay(Rectangle().stroke(BK.ink, lineWidth: 2))
+            }
+            .buttonStyle(ScaleButtonStyle())
+            .disabled(done)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(BK.card)
+        .overlay(Rectangle().stroke(BK.ink.opacity(0.18), lineWidth: 1.5))
+        .animation(.easeInOut(duration: 0.18), value: done)
+    }
+
+    private func avatar(_ reader: SuggestedReader) -> some View {
+        ZStack {
+            BK.paper2
+            if let url = reader.avatarURL, let u = URL(string: url) {
+                AsyncImage(url: u) { phase in
+                    if let image = phase.image {
+                        image.resizable().scaledToFill()
+                    } else {
+                        initial(reader)
+                    }
+                }
+            } else {
+                initial(reader)
+            }
+        }
+        .frame(width: 40, height: 40)
+        .clipShape(Circle())
+        .overlay(Circle().stroke(BK.ink, lineWidth: 1.5))
+    }
+
+    private func initial(_ reader: SuggestedReader) -> some View {
+        Text(String(reader.displayName.prefix(1)).uppercased())
+            .font(.system(size: 15, weight: .bold, design: .serif))
+            .foregroundStyle(BK.ink)
     }
 }

@@ -170,6 +170,23 @@ final class AppState: ObservableObject {
         return user.username == nil || user.username?.isEmpty == true
     }
 
+    /// Records an app open for DAU/streaks. The backend awards daily-open XP at
+    /// most once per UTC day, so a local once-per-day guard just saves the call.
+    func recordDailyOpen() {
+        guard case .main = currentScreen else { return }
+        let key = "pb_daily_open_date"
+        let today = ISO8601DateFormatter.utcDay.string(from: Date())
+        if UserDefaults.standard.string(forKey: key) == today { return }
+        Task.detached(priority: .utility) {
+            let ok = (try? await APIClient.shared.request(
+                path: Endpoints.dailyOpen,
+                method: .post,
+                requiresAuth: true
+            ) as Empty) != nil
+            if ok { UserDefaults.standard.set(today, forKey: key) }
+        }
+    }
+
     /// Called mid-onboarding once the username is claimed. Updates the cached
     /// user without routing — the flow continues to the next step.
     func setOnboardingUsername(_ username: String) {
@@ -224,4 +241,14 @@ extension Notification.Name {
     static let paperboxdAvatarUpdated = Notification.Name("paperboxd.avatarUpdated")
     static let diaryEntryCreated = Notification.Name("paperboxd.diaryEntryCreated")
     static let diaryEntryDeleted = Notification.Name("paperboxd.diaryEntryDeleted")
+}
+
+private extension ISO8601DateFormatter {
+    /// `yyyy-MM-dd` in UTC, matching the backend's daily-open day boundary.
+    static let utcDay: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withFullDate]
+        f.timeZone = TimeZone(identifier: "UTC")
+        return f
+    }()
 }

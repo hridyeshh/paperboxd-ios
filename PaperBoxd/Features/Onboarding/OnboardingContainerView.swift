@@ -45,6 +45,7 @@ struct OnboardingContainerView: View {
             withAnimation(.spring(response: 0.6, dampingFraction: 0.85).delay(0.08)) {
                 contentIn = true
             }
+            Analytics.track("onboarding_started", metadata: ["entry_step": "username"])
         }
     }
 
@@ -57,8 +58,11 @@ struct OnboardingContainerView: View {
         case .genres:
             GenresStepView(viewModel: viewModel)
                 .transition(stepTransition)
-        case .tempo:
-            TempoStepView(viewModel: viewModel)
+        case .books:
+            BooksStepView(viewModel: viewModel)
+                .transition(stepTransition)
+        case .readers:
+            ReadersStepView(viewModel: viewModel)
                 .transition(stepTransition)
         case .ahaLoading:
             AhaLoadingView()
@@ -86,7 +90,7 @@ struct OnboardingStageHeader: View {
 
     private var activeStage: Int {
         switch step {
-        case .username, .genres, .tempo: return 1
+        case .username, .genres, .books, .readers: return 1
         case .ahaLoading, .ahaReveal:    return 2
         }
     }
@@ -95,7 +99,8 @@ struct OnboardingStageHeader: View {
         switch step {
         case .username: return 1
         case .genres:   return 2
-        case .tempo:    return 3
+        case .books:    return 3
+        case .readers:  return 4
         default:        return nil
         }
     }
@@ -114,7 +119,7 @@ struct OnboardingStageHeader: View {
                 Spacer(minLength: 0)
             }
             if let subStep {
-                Text("Step \(subStep) of 3")
+                Text("Step \(subStep) of 4")
                     .font(.system(size: 11, weight: .medium, design: .monospaced))
                     .textCase(.uppercase)
                     .kerning(1.4)

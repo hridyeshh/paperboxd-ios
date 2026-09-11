@@ -12,7 +12,6 @@ struct ProfileView: View {
     @State private var showSettings = false
     @State private var showCreateList = false
     @State private var bannerCropTarget: CropTarget?
-    @State private var fullList: FullList?
     @State private var diarySheet: DiaryNavItem?
     @State private var showWrapped = false
     @State private var showLevelSheet = false
@@ -62,9 +61,7 @@ struct ProfileView: View {
         .onReceive(NotificationCenter.default.publisher(for: .diaryEntryDeleted)) { note in
             if let id = note.object as? String { vm.handleDeletedEntry(id) }
         }
-        .navigationDestination(item: $fullList) { which in
-            fullListPage(which)
-        }
+        .navigationDestination(for: FullList.self) { fullListPage($0) }
         .overlay(alignment: .bottom) {
             if let toast = vm.toastMessage {
                 toastChip(toast)
@@ -365,7 +362,7 @@ struct ProfileView: View {
                 books: vm.shelfBooks,
                 isLoading: vm.isLoadingShelf,
                 limit: 9,
-                onShowMore: { fullList = .bookshelf },
+                showMore: .bookshelf,
                 onAppearItem: { await vm.fetchShelfIfNeeded(item: $0) }
             )
         case .diary:
@@ -389,7 +386,7 @@ struct ProfileView: View {
                 isLoading: vm.isLoadingTBR,
                 emptyMessage: "Nothing on the TBR list yet",
                 limit: 9,
-                onShowMore: { fullList = .tbr }
+                showMore: .tbr
             )
         }
     }

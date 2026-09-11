@@ -3,6 +3,7 @@ import SwiftUI
 @main
 struct PaperBoxdApp: App {
     @StateObject private var appState = AppState()
+    @Environment(\.scenePhase) private var scenePhase
 
     init() {
         // Free-scan quota defaults to 7 before the first scan writes a real count.
@@ -19,6 +20,12 @@ struct PaperBoxdApp: App {
                 .environmentObject(appState)
                 .preferredColorScheme(.dark)
                 .background(Color("Background").ignoresSafeArea())
+                .onChange(of: scenePhase) { _, phase in
+                    if phase == .active { appState.recordDailyOpen() }
+                }
+                .onChange(of: appState.currentScreen) { _, _ in
+                    appState.recordDailyOpen()
+                }
         }
     }
 

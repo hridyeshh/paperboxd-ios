@@ -21,9 +21,17 @@ enum Endpoints {
 
     // Onboarding (web v1 routes — accept the mobile bearer token)
     static let saveOnboarding     = "/api/v1/users/me/onboarding"
+    static let suggestedUsers     = "/api/v1/users/suggested"
+    static let dailyOpen          = "/api/v1/users/me/daily-open"
     static let avatarUpload       = "/api/v1/users/me/avatar/upload"
     static let bannerUpload       = "/api/v1/users/me/banner/upload"
     static let recommendationsHome = "/api/v1/recommendations/home"
+    /// The modular home. tz is the reader's IANA zone, for the greeting.
+    static func recommendationsFeed(timeZone: String) -> String {
+        var comps = URLComponents(string: "/api/v1/recommendations/feed")!
+        comps.queryItems = [URLQueryItem(name: "tz", value: timeZone)]
+        return comps.string ?? "/api/v1/recommendations/feed"
+    }
     static let scanAnalyze        = "/api/v1/scan/analyze"
 
     /// Monthly Wrapped. `month` is YYYY-MM (defaults to the current month) and
@@ -74,6 +82,8 @@ enum Endpoints {
     static func likeBook(_ id: String) -> String { "/api/v1/books/\(id)/like" }
     static func similarBooks(_ id: String) -> String { "/api/v1/recommendations/similar/\(id)" }
     static func bookFriendsReading(_ id: String) -> String { "/api/v1/books/\(id)/friends-reading" }
+    /// Paperboxd's own reader stats for a book (rating, reads, TBR).
+    static func bookSocial(_ id: String) -> String { "/api/v1/books/\(id)/social" }
     static func bookReviews(_ id: String) -> String { "/api/v1/books/\(id)/reviews" }
     static func bookReviewsByFriends(_ id: String) -> String { "/api/v1/books/\(id)/reviews/friends" }
     static func readingProgress(username: String, bookId: String) -> String {
@@ -115,6 +125,8 @@ enum Endpoints {
 
     // Activities
     static let followingActivities = "/api/v1/activities/following"
+    /// Public community snapshot: trending books + public activity. No auth.
+    static let community = "/api/v1/community"
 
     // Search
     static let searchBooks = "/api/v1/books/search"

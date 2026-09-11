@@ -10,6 +10,7 @@ final class BookDetailViewModel: ObservableObject {
     @Published var errorMessage: String?
     @Published var toastMessage: String?
 
+    @Published var readerStats: BookSocialResponse.Readers?
     @Published var friendsOnBook: [FriendOnBook] = []
     @Published var friendsReadingCount: Int = 0
     @Published var friendReviews: [FriendBookReview] = []
@@ -41,6 +42,7 @@ final class BookDetailViewModel: ObservableObject {
         async let friendReviewsTask: FriendReviewsResponse? = fetchFriendReviews()
         async let reviewsTask: BookReviewsResponse? = fetchReviews()
         async let progressTask: ReadingProgress? = fetchProgress()
+        async let socialTask: BookSocialResponse? = fetchSocial()
         do {
             book = try await bookTask
         } catch let e as APIError {
@@ -62,7 +64,16 @@ final class BookDetailViewModel: ObservableObject {
         friendReviews = (await friendReviewsTask)?.reviews ?? []
         reviews = (await reviewsTask)?.reviews ?? []
         progress = await progressTask
+        readerStats = (await socialTask)?.readers
         isLoading = false
+    }
+
+    private func fetchSocial() async -> BookSocialResponse? {
+        try? await APIClient.shared.request(
+            path: Endpoints.bookSocial(bookId),
+            method: .get,
+            requiresAuth: true
+        )
     }
 
     /// Pages a reader must log before they can rate or review. Mirrors

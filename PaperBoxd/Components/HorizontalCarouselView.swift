@@ -14,7 +14,10 @@ struct HorizontalCarouselView<Item: Identifiable, Content: View>: View {
                 .padding(.horizontal, 20)
 
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 12) {
+                // Top-aligned: cards of different heights (two-line vs
+                // one-line titles, an optional reason) otherwise centre and
+                // the covers drift along the rail.
+                HStack(alignment: .top, spacing: 12) {
                     ForEach(items) { item in
                         content(item)
                     }

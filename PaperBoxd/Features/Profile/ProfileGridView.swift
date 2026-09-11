@@ -52,7 +52,9 @@ struct ShelfGridView: View {
     /// When set, caps the grid (the profile tab shows 3×3) and swaps infinite
     /// pagination for a Show More button. `nil` = full paginated grid.
     var limit: Int? = nil
-    var onShowMore: (() -> Void)? = nil
+    /// Pushed when "Show more" is tapped. A navigation *value*, not a
+    /// closure setting state — see ShowMoreLink.
+    var showMore: ProfileView.FullList? = nil
     var onAppearItem: (BookWithStatus) async -> Void
 
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 8), count: 3)
@@ -81,8 +83,8 @@ struct ShelfGridView: View {
                         }
                     }
                 }
-                if let limit, let onShowMore, books.count > limit {
-                    ShowMoreButton(action: onShowMore)
+                if let limit, let showMore, books.count > limit {
+                    ShowMoreLink(value: showMore)
                         .padding(.top, 16)
                 }
             }
@@ -244,7 +246,7 @@ struct ListsTabView: View {
         VStack(alignment: .leading, spacing: 10) {
             Eyebrow(text: eyebrow).padding(.horizontal, 20)
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 10) {
+                HStack(alignment: .top, spacing: 10) {
                     ForEach(lists) { list in
                         NavigationLink(value: ListNav(listId: list.id, username: list.username)) {
                             ReadingListCard(list: list)
@@ -306,7 +308,9 @@ struct TBRGridView: View {
     var emptyMessage: String = "Nothing on the TBR list"
     /// Same semantics as `ShelfGridView.limit` — 3×3 cap on the profile tab.
     var limit: Int? = nil
-    var onShowMore: (() -> Void)? = nil
+    /// Pushed when "Show more" is tapped. A navigation *value*, not a
+    /// closure setting state — see ShowMoreLink.
+    var showMore: ProfileView.FullList? = nil
 
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 8), count: 3)
 
@@ -331,8 +335,8 @@ struct TBRGridView: View {
                         }
                     }
                 }
-                if let limit, let onShowMore, items.count > limit {
-                    ShowMoreButton(action: onShowMore)
+                if let limit, let showMore, items.count > limit {
+                    ShowMoreLink(value: showMore)
                         .padding(.top, 16)
                 }
             }
@@ -343,20 +347,32 @@ struct TBRGridView: View {
 }
 
 /// Full-width brutalist "show more" — mono caps with a hard ink border.
-struct ShowMoreButton: View {
-    var action: () -> Void
+/// "Show more" as a navigation value rather than a state flag.
+///
+/// It used to set `@State fullList`, which drove a
+/// `navigationDestination(item:)`. That does not survive a value push made
+/// from inside the pushed page: tapping a book in the full TBR grid appended
+/// the book to the stack, and the item-based destination then re-pushed the
+/// grid on top of it — so the reader saw the TBR list again and found the
+/// book underneath it on back. One push mechanism per stack fixes it.
+struct ShowMoreLink<V: Hashable>: View {
+    let value: V
 
     var body: some View {
-        Button(action: action) {
-            Text("SHOW MORE")
-                .font(PB.mono(11, .medium))
-                .tracking(1.5)
-                .foregroundStyle(Color("TextPrimary"))
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 11)
-                .overlay(Rectangle().strokeBorder(Color("TextPrimary"), lineWidth: 1.5))
-        }
-        .buttonStyle(.plain)
+        NavigationLink(value: value) { ShowMoreLabel() }
+            .buttonStyle(.plain)
+    }
+}
+
+private struct ShowMoreLabel: View {
+    var body: some View {
+        Text("SHOW MORE")
+            .font(PB.mono(11, .medium))
+            .tracking(1.5)
+            .foregroundStyle(Color("TextPrimary"))
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 11)
+            .overlay(Rectangle().strokeBorder(Color("TextPrimary"), lineWidth: 1.5))
     }
 }
 
