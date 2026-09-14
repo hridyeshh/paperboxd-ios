@@ -1,4 +1,5 @@
 import Combine
+import SwiftUI
 import Foundation
 
 /// Vibe search moved out of here — it lives in Ask Jazy now (`Features/Jazy`).
@@ -15,6 +16,9 @@ final class SearchViewModel: ObservableObject {
     @Published var users: [UserProfile] = []
     @Published var isSearching = false
     @Published var errorMessage: String?
+    @Published var toastMessage: String?
+    /// Books quick-added from a result row this session; the row shows a check.
+    @Published var addedIDs: Set<String> = []
 
     @Published var wallBooks: [Book] = []
     @Published var isLoadingWall = false
@@ -68,9 +72,12 @@ final class SearchViewModel: ObservableObject {
         searchTask?.cancel()
         let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
         if q.isEmpty {
-            books = []; users = []; errorMessage = nil
+            books = []; users = []; errorMessage = nil; isSearching = false
             return
         }
+        // Spinner from the first keystroke, so the debounce window doesn't flash
+        // "Nothing found" before the request has even been sent.
+        isSearching = true
         searchTask = Task {
             try? await Task.sleep(nanoseconds: 400_000_000)
             guard !Task.isCancelled else { return }
@@ -102,6 +109,25 @@ final class SearchViewModel: ObservableObject {
             let result = (try? await searchUsers(query)) ?? []
             users = result
             if !result.isEmpty { addToHistory(query) }
+        }
+    }
+
+    /// Plus button on a result row: straight to TBR. The backend resolves
+    /// whatever id the result carries (UUID, Google volume id, ISBN).
+    func addToTBR(_ book: Book, username: String?) async {
+        guard let username else { toastMessage = "Sign in to save books"; return }
+        guard !addedIDs.contains(book.id) else { return }
+        do {
+            let _: Empty = try await APIClient.shared.request(
+                path: Endpoints.addToBookshelf(username: username),
+                method: .post,
+                body: ["book_id": book.id, "status": BookshelfStatus.toRead.rawValue],
+                requiresAuth: true
+            )
+            addedIDs.insert(book.id)
+            withAnimation { toastMessage = "Added to your TBR" }
+        } catch {
+            withAnimation { toastMessage = (error as? APIError)?.errorDescription ?? "Couldn't add — try again" }
         }
     }
 

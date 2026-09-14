@@ -52,29 +52,36 @@ struct WrappedChapter: Identifiable {
 
 private struct CoverChapter: View {
     let w: Wrapped
+    @Environment(\.wrappedTopInset) private var topInset
 
     var body: some View {
         ZStack(alignment: .topLeading) {
             PBW.ink.ignoresSafeArea()
+            // The discs move with the content inset so the masthead keeps its
+            // design-grid clearance above the terra circle.
             PBStamp(delay: 0.08, duration: 0.62) {
                 Circle().fill(PBW.terra).frame(width: 268, height: 268)
             }
-            .offset(x: -70, y: 168)
+            .offset(x: -70, y: 168 + topInset)
             PBStamp(delay: 0.24, duration: 0.62) {
                 Circle().fill(PBW.amber).frame(width: 152, height: 152)
             }
-            .offset(x: 284, y: 372)
+            .offset(x: 284, y: 372 + topInset)
 
             VStack(alignment: .leading, spacing: 0) {
                 PBFade {
                     Text("PaperBoxd").font(PBW.script(34)).foregroundStyle(PBW.cream)
                 }
-                PBKicker(text: "Monthly Wrapped", delay: 0.16).padding(.top, 6)
+                PBKicker(text: "Monthly Wrapped", color: PBW.cream.opacity(0.85), size: 11.5, weight: .semibold, delay: 0.16)
+                    .padding(.top, 6)
                 Spacer()
                 PBRise(delay: 0.42) {
+                    // "SEPTEMBER" overflows 72pt on the 342pt column; shrink, never wrap.
                     Text(w.month.uppercased())
                         .font(PBW.poster(72))
                         .kerning(-2)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.6)
                         .foregroundStyle(PBW.cream)
                 }
                 PBFade(delay: 0.62) {
@@ -94,7 +101,7 @@ private struct CoverChapter: View {
                 }
                 .padding(.top, 16)
             }
-            .padding(.top, 76).padding(.horizontal, 30).padding(.bottom, 112)
+            .padding(.top, 76 + topInset).padding(.horizontal, 30).padding(.bottom, 112)
         }
         .clipped()
     }
@@ -181,11 +188,14 @@ private struct BooksChapter: View {
                                 .font(PBW.mono(11))
                                 .foregroundStyle(i == 0 ? PBW.terra : PBW.ink.opacity(0.4))
                                 .frame(width: 20, alignment: .leading)
-                            ZStack(alignment: .leading) {
-                                Rectangle().fill(PBWPalette.spine(i))
-                                Rectangle().fill(.black.opacity(0.25)).frame(width: 1).offset(x: 2)
+                            PBCoverArt(url: book.cover) {
+                                ZStack(alignment: .leading) {
+                                    Rectangle().fill(PBWPalette.spine(i))
+                                    Rectangle().fill(.black.opacity(0.25)).frame(width: 1).offset(x: 2)
+                                }
                             }
                             .frame(width: 26, height: 39)
+                            .clipped()
                             .shadow(color: .black.opacity(0.2), radius: 4, y: 3)
                             VStack(alignment: .leading, spacing: 3) {
                                 Text(book.title)
@@ -510,7 +520,7 @@ private struct TopRatedChapter: View {
                 PBKicker(text: f.rating >= 5 ? "The only five star" : "The best of the month", color: PBW.terraDeep)
                 HStack(alignment: .top, spacing: 18) {
                     PBBookBlock(
-                        title: f.title, author: f.author,
+                        title: f.title, author: f.author, cover: f.cover,
                         spine: PBWPalette.spine(1), accent: Color(hex: "e9e2cf"),
                         width: 104, delay: 0.26, rotation: -3
                     )
@@ -572,7 +582,7 @@ private struct AbandonedChapter: View {
                     Spacer()
                     ZStack(alignment: .topTrailing) {
                         PBBookBlock(
-                            title: a.title, author: a.author,
+                            title: a.title, author: a.author, cover: a.cover,
                             spine: PBWPalette.spine(5), accent: Color(hex: "efe6f2"),
                             width: 128, delay: 0.24, rotation: 4
                         )
@@ -706,6 +716,7 @@ private struct RankChapter: View {
 
 private struct ArchetypeChapter: View {
     let w: Wrapped
+    @Environment(\.wrappedTopInset) private var topInset
 
     var body: some View {
         ZStack(alignment: .topLeading) {
@@ -784,7 +795,7 @@ private struct ArchetypeChapter: View {
                     }
                 }
             }
-            .padding(.top, 76).padding(.horizontal, 30).padding(.bottom, 112)
+            .padding(.top, 76 + topInset).padding(.horizontal, 30).padding(.bottom, 112)
         }
         .clipped()
     }

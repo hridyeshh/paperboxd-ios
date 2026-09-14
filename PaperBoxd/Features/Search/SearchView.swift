@@ -5,6 +5,8 @@ struct SearchView: View {
     let viewer: User
     @FocusState private var searchFocused: Bool
     @State private var searchPath = NavigationPath()
+    @State private var showScanner = false
+    @State private var scannedCode: String?
 
     // Search page is light-mode only. The app window is globally forced dark and
     // the asset colors are single-appearance dark, so we use fixed light values
@@ -37,6 +39,20 @@ struct SearchView: View {
                 VStack(spacing: 0) {
                     searchHeader
                     contentArea
+                }
+            }
+            .overlay(alignment: .bottom) { toast }
+            // Barcode → book page. The EAN-13 on a back cover is the ISBN, and
+            // GET /books/{id} resolves an ISBN server-side, so no lookup here.
+            .sheet(isPresented: $showScanner, onDismiss: {
+                if let code = scannedCode {
+                    scannedCode = nil
+                    searchPath.append(code)
+                }
+            }) {
+                BarcodeScanSheet { code in
+                    scannedCode = code
+                    showScanner = false
                 }
             }
             .toolbar(.hidden, for: .navigationBar)
@@ -103,10 +119,14 @@ struct SearchView: View {
     private var searchBarField: some View {
         let offset: CGFloat = 5
         let pressed = searchFocused
-        return HStack(spacing: 10) {
+        // Hit areas: the field spans the bar's full height so any tap on it
+        // reaches UIKit directly (no SwiftUI gesture in between), and the icons
+        // get 44pt targets instead of their glyph bounds.
+        return HStack(spacing: 6) {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: 15, weight: .medium))
                 .foregroundStyle(slInk)
+                .padding(.leading, 14)
 
             TextField(placeholder, text: $vm.query)
                 .focused($searchFocused)
@@ -115,6 +135,7 @@ struct SearchView: View {
                 .tint(slAccent)
                 .autocorrectionDisabled()
                 .submitLabel(.search)
+                .frame(maxWidth: .infinity, minHeight: 46)
                 .onChange(of: vm.query) { _, _ in vm.onQueryChanged() }
 
             if !vm.query.isEmpty {
@@ -126,26 +147,38 @@ struct SearchView: View {
                     Image(systemName: "xmark.circle.fill")
                         .font(.system(size: 15))
                         .foregroundStyle(slMuted)
+                        .frame(width: 32, height: 44)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
             }
+
+            Button { showScanner = true } label: {
+                Image(systemName: "barcode.viewfinder")
+                    .font(.system(size: 18, weight: .medium))
+                    .foregroundStyle(slInk)
+                    .frame(width: 44, height: 46)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Scan a book barcode")
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 13)
-        .background(slCard)
-        .overlay(Rectangle().strokeBorder(slInk, lineWidth: 1.5))
+        // Tap-to-focus for the leading icon / gaps lives on the background, not
+        // the container: a tap gesture wrapping the TextField swallows its
+        // first tap, so the keyboard only came up on the second try.
+        .background(slCard.onTapGesture { searchFocused = true })
+        .overlay(Rectangle().strokeBorder(slInk, lineWidth: 1.5).allowsHitTesting(false))
         // hard offset shadow sits behind the face; collapses on focus
         .background(alignment: .topLeading) {
             Rectangle()
                 .fill(slInk)
                 .offset(x: pressed ? 0 : offset, y: pressed ? 0 : offset)
+                .allowsHitTesting(false)
         }
         // face pushes into its own shadow when focused
         .offset(x: pressed ? offset : 0, y: pressed ? offset : 0)
         .animation(nil, value: pressed) // instant, brutalist
         .padding(.trailing, offset)     // reserve room for the idle shadow
-        .contentShape(Rectangle())
-        .onTapGesture { searchFocused = true }
     }
 
     private var placeholder: String {
@@ -319,7 +352,9 @@ struct SearchView: View {
                 VStack(spacing: 0) {
                     ForEach(items) { book in
                         Button { searchPath.append(book.id) } label: {
-                            BookSearchResultRow(book: book)
+                            BookSearchResultRow(book: book, added: vm.addedIDs.contains(book.id)) {
+                                Task { await vm.addToTBR(book, username: viewer.username) }
+                            }
                         }
                         .buttonStyle(.plain)
                         Rectangle().fill(slLine.opacity(0.5)).frame(height: 1)
@@ -348,6 +383,25 @@ struct SearchView: View {
                     }
                 }
             }
+        }
+    }
+
+    // Same brutalist toast as the book page; sits above the keyboard.
+    @ViewBuilder
+    private var toast: some View {
+        if let msg = vm.toastMessage {
+            Text(msg.uppercased())
+                .font(PB.mono(10, .semibold)).tracking(1)
+                .foregroundStyle(slBg)
+                .padding(.horizontal, 15).padding(.vertical, 9)
+                .background(slInk)
+                .overlay(Rectangle().strokeBorder(slAccent, lineWidth: 2))
+                .padding(.bottom, 16)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .task(id: msg) {
+                    try? await Task.sleep(nanoseconds: 2_500_000_000)
+                    withAnimation { vm.toastMessage = nil }
+                }
         }
     }
 
@@ -472,6 +526,71 @@ struct SearchView: View {
 
 struct ProfileDestination: Hashable {
     let username: String
+}
+
+/// Full-screen camera sheet for the search bar. Reuses the Scan & Know
+/// scanner; only the chrome differs.
+private struct BarcodeScanSheet: View {
+    let onCode: (String) -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var status: BarcodeScannerView.Status = .scanning
+
+    var body: some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+            BarcodeScannerView(onCode: onCode, onStatus: { status = $0 })
+                .ignoresSafeArea()
+
+            if status == .scanning {
+                RoundedRectangle(cornerRadius: 10)
+                    .strokeBorder(.white.opacity(0.9), lineWidth: 2)
+                    .frame(width: 260, height: 150)
+            }
+
+            VStack {
+                HStack {
+                    Text("SCAN THE BARCODE")
+                        .font(PB.mono(10, .semibold)).tracking(1.5)
+                        .foregroundStyle(.white)
+                    Spacer()
+                    Button { dismiss() } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .frame(width: 36, height: 36)
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 18)
+
+                Spacer()
+
+                VStack(spacing: 10) {
+                    Text(hint)
+                        .font(PB.serifItalic(15))
+                        .foregroundStyle(.white.opacity(0.9))
+                        .multilineTextAlignment(.center)
+                    if status == .denied, let url = URL(string: UIApplication.openSettingsURLString) {
+                        Link("Open Settings", destination: url)
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(.white)
+                    }
+                }
+                .padding(.horizontal, 32)
+                .padding(.bottom, 44)
+            }
+        }
+        .preferredColorScheme(.dark)
+    }
+
+    private var hint: String {
+        switch status {
+        case .scanning:    return "Point the camera at the barcode on the back cover."
+        case .denied:      return "Camera access is off, so scanning can't start."
+        case .unavailable: return "No camera on this device — type the title instead."
+        }
+    }
 }
 
 /// Cover + title card for the search page's "Picked for you" rail.

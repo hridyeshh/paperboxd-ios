@@ -9,6 +9,7 @@ struct NotificationsView: View {
     var onRespondToRequest: (String, Bool) -> Void = { _, _ in }
 
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var appState: AppState
     @State private var path = NavigationPath()
 
     /// This is a feed of people you follow — never surface your own actions
@@ -91,7 +92,16 @@ struct NotificationsView: View {
     @ViewBuilder
     private func row(_ a: FriendActivity) -> some View {
         Button {
-            if let bookId = a.bookID { path.append(bookId) }
+            if a.activityType == "fusion_joined", let id = a.metadata?.fusionID {
+                // The Fusion covers the tabs, so this sheet has to go first.
+                dismiss()
+                let name = a.displayName
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                    appState.fusionRoute = .fusion(id: id, introFrom: name)
+                }
+            } else if let bookId = a.bookID {
+                path.append(bookId)
+            }
         } label: {
             HStack(alignment: .top, spacing: 11) {
                 AvatarView(url: a.avatarURL, size: 38)
@@ -136,7 +146,7 @@ struct NotificationsView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .disabled(a.bookID == nil)
+        .disabled(a.bookID == nil && a.metadata?.fusionID == nil)
     }
 
     private var emptyState: some View {

@@ -19,6 +19,34 @@ final class AppState: ObservableObject {
     /// read it without unwrapping the enum each time.
     @Published private(set) var currentUser: User?
 
+    /// A Fusion waiting to open. Presented over the main tabs; a link that
+    /// arrives while signed out waits here (and survives a relaunch) until
+    /// sign-in or onboarding finishes.
+    @Published var fusionRoute: FusionRoute? = AppState.restorePendingFusion() {
+        didSet {
+            if case .link(let token) = fusionRoute {
+                UserDefaults.standard.set(token, forKey: Self.pendingFusionKey)
+            } else {
+                UserDefaults.standard.removeObject(forKey: Self.pendingFusionKey)
+            }
+        }
+    }
+
+    private static let pendingFusionKey = "pb_pending_fusion_token"
+
+    private static func restorePendingFusion() -> FusionRoute? {
+        UserDefaults.standard.string(forKey: pendingFusionKey).map { .link(token: $0) }
+    }
+
+    /// Universal links and paperboxd:// URLs. Returns false for anything that
+    /// is not ours so the system can carry on.
+    @discardableResult
+    func handleIncomingURL(_ url: URL) -> Bool {
+        guard let route = FusionRoute.from(url: url) else { return false }
+        fusionRoute = route
+        return true
+    }
+
     init() {
         // Listen for any layer that calls API and hits 401 — APIClient posts
         // this notification after clearing the keychain. We then reset state.

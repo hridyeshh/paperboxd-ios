@@ -48,6 +48,36 @@ enum PBW {
     }
 }
 
+// MARK: - Chrome inset
+
+private struct WrappedTopInsetKey: EnvironmentKey {
+    static let defaultValue: CGFloat = 0
+}
+
+extension EnvironmentValues {
+    /// Extra top padding, in design units, that the player adds so chapter
+    /// content clears the device safe area plus the rails/label chrome.
+    var wrappedTopInset: CGFloat {
+        get { self[WrappedTopInsetKey.self] }
+        set { self[WrappedTopInsetKey.self] = newValue }
+    }
+}
+
+// MARK: - Preloaded covers
+
+private struct WrappedCoversKey: EnvironmentKey {
+    static let defaultValue: [String: UIImage] = [:]
+}
+
+extension EnvironmentValues {
+    /// Cover images fetched ahead of an ImageRenderer pass, keyed by URL.
+    /// AsyncImage never resolves inside a renderer, so exports read from here.
+    var wrappedCovers: [String: UIImage] {
+        get { self[WrappedCoversKey.self] }
+        set { self[WrappedCoversKey.self] = newValue }
+    }
+}
+
 // MARK: - Still mode
 
 private struct WrappedStillKey: EnvironmentKey {
@@ -299,22 +329,51 @@ struct PBCount: View {
 struct PBKicker: View {
     let text: String
     var color: Color = PBW.muted
+    var size: CGFloat = 10.5
+    var weight: Font.Weight = .regular
     var delay: Double = 0
 
     var body: some View {
         PBFade(delay: delay, duration: 0.52) {
             Text(text.uppercased())
-                .font(PBW.mono(10.5))
+                .font(PBW.mono(size, weight))
                 .tracking(1.9)
                 .foregroundStyle(color)
         }
     }
 }
 
-/// A book as printed matter: spine, board, no artwork.
+/// Real cover art when the backend has it; `fallback` (the drawn board) while
+/// it loads, when it fails, or when there is no URL.
+struct PBCoverArt<Fallback: View>: View {
+    let url: String?
+    @ViewBuilder let fallback: () -> Fallback
+    @Environment(\.wrappedCovers) private var preloaded
+
+    var body: some View {
+        if let url, let image = preloaded[url] {
+            Image(uiImage: image).resizable().scaledToFill()
+        } else if let url, !url.isEmpty,
+           let u = URL(string: url.replacingOccurrences(of: "http://", with: "https://")) {
+            AsyncImage(url: u) { phase in
+                if let image = phase.image {
+                    image.resizable().scaledToFill()
+                } else {
+                    fallback()
+                }
+            }
+        } else {
+            fallback()
+        }
+    }
+}
+
+/// A book as printed matter: the real cover when we have it, otherwise spine,
+/// board and type.
 struct PBBookBlock: View {
     let title: String
     var author: String = ""
+    var cover: String? = nil
     var spine: Color
     var accent: Color
     var width: CGFloat = 96
@@ -323,6 +382,14 @@ struct PBBookBlock: View {
 
     var body: some View {
         PBStamp(delay: delay, rotation: rotation) {
+            PBCoverArt(url: cover) { board }
+                .frame(width: width, height: width * 1.52)
+                .clipped()
+                .shadow(color: .black.opacity(0.34), radius: 13, y: 10)
+        }
+    }
+
+    private var board: some View {
             ZStack(alignment: .topLeading) {
                 spine
                 LinearGradient(
@@ -351,10 +418,6 @@ struct PBBookBlock: View {
                 .padding(width * 0.1)
                 .padding(.leading, width * 0.05)
             }
-            .frame(width: width, height: width * 1.52)
-            .clipped()
-            .shadow(color: .black.opacity(0.34), radius: 13, y: 10)
-        }
     }
 }
 
@@ -364,6 +427,7 @@ struct WrappedScreen<Content: View>: View {
     var foreground: Color = PBW.cream
     var topPadding: CGFloat = 76
     @ViewBuilder var content: Content
+    @Environment(\.wrappedTopInset) private var topInset
 
     var body: some View {
         ZStack {
@@ -372,7 +436,7 @@ struct WrappedScreen<Content: View>: View {
                 content
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .padding(.top, topPadding)
+            .padding(.top, topPadding + topInset)
             .padding(.horizontal, 30)
             .padding(.bottom, 112)
             .foregroundStyle(foreground)

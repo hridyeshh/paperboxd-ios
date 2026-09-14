@@ -51,6 +51,9 @@ private struct WrappedStoryPlayer: View {
     @State private var holdTask: Task<Void, Never>?
     @State private var isFinished = false
     @State private var showShare = false
+    /// Where the safe-area chrome starts, measured from layout — feeds the
+    /// chapters' top inset so their headers clear the rails and label row.
+    @State private var safeTop: CGFloat = 0
 
     /// Seconds a chapter holds before it turns itself.
     private let chapterDuration: Double = 6
@@ -69,28 +72,34 @@ private struct WrappedStoryPlayer: View {
             // targets and safe-area insets are not scaled with it.
             let scale = geo.size.width / PBW.designWidth
 
-            ZStack(alignment: .top) {
-                chapter.content(wrapped)
-                    .frame(width: PBW.designWidth, height: geo.size.height / scale)
-                    .scaleEffect(scale, anchor: .topLeading)
-                    .frame(width: geo.size.width, height: geo.size.height, alignment: .topLeading)
-                    .id(chapter.id)   // a new chapter re-runs its own typesetting
-                    .clipped()
-
-                chrome(width: geo.size.width)
-            }
-            .frame(width: geo.size.width, height: geo.size.height)
-            .contentShape(Rectangle())
-            .gesture(
-                DragGesture(minimumDistance: 0)
-                    .onChanged { _ in beginHold() }
-                    .onEnded { value in endHold(at: value.location.x, width: geo.size.width) }
-            )
+            chapter.content(wrapped)
+                // Chapters keep their design-grid 76pt top margin, measured
+                // from below the notch rather than the screen edge, so the
+                // rails + label row never overlap the chapter's own header.
+                .environment(\.wrappedTopInset, safeTop / scale)
+                .frame(width: PBW.designWidth, height: geo.size.height / scale)
+                .scaleEffect(scale, anchor: .topLeading)
+                .frame(width: geo.size.width, height: geo.size.height, alignment: .topLeading)
+                .id(chapter.id)   // a new chapter re-runs its own typesetting
+                .clipped()
+                .contentShape(Rectangle())
+                .gesture(
+                    DragGesture(minimumDistance: 0)
+                        .onChanged { _ in beginHold() }
+                        .onEnded { value in endHold(at: value.location.x, width: geo.size.width) }
+                )
         }
         .ignoresSafeArea()
+        // Chrome sits in the safe area by layout (same as the Fusion player).
+        // Reading the window's insets during body caused an AttributeGraph
+        // cycle there, and the rails ended up under the notch here.
+        .overlay {
+            chrome
+                .onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).minY } action: { safeTop = $0 }
+        }
         .onReceive(timer) { _ in advanceProgress() }
         .sheet(isPresented: $showShare) {
-            WrappedShareSheet(wrapped: wrapped)
+            WrappedShareSheet(wrapped: wrapped, chapter: chapter)
                 .presentationDetents([.large])
                 .presentationBackground(PBW.inkDeep)
         }
@@ -103,7 +112,7 @@ private struct WrappedStoryPlayer: View {
 
     // MARK: Chrome
 
-    private func chrome(width: CGFloat) -> some View {
+    private var chrome: some View {
         VStack(spacing: 0) {
             HStack(spacing: 3) {
                 ForEach(Array(chapters.enumerated()), id: \.element.id) { i, _ in
@@ -167,20 +176,6 @@ private struct WrappedStoryPlayer: View {
             }
             .padding(.bottom, 22)
         }
-        .padding(.top, safeTop)
-        .padding(.bottom, safeBottom)
-    }
-
-    private var safeTop: CGFloat {
-        UIApplication.shared.connectedScenes
-            .compactMap { ($0 as? UIWindowScene)?.keyWindow?.safeAreaInsets.top }
-            .first ?? 20
-    }
-
-    private var safeBottom: CGFloat {
-        UIApplication.shared.connectedScenes
-            .compactMap { ($0 as? UIWindowScene)?.keyWindow?.safeAreaInsets.bottom }
-            .first ?? 0
     }
 
     private func fill(for i: Int) -> Double {
@@ -246,10 +241,15 @@ private struct WrappedStoryPlayer: View {
 
 private struct WrappedShareSheet: View {
     let wrapped: Wrapped
+    /// The chapter on screen when "Share this" was tapped — that is what gets
+    /// exported. The card chapter exports the recap card itself.
+    let chapter: WrappedChapter
     @Environment(\.dismiss) private var dismiss
+    @State private var toast: String?
+    @State private var rendered: UIImage?
 
     /// 9:16 at 1080×1920 — the size every story surface wants.
-    private static let exportWidth: CGFloat = 360
+    private static let exportPixels: CGFloat = 1080
 
     var body: some View {
         VStack(spacing: 18) {
@@ -258,9 +258,15 @@ private struct WrappedShareSheet: View {
                 .frame(width: 40, height: 3.5)
                 .padding(.top, 14)
 
-            WrappedRecapCard(w: wrapped, width: 230)
-                .environment(\.wrappedStill, true)
-                .shadow(color: .black.opacity(0.55), radius: 22, y: 18)
+            Group {
+                if let rendered {
+                    Image(uiImage: rendered).resizable().scaledToFit()
+                } else {
+                    Rectangle().fill(PBW.ink)
+                }
+            }
+            .frame(width: 230, height: 230 * 16 / 9)
+            .shadow(color: .black.opacity(0.55), radius: 22, y: 18)
 
             Text("9:16 STORY")
                 .font(PBW.mono(9)).tracking(1)
@@ -268,19 +274,21 @@ private struct WrappedShareSheet: View {
                 .padding(.horizontal, 10).padding(.vertical, 6)
                 .overlay(Rectangle().stroke(PBW.cream, lineWidth: 1))
 
-            if let image = renderedCard {
-                ShareLink(
-                    item: image,
-                    preview: SharePreview("My \(wrapped.month) \(wrapped.year) on PaperBoxd", image: image)
-                ) {
-                    HStack(spacing: 9) {
-                        Image(systemName: "square.and.arrow.up")
-                        Text("SHARE CARD").font(PBW.mono(10)).tracking(1.4)
+            // Two destinations the card was drawn for, not the system sheet:
+            // straight into an Instagram story, or into Photos to post anywhere.
+            if let image = rendered {
+                VStack(spacing: 10) {
+                    if ShareService.canShareToInstagramStories {
+                        shareButton("INSTAGRAM STORY", icon: { InstagramGlyph(size: 14, color: PBW.terra) }) {
+                            ShareService.shareToInstagramStories(image: image, sourceAppID: "com.paperboxd.PaperBoxd")
+                            dismiss()
+                        }
                     }
-                    .foregroundStyle(PBW.terra)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
-                    .overlay(Rectangle().stroke(PBW.terra, lineWidth: 1))
+                    shareButton("SAVE IMAGE", icon: { Image(systemName: "arrow.down.to.line") }) {
+                        ShareService.saveToPhotos(image) { ok in
+                            toast = ok ? "Saved to Photos" : "Couldn’t save image"
+                        }
+                    }
                 }
                 .padding(.horizontal, 22)
             } else {
@@ -293,19 +301,73 @@ private struct WrappedShareSheet: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(PBW.inkDeep)
+        .task { rendered = await renderChapter() }
+        .overlay(alignment: .bottom) {
+            if let toast {
+                Text(toast.uppercased())
+                    .font(PBW.mono(10)).tracking(1.4)
+                    .foregroundStyle(PBW.ink)
+                    .padding(.horizontal, 15).padding(.vertical, 9)
+                    .background(PBW.cream)
+                    .padding(.bottom, 30)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .task(id: toast) {
+                        try? await Task.sleep(for: .seconds(2.2))
+                        withAnimation { self.toast = nil }
+                    }
+            }
+        }
+    }
+
+    private func shareButton<I: View>(_ label: String, @ViewBuilder icon: () -> I, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 9) {
+                icon()
+                Text(label).font(PBW.mono(10)).tracking(1.4)
+            }
+            .foregroundStyle(PBW.terra)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 14)
+            .overlay(Rectangle().stroke(PBW.terra, lineWidth: 1))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     /// Rendered once per presentation. `wrappedStill` makes every primitive
     /// draw its finished state — ImageRenderer never runs an animation, so
-    /// without it the card would export blank.
-    private var renderedCard: Image? {
+    /// without it the export would be blank. Covers are fetched first for the
+    /// same reason: AsyncImage never resolves inside a renderer.
+    @MainActor
+    private func renderChapter() async -> UIImage? {
+        let covers = await preloadCovers()
+        let width: CGFloat = chapter.id == "card" ? 360 : PBW.designWidth
+        let content: AnyView = chapter.id == "card"
+            ? AnyView(WrappedRecapCard(w: wrapped, width: width))
+            : AnyView(chapter.content(wrapped).frame(width: width, height: width * 16 / 9))
         let renderer = ImageRenderer(
-            content: WrappedRecapCard(w: wrapped, width: Self.exportWidth)
+            content: content
                 .environment(\.wrappedStill, true)
+                .environment(\.wrappedCovers, covers)
         )
-        renderer.scale = 3
-        guard let uiImage = renderer.uiImage else { return nil }
-        return Image(uiImage: uiImage)
+        renderer.scale = Self.exportPixels / width
+        return renderer.uiImage
+    }
+
+    /// URLSession's cache already holds whatever the chapter showed, so this is
+    /// usually instant; a miss just leaves that book on its drawn board.
+    private func preloadCovers() async -> [String: UIImage] {
+        var urls = wrapped.books.map(\.cover)
+        if let t = wrapped.topRated { urls.append(t.cover) }
+        if let a = wrapped.abandoned?.cover { urls.append(a) }
+        var out: [String: UIImage] = [:]
+        for raw in Set(urls) where !raw.isEmpty {
+            guard let url = URL(string: raw.replacingOccurrences(of: "http://", with: "https://")),
+                  let (data, _) = try? await URLSession.shared.data(from: url),
+                  let image = UIImage(data: data) else { continue }
+            out[raw] = image
+        }
+        return out
     }
 }
 

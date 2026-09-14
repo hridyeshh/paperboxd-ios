@@ -302,6 +302,9 @@ struct ProfileView: View {
                         WrappedEntryCard(monthName: currentMonthName) { showWrapped = true }
                             .padding(.horizontal, 20)
                             .padding(.top, 28)
+                        FusionsSection()
+                            .padding(.horizontal, 20)
+                            .padding(.top, 14)
                     }
 
                     if !vm.favoriteBooks.isEmpty {

@@ -48,6 +48,13 @@ enum Endpoints {
         "/api/v1/users/\(username)/bookshelf"
     }
 
+    // Fusion — one-time invite links and the two-reader story.
+    static let fusions       = "/api/v1/fusions"
+    static let fusionInvites = "/api/v1/fusions/invites"
+    static func fusionInvite(_ token: String) -> String { "/api/v1/fusions/invites/\(token)" }
+    static func acceptFusionInvite(_ token: String) -> String { "/api/v1/fusions/invites/\(token)/accept" }
+    static func fusion(_ id: String) -> String { "/api/v1/fusions/\(id)" }
+
     static func removeFromBookshelf(username: String, bookId: String) -> String {
         "/api/v1/users/\(username)/bookshelf/\(bookId)"
     }

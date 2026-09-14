@@ -47,6 +47,7 @@ struct FriendActivity: Codable, Identifiable {
         case "created_list":         return "made a list"
         case "shared_list":          return "shared a list"
         case "shared_book":          return "shared"
+        case "fusion_joined":        return "fused with you. Tap to play your Fusion"
         default:                     return activityType.replacingOccurrences(of: "_", with: " ")
         }
     }
@@ -74,6 +75,13 @@ struct FriendActivity: Codable, Identifiable {
 
 struct ActivityMetadata: Codable {
     let rating: Int?
+    /// Set on "fusion_joined": the Fusion the tap should open.
+    var fusionID: String? = nil
+
+    enum CodingKeys: String, CodingKey {
+        case rating
+        case fusionID = "fusion_id"
+    }
 }
 
 /// Shared ISO8601 parser that tolerates fractional seconds, which Go's

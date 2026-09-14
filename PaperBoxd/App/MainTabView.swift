@@ -66,6 +66,10 @@ struct MainTabView: View {
         }
         // Full-screen celebration takeovers (shelved / streak / level-up).
         .overlay { CelebrationOverlayView() }
+        // Fusion links, notification taps and the profile list all land here.
+        .fullScreenCover(item: $appState.fusionRoute) { route in
+            FusionRootView(route: route, user: user)
+        }
     }
 
     // MARK: - iOS 26+ : native Liquid Glass tab bar (shrink on scroll + sliding indicator)

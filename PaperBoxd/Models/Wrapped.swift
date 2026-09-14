@@ -143,6 +143,7 @@ struct Wrapped: Decodable, Equatable {
     struct Abandoned: Decodable, Equatable {
         let title: String
         let author: String
+        let cover: String?
         let page: Int
         let of: Int
         let started: String
@@ -150,7 +151,7 @@ struct Wrapped: Decodable, Equatable {
         let roast: String
 
         enum CodingKeys: String, CodingKey {
-            case title, author, page, of, started, roast
+            case title, author, cover, page, of, started, roast
             case lastOpened = "last_opened"
         }
 

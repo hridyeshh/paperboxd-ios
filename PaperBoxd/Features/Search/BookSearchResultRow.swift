@@ -2,6 +2,7 @@ import SwiftUI
 
 struct BookSearchResultRow: View {
     let book: Book
+    var added = false
     var onAdd: () -> Void = { }
 
     var body: some View {
@@ -38,14 +39,18 @@ struct BookSearchResultRow: View {
 
             Spacer(minLength: 0)
 
+            // Quick-add to TBR. Once added it turns into a check and stops firing.
             Button(action: onAdd) {
-                Image(systemName: "plus")
+                Image(systemName: added ? "checkmark" : "plus")
                     .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(BK.ink)
+                    .foregroundStyle(added ? BK.paper : BK.ink)
                     .frame(width: 32, height: 32)
+                    .background(added ? BK.ink : Color.clear, in: Circle())
                     .overlay(Circle().strokeBorder(BK.paper2, lineWidth: 1))
             }
             .buttonStyle(.plain)
+            .disabled(added)
+            .accessibilityLabel(added ? "Added to TBR" : "Add to TBR")
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 10)

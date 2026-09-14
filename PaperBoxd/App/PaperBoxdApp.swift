@@ -26,6 +26,7 @@ struct PaperBoxdApp: App {
                 .onChange(of: appState.currentScreen) { _, _ in
                     appState.recordDailyOpen()
                 }
+                .onOpenURL { appState.handleIncomingURL($0) }
         }
     }
 
