@@ -4,6 +4,7 @@ import SwiftUI
 
 /// Sub-screen the AuthContainerView routes between.
 enum AuthMode: Equatable {
+    case welcome              // paper-themed landing, first thing a new install sees
     case login
     case loginOTP            // came from "Login with OTP instead"
     case register
@@ -18,7 +19,7 @@ final class AuthViewModel: ObservableObject {
     @Published var otpCode: String = ""
 
     // Sub-screen
-    @Published var mode: AuthMode = .login
+    @Published var mode: AuthMode = .welcome
 
     // Async UX
     @Published var isLoading: Bool = false

@@ -14,10 +14,13 @@ import SwiftUI
 struct SettingsView: View {
     let profile: UserProfile
     var onSignOut: () -> Void
+    /// Opens the Fusion link window; nil hides the row.
+    var onCreateFusion: (() -> Void)? = nil
 
     @EnvironmentObject private var appState: AppState
     @Environment(\.dismiss) private var dismiss
-    @AppStorage("pb_scans_remaining") private var scansRemaining: Int = 7
+    @AppStorage("pb_scans_remaining") private var scansRemaining: Int = 3
+    @AppStorage("pb_scans_unlimited") private var scansUnlimited = false
     @State private var showDeleteSheet = false
     @State private var showRateAlert = false
     @State private var shareItem: ShareItem?
@@ -34,6 +37,7 @@ struct SettingsView: View {
 
                     ScrollView {
                         VStack(spacing: 24) {
+                            if onCreateFusion != nil { fusionSection }
                             privacySection
                             accountSection
                             scanSection
@@ -103,6 +107,17 @@ struct SettingsView: View {
         .background(alignment: .bottom) { Rectangle().fill(BK.ink).frame(height: 2) }
     }
 
+    // MARK: - Fusion
+
+    private var fusionSection: some View {
+        SettingsSection(title: "Fusion") {
+            Button { onCreateFusion?() } label: {
+                SettingsRow(icon: "circle.lefthalf.filled", label: "Create a Fusion")
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
     // MARK: - Private profile
 
     private var privacySection: some View {
@@ -117,7 +132,7 @@ struct SettingsView: View {
                         .font(.system(size: 15, weight: .medium))
                         .foregroundStyle(BK.ink)
                     Text(isPublic
-                         ? "Anyone can see your shelves, diary and lists."
+                         ? "Anyone can see your shelves, thoughts and lists."
                          : "Only followers you approve can see your shelves.")
                         .font(.system(size: 12))
                         .foregroundStyle(BK.muted)
@@ -262,7 +277,7 @@ struct SettingsView: View {
     private var scanSection: some View {
         SettingsSection(title: "Scan & Know") {
             SettingsRow(icon: "barcode.viewfinder", label: "Free Scans Remaining") {
-                Text(scansRemaining == 0 ? "NONE LEFT" : "\(scansRemaining) LEFT")
+                Text(scansUnlimited ? "UNLIMITED" : (scansRemaining == 0 ? "NONE LEFT" : "\(scansRemaining) LEFT"))
                     .font(PB.mono(12, .medium))
                     .foregroundStyle(BK.ink)
                     .padding(.horizontal, 8).padding(.vertical, 3)

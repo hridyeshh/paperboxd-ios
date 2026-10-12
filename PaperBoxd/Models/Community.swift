@@ -12,10 +12,13 @@ struct CommunityResponse: Decodable {
     let rising: [CommunityShelfBook]
     let mostTBR: [CommunityShelfBook]
     let hiddenGems: [CommunityShelfBook]
+    /// Right Now on Paperboxd. Empty when too little is happening; show
+    /// `activity` instead.
+    let now: [NowCard]
 
     enum CodingKeys: String, CodingKey {
         case trendingBooks = "trending_books"
-        case activity, rising
+        case activity, rising, now
         case mostTBR = "most_tbr"
         case hiddenGems = "hidden_gems"
     }
@@ -27,6 +30,7 @@ struct CommunityResponse: Decodable {
         rising = try c.decodeIfPresent([CommunityShelfBook].self, forKey: .rising) ?? []
         mostTBR = try c.decodeIfPresent([CommunityShelfBook].self, forKey: .mostTBR) ?? []
         hiddenGems = try c.decodeIfPresent([CommunityShelfBook].self, forKey: .hiddenGems) ?? []
+        now = try c.decodeIfPresent([NowCard].self, forKey: .now) ?? []
     }
 }
 
@@ -61,5 +65,55 @@ struct BookSocialResponse: Decodable {
             case tbr30d = "tbr_30d"
         }
     }
+    struct Friend: Decodable, Identifiable {
+        let userID: String
+        let username: String
+        let name: String?
+        let avatarURL: String?
+        let status: String
+        let rating: Int?
+        var id: String { userID }
+
+        enum CodingKeys: String, CodingKey {
+            case username, name, status, rating
+            case userID = "user_id"
+            case avatarURL = "avatar_url"
+        }
+    }
     let readers: Readers
+    let friends: [Friend]
+    let thoughtsCount: Int
+
+    enum CodingKeys: String, CodingKey {
+        case readers, friends
+        case thoughtsCount = "thoughts_count"
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        readers = try c.decode(Readers.self, forKey: .readers)
+        friends = try c.decodeIfPresent([Friend].self, forKey: .friends) ?? []
+        thoughtsCount = try c.decodeIfPresent(Int.self, forKey: .thoughtsCount) ?? 0
+    }
+}
+
+/// One "Right Now on Paperboxd" event. The headline is server-authored so
+/// every client makes the same claim with the same number.
+struct NowCard: Decodable, Identifiable {
+    let kind: String
+    let headline: String
+    let count: Int
+    let book: Book?
+    let listID: String?
+    let thoughtID: String?
+    let username: String?
+    let excerpt: String?
+
+    var id: String { kind + (book?.id ?? listID ?? thoughtID ?? username ?? "") }
+
+    enum CodingKeys: String, CodingKey {
+        case kind, headline, count, book, username, excerpt
+        case listID = "list_id"
+        case thoughtID = "thought_id"
+    }
 }

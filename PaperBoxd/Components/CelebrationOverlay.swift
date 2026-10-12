@@ -26,15 +26,22 @@ enum ReaderLevel {
 final class CelebrationCenter: ObservableObject {
     static let shared = CelebrationCenter()
     @Published var current: Celebration?
+    /// Takeovers that landed while another was playing (e.g. the streak after
+    /// a shelved poster). Played in order, one at a time.
+    private var queue: [Celebration] = []
 
     private init() {}
 
     func show(_ celebration: Celebration) {
-        current = celebration
+        if current == nil { current = celebration } else { queue.append(celebration) }
     }
 
-    func dismiss() {
-        current = nil
+    /// Ends `celebration` and starts the next queued one. Ignored unless it is
+    /// the one playing, so a second mounted overlay (one under a
+    /// fullScreenCover) finishing the same takeover can't skip the next.
+    func dismiss(_ celebration: Celebration) {
+        guard current == celebration else { return }
+        current = queue.isEmpty ? nil : queue.removeFirst()
     }
 
     // MARK: - Increment detection (streak / level)
@@ -42,10 +49,10 @@ final class CelebrationCenter: ObservableObject {
     private var streakDayKey: String { "celebrated_streak_day" }
     private var levelKey: String { "celebrated_level" }
 
-    /// Celebrate the first successful page-log of each UTC day — that's the moment
-    /// a reading day (and thus the streak) is earned. Keyed on the UTC day so
-    /// repeat logs the same day don't re-fire, but a fresh day / first-ever log /
-    /// streak reset all celebrate (a numeric-increase check missed those).
+    /// Celebrate the first successful log of each UTC day (pages, or a book
+    /// shelved). Keyed on the UTC day so repeat logs the same day don't re-fire,
+    /// but a fresh day / first-ever log / streak reset all celebrate (a
+    /// numeric-increase check missed those).
     func checkStreak(_ new: Int) {
         guard new > 0 else { return }
         var cal = Calendar(identifier: .gregorian)
@@ -96,7 +103,7 @@ struct CelebrationOverlayView: View {
                         LevelUpPoster(level: level)
                     }
                 } onDone: {
-                    center.dismiss()
+                    center.dismiss(c)
                 }
                 .id(c) // restart the phase machine if a new celebration lands
             }

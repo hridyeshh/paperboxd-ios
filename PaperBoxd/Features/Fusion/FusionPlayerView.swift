@@ -302,6 +302,7 @@ struct FusionShareCard: View {
 
 struct FusionShareSheet: View {
     let story: FusionStory
+    @State private var showSend = false
 
     var body: some View {
         VStack(spacing: 18) {
@@ -310,6 +311,16 @@ struct FusionShareSheet: View {
                 .environment(\.wrappedStill, true)
                 .shadow(color: .black.opacity(0.5), radius: 22, y: 18)
             FZLabel(text: "No ratings, titles or notes are on the card", size: 9, color: FZ.bg.opacity(0.5))
+            Button { showSend = true } label: {
+                Text("SEND ON PAPERBOXD")
+                    .font(FZ.medium(11)).tracking(1.1)
+                    .foregroundStyle(FZ.ink)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 15)
+                    .background(FZ.bg)
+            }
+            .buttonStyle(.plain)
+            .padding(.horizontal, 26)
             if let image = renderedCard {
                 ShareLink(item: image, preview: SharePreview("Our PaperBoxd Fusion", image: image)) {
                     Text("SHARE CARD")
@@ -325,6 +336,9 @@ struct FusionShareSheet: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(FZ.ink)
+        .sheet(isPresented: $showSend) {
+            SendSheetView(attachment: AttachmentRef(kind: AttachKind.fusion, refID: story.id))
+        }
     }
 
     private var renderedCard: Image? {

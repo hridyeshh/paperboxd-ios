@@ -16,6 +16,16 @@ enum ShareService {
         return renderer.uiImage
     }
 
+    /// Fetches a remote image (covers, avatars) for an ImageRenderer pass, which
+    /// cannot load URLs itself.
+    static func loadImage(_ urlString: String?) async -> UIImage? {
+        guard let s = urlString?.replacingOccurrences(of: "http://", with: "https://"),
+              let url = URL(string: s),
+              let (data, _) = try? await URLSession.shared.data(from: url)
+        else { return nil }
+        return UIImage(data: data)
+    }
+
     /// Whether Instagram Stories sharing is available on this device.
     static var canShareToInstagramStories: Bool {
         guard let url = URL(string: "instagram-stories://share") else { return false }

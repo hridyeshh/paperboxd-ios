@@ -33,7 +33,7 @@ struct FriendActivity: Codable, Identifiable {
     }
 
     /// Verb for "<name> <verb> <title>". Types are the ones the Go backend
-    /// writes (handler/bookshelf.go shelfActivityType, diary.go, lists.go);
+    /// writes (handler/bookshelf.go shelfActivityType, thoughts.go, lists.go);
     /// the fallback turns any newer type into readable words.
     var verbPhrase: String {
         let stars = metadata?.rating.map { " " + String(repeating: "★", count: min(5, max(0, $0))) } ?? ""
@@ -43,7 +43,9 @@ struct FriendActivity: Codable, Identifiable {
         case "wants_to_read":        return "wants to read"
         case "rated":                return "rated" + stars
         case "added_book":           return "shelved"
-        case "created_diary_entry":  return "wrote about"
+        case "created_thought":      return "wrote about"
+        case "liked_thought":        return "liked a thought on"
+        case "reposted_thought":     return "reposted a thought on"
         case "created_list":         return "made a list"
         case "shared_list":          return "shared a list"
         case "shared_book":          return "shared"

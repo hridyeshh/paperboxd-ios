@@ -7,6 +7,7 @@ struct NotificationsView: View {
     let user: User
     var followRequests: [FollowRequestUser] = []
     var onRespondToRequest: (String, Bool) -> Void = { _, _ in }
+    var title = "Updates"
 
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var appState: AppState
@@ -51,7 +52,7 @@ struct NotificationsView: View {
                     }
                 }
             }
-            .navigationTitle("Updates")
+            .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {

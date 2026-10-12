@@ -26,10 +26,6 @@ struct Genre: Identifiable, Hashable {
     ]
 }
 
-/// Backend cap on favourites (Top 4). The "books you love" step reuses it so a
-/// pick never fails on the favourites write.
-let onboardingMaxPicks = 4
-
 /// One row of GET /api/v1/users/suggested. `reason` is authored by the server
 /// so web, iOS and Android show the same explanation.
 struct SuggestedReader: Decodable, Identifiable, Equatable {
@@ -74,15 +70,6 @@ struct RecBook: Decodable, Identifiable, Equatable {
 
     var authorLine: String {
         authors.isEmpty ? "Unknown author" : authors.joined(separator: ", ")
-    }
-
-    /// A search hit (Google-volumes shape) as a pick candidate.
-    init(searchResult book: Book) {
-        self.id = book.id
-        self.title = book.volumeInfo.title
-        self.authors = book.volumeInfo.authors ?? []
-        self.coverURL = book.coverURL
-        self.reason = nil
     }
 
     init(id: String, title: String, authors: [String], coverURL: String?, reason: String?) {

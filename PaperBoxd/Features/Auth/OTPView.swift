@@ -1,73 +1,61 @@
 import SwiftUI
 
+/// One-time-code sign-in on the paper ground.
 struct OTPView: View {
     @ObservedObject var viewModel: AuthViewModel
     @FocusState private var fieldFocused: Bool
+    @State private var appear = false
+    @State private var errorTrigger = 0
 
     private let length = 6
 
     var body: some View {
-        VStack(spacing: 0) {
-            topBar
-            Spacer()
-            glassCard
-                .padding(.horizontal, 18)
-                .padding(.bottom, 32)
-        }
-    }
-
-    // MARK: - Top bar
-
-    private var topBar: some View {
-        HStack {
-            Text("PaperBoxd")
-                .font(.custom("SnellRoundhand-Black", size: 30))
-                .foregroundStyle(BK.ink)
-            Spacer()
-        }
-        .padding(.horizontal, 26)
-        .padding(.top, 20)
-    }
-
-    // MARK: - Glass card
-
-    private var glassCard: some View {
         VStack(alignment: .leading, spacing: 0) {
-            cardHeader
-            otpBoxes.padding(.top, 24)
+            PaperBackHeader(title: "Sign in") { viewModel.switchTo(.login) }
+                .padding(.bottom, 22)
+            header
+            otpBoxes.padding(.top, 28)
+                .reveal(appear, delay: 0.15)
             errorRow
             resendRow.padding(.top, 20)
-            backLink.padding(.top, 12)
+                .reveal(appear, delay: 0.2)
+            backLink.padding(.top, 14)
+                .reveal(appear, delay: 0.24)
         }
-        .padding(.horizontal, 24)
-        .padding(.top, 28)
-        .padding(.bottom, 26)
-        .background(BrutalCard())
+        .padding(.horizontal, 28)
+        .padding(.top, 20)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .background(BK.paper)
+        .shake(trigger: errorTrigger)
+        .onAppear {
+            fieldFocused = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { appear = true }
+        }
+        .onChange(of: viewModel.errorMessage) { _, newValue in
+            guard newValue != nil else { return }
+            errorTrigger += 1
+        }
     }
 
-    // MARK: - Card sections
+    // MARK: - Header
 
-    private var cardHeader: some View {
+    private var header: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Enter your code.")
-                .font(.system(size: 30, weight: .bold))
-                .tracking(-0.8)
+                .font(.system(size: 28, weight: .bold, design: .serif))
                 .foregroundStyle(BK.ink)
+                .reveal(appear, delay: 0)
             Group {
-                Text("Sent to ")
-                    .foregroundStyle(BK.muted)
-                + Text(viewModel.otpEmail)
-                    .foregroundStyle(BK.ink)
+                Text("Sent to ").foregroundStyle(BK.muted)
+                + Text(viewModel.otpEmail).foregroundStyle(BK.ink)
             }
-            .font(.system(size: 14, design: .serif).italic())
-            .lineSpacing(2)
+            .font(.system(size: 13.5))
+            .reveal(appear, delay: 0.05)
         }
-        .padding(.bottom, 4)
     }
 
     private var otpBoxes: some View {
         ZStack {
-            // Hidden capture field
             TextField("", text: $viewModel.otpCode)
                 .keyboardType(.numberPad)
                 .textContentType(.oneTimeCode)
@@ -82,7 +70,7 @@ struct OTPView: View {
 
             HStack(spacing: 10) {
                 ForEach(0..<length, id: \.self) { idx in
-                    OTPBox(
+                    PaperOTPBox(
                         digit: digit(at: idx),
                         isActive: viewModel.otpCode.count == idx && fieldFocused
                     )
@@ -91,7 +79,7 @@ struct OTPView: View {
             .contentShape(Rectangle())
             .onTapGesture { fieldFocused = true }
         }
-        .onAppear { fieldFocused = true }
+        .frame(maxWidth: .infinity)
     }
 
     @ViewBuilder
@@ -99,7 +87,7 @@ struct OTPView: View {
         if let msg = viewModel.errorMessage {
             Text(msg)
                 .font(.footnote)
-                .foregroundStyle(BK.accent)
+                .foregroundStyle(BK.crimson)
                 .padding(.top, 12)
         }
     }
@@ -114,17 +102,17 @@ struct OTPView: View {
                 Spacer()
                 Text("Resend")
                     .font(.footnote.weight(.medium))
-                    .foregroundStyle(BK.muted.opacity(0.7))
+                    .foregroundStyle(BK.muted.opacity(0.6))
             } else {
                 Text("Code expired")
                     .font(.footnote)
-                    .foregroundStyle(BK.accent)
+                    .foregroundStyle(BK.crimson)
                 Spacer()
                 Button("Resend code") {
                     Task { await viewModel.sendOTP() }
                 }
                 .font(.footnote.weight(.semibold))
-                .foregroundStyle(BK.accent)
+                .foregroundStyle(BK.ink)
             }
         }
     }
@@ -136,7 +124,7 @@ struct OTPView: View {
             Text("Use a different email")
                 .font(.system(size: 13))
                 .foregroundStyle(BK.muted)
-                .underline(color: BK.muted.opacity(0.7))
+                .underline(color: BK.muted.opacity(0.5))
                 .frame(maxWidth: .infinity)
         }
     }
@@ -150,26 +138,5 @@ struct OTPView: View {
 
     private func formatCountdown(_ s: Int) -> String {
         String(format: "%d:%02d", s / 60, s % 60)
-    }
-}
-
-private struct OTPBox: View {
-    let digit: String
-    let isActive: Bool
-
-    var body: some View {
-        Text(digit)
-            .font(.system(size: 26, weight: .semibold, design: .monospaced))
-            .foregroundStyle(BK.ink)
-            .frame(width: 46, height: 56)
-            .background(BK.paper2, in: Rectangle())
-            .overlay(
-                Rectangle()
-                    .stroke(
-                        isActive ? BK.accent : BK.ink.opacity(0.28),
-                        lineWidth: 1.5
-                    )
-            )
-            .animation(.easeInOut(duration: 0.15), value: isActive)
     }
 }

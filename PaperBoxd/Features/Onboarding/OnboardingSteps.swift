@@ -62,15 +62,21 @@ struct UsernameStepView: View {
     }
 
     private var titleBlock: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Choose your name\non the shelves.")
-                .font(.system(size: 28, weight: .bold, design: .serif))
-                .foregroundStyle(BK.ink)
-                .lineSpacing(2)
-            Text("This is how readers will find and follow you.")
-                .font(.system(size: 13.5))
-                .foregroundStyle(BK.muted)
-                .lineSpacing(2)
+        HStack(alignment: .top, spacing: 12) {
+            Image("ReadingBuddyIcon")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 50)
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Choose your name\non the shelves.")
+                    .font(.system(size: 28, weight: .bold, design: .serif))
+                    .foregroundStyle(BK.ink)
+                    .lineSpacing(2)
+                Text("This is how readers will find and follow you.")
+                    .font(.system(size: 13.5))
+                    .foregroundStyle(BK.muted)
+                    .lineSpacing(2)
+            }
         }
         .padding(.bottom, 24)
     }
@@ -240,475 +246,303 @@ struct UsernameStepView: View {
     }
 }
 
-// MARK: - Step 2: Genres — pull them off the shelf
+// MARK: - Step 3: Genres — swipe away
 
-/// Cloth and foil for each genre, plus how tall its board stands. Same shelf
-/// language as the sign-in hero, so the metaphor carries from the first screen
-/// into the first task. Keyed by `Genre.id`.
-private let genreBoards: [String: (cloth: String, foil: String, height: CGFloat)] = [
-    "fiction":         ("6A2350", "EDD9A8", 112),
-    "mystery":         ("23304F", "D8B45C", 122),
-    "thriller":        ("C0271C", "FFF0CC", 106),
-    "romance":         ("B5456B", "FFF0CC", 118),
-    "science-fiction": ("14595E", "E7C77A", 110),
-    "fantasy":         ("33306B", "D8B45C", 124),
-    "horror":          ("23211E", "D8B45C", 104),
-    "historical":      ("C9962B", "3A2C1C", 120),
-    "biography":       ("7A2E1B", "E7C77A", 114),
-    "self-help":       ("4F7A1E", "F2EDE1", 108),
-    "business":        ("2A3A5A", "C9962B", 116),
-    "non-fiction":     ("1B4B3C", "EDD9A8", 122),
-    "young-adult":     ("B5642A", "2A1C0E", 110),
-    "classics":        ("8C2B22", "E7C77A", 126),
-    "poetry":          ("2F7D5A", "FFF0CC", 106),
-]
-
-struct GenresStepView: View {
+/// Deck of 15 genre cards. Swipe (or tap) right to like, left to skip.
+/// Like as many as you want; Continue unlocks at 3, and running out of
+/// cards with 3+ liked moves on by itself.
+struct SwipeGenresStepView: View {
     @ObservedObject var viewModel: OnboardingViewModel
+    @State private var deck: [Genre] = Genre.all.shuffled()
+    @State private var dragOffset: CGSize = .zero
+    @State private var pastThreshold = false
+    @State private var flying = false
 
-    private var remaining: Int { max(0, 3 - viewModel.selectedGenres.count) }
+    private let commitDistance: CGFloat = 90
 
-    /// Fifteen boards across three shelves.
-    private var shelves: [[Genre]] {
-        stride(from: 0, to: Genre.all.count, by: 5).map {
-            Array(Genre.all[$0 ..< min($0 + 5, Genre.all.count)])
-        }
-    }
+    private var topGenre: Genre? { deck.first }
+    /// -1…1: how far the top card leans toward skip (−) or add (+).
+    private var lean: CGFloat { max(-1, min(1, dragOffset.width / commitDistance)) }
+    private var leaningAdd: Bool { lean > 0.3 }
+    private var leaningSkip: Bool { lean < -0.3 }
 
     var body: some View {
-        VStack(spacing: 0) {
-            VStack(alignment: .leading, spacing: 7) {
-                Text("Pull the ones\nyou'd reread.")
-                    .font(.system(size: 28, weight: .bold, design: .serif))
+        VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Swipe away!")
+                    .font(.system(size: 32, weight: .bold, design: .serif))
                     .foregroundStyle(BK.ink)
-                    .lineSpacing(2)
-                Text("Tap a spine to pull it off the shelf. Three or more and we can start.")
-                    .font(.system(size: 13.5))
+                Text("Right for genres you love, left to skip. Pick at least 3.")
+                    .font(.system(size: 14))
                     .foregroundStyle(BK.muted)
                     .lineSpacing(2)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 26)
-            .padding(.top, 22)
-            .padding(.bottom, 14)
+            .padding(.top, 18)
 
-            ScrollView {
-                VStack(spacing: 0) {
-                    ForEach(shelves.indices, id: \.self) { i in
-                        shelf(shelves[i])
+            shelfTray.padding(.top, 16)
+
+            Spacer(minLength: 12)
+
+            // Shrinks the deck on short phones (SE) so Continue stays on screen.
+            GeometryReader { geo in
+                ZStack {
+                    ForEach(deck.prefix(3).reversed(), id: \.id) { genre in
+                        card(genre)
                     }
                 }
-                .padding(.horizontal, 20)
+                .frame(width: geo.size.width, height: geo.size.height)
+                .scaleEffect(min(1, geo.size.height / 330))
             }
-            .scrollBounceBehavior(.basedOnSize)
+            .frame(maxHeight: 330)
+            .layoutPriority(1)
 
-            VStack(spacing: 12) {
-                tallyRow
-                OnboardingPrimaryButton(
-                    title: remaining == 0 ? "Continue" : "Pull \(remaining) more",
-                    isEnabled: remaining == 0
-                ) {
-                    viewModel.continueFromGenres()
-                }
+            hintRow.padding(.top, 10)
+
+            Spacer(minLength: 12)
+
+            HStack {
+                swipeButton(add: false)
+                Spacer()
+                mascot
+                Spacer()
+                swipeButton(add: true)
             }
-            .padding(.horizontal, 20)
-            .padding(.top, 10)
+
+            OnboardingPrimaryButton(title: "Continue", isEnabled: viewModel.selectedGenres.count >= 3) {
+                viewModel.continueFromGenres()
+            }
+            .padding(.top, 18)
             .padding(.bottom, 20)
         }
+        .padding(.horizontal, 26)
+        .task { await CatClipStore.shared.preload(["CatPlayFrames", "CatMatchFrames"]) }
     }
 
-    private func shelf(_ books: [Genre]) -> some View {
-        VStack(spacing: 0) {
-            HStack(alignment: .bottom, spacing: 5) {
-                ForEach(books) { genre in
-                    board(genre)
-                }
-            }
-            .frame(height: 128, alignment: .bottom)
-            Rectangle().fill(BK.plank).frame(height: 5)
-            LinearGradient(colors: [BK.plank.opacity(0.26), BK.plank.opacity(0)],
-                           startPoint: .top, endPoint: .bottom)
-                .frame(height: 14)
-        }
-        .padding(.top, 14)
-    }
+    // MARK: - Shelf tray
 
-    private func board(_ genre: Genre) -> some View {
-        let spec = genreBoards[genre.id] ?? ("23211E", "D8B45C", 114)
-        let pulled = viewModel.selectedGenres.contains(genre.id)
-        return Button {
-            viewModel.toggleGenre(genre.id)
-        } label: {
-            VStack(spacing: 0) {
-                foilRule(Color(hex: spec.foil))
-                Spacer(minLength: 0)
-                SpineTitle(
-                    text: genre.label,
-                    size: 12,
-                    weight: .bold,
-                    kerning: 0.3,
-                    color: Color(hex: spec.foil),
-                    run: spec.height - 36
-                )
-                Spacer(minLength: 0)
-                foilRule(Color(hex: spec.foil))
-            }
-            .padding(.vertical, 8)
-            .frame(width: 61, height: spec.height)
-            .background(Color(hex: spec.cloth))
-            // Untouched boards sit back under a shadow veil; a pulled one is
-            // lifted out of the row and into the light.
-            .overlay(pulled ? Color.clear : Color(hex: "1A140C").opacity(0.30))
-            .overlay(Rectangle().strokeBorder(BK.ink, lineWidth: 2))
-            .shadow(color: BK.plank.opacity(pulled ? 0.38 : 0), radius: 7, y: 8)
-            .offset(y: pulled ? -14 : 0)
-        }
-        .buttonStyle(.plain)
-        .animation(.spring(response: 0.32, dampingFraction: 0.7), value: pulled)
-        .accessibilityLabel(genre.label)
-        .accessibilityAddTraits(pulled ? [.isButton, .isSelected] : .isButton)
-    }
-
-    private func foilRule(_ color: Color) -> some View {
-        Rectangle().fill(color).frame(width: 61 * 0.66, height: 2)
-    }
-
-    private var tallyRow: some View {
-        HStack(spacing: 8) {
-            Text("Pulled")
-                .font(.system(size: 10, design: .monospaced))
-                .textCase(.uppercase)
+    private var shelfTray: some View {
+        let picked = viewModel.selectedGenres.compactMap { id in Genre.all.first { $0.id == id } }
+        let pending = leaningAdd ? topGenre : nil
+        return VStack(alignment: .leading, spacing: 8) {
+            Text(picked.count < 3 ? "YOUR SHELF · \(picked.count) OF 3" : "YOUR SHELF · \(picked.count) PICKED")
+                .font(.system(size: 11, weight: .medium, design: .monospaced))
                 .kerning(1.6)
                 .foregroundStyle(BK.muted)
-            HStack(spacing: 4) {
-                ForEach(0 ..< 3, id: \.self) { i in
-                    Rectangle()
-                        .fill(i < viewModel.selectedGenres.count ? BK.crimson : BK.card)
-                        .frame(height: 8)
-                        .overlay(Rectangle().stroke(BK.ink, lineWidth: 1.5))
-                }
-            }
-            Text("\(viewModel.selectedGenres.count)/\(Genre.all.count)")
-                .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                .foregroundStyle(BK.ink)
-        }
-    }
-}
-
-// MARK: - Step 3: Books you love
-
-/// Up to four books the reader already loves. Search on top, a suggestion
-/// grid underneath; picks sit in a tray of four slots so the cap is visible
-/// before it bites.
-struct BooksStepView: View {
-    @ObservedObject var viewModel: OnboardingViewModel
-    @FocusState private var searchFocused: Bool
-
-    private let columns = Array(repeating: GridItem(.flexible(), spacing: 8), count: 4)
-
-    var body: some View {
-        VStack(spacing: 0) {
-            VStack(alignment: .leading, spacing: 7) {
-                Text("Books you\nalready love.")
-                    .font(.system(size: 28, weight: .bold, design: .serif))
-                    .foregroundStyle(BK.ink)
-                    .lineSpacing(2)
-                Text("Pick up to \(onboardingMaxPicks). They become your Top 4 and teach us your taste.")
-                    .font(.system(size: 13.5))
-                    .foregroundStyle(BK.muted)
-                    .lineSpacing(2)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 26)
-            .padding(.top, 22)
-            .padding(.bottom, 14)
-
-            tray
-                .padding(.horizontal, 26)
-                .padding(.bottom, 12)
-
-            searchField
-                .padding(.horizontal, 26)
-                .padding(.bottom, 12)
-
-            ScrollView {
-                grid.padding(.horizontal, 26).padding(.bottom, 16)
-            }
-            .scrollBounceBehavior(.basedOnSize)
-            .scrollDismissesKeyboard(.immediately)
-
-            VStack(spacing: 8) {
-                if let err = viewModel.errorMessage {
-                    Text(err)
-                        .font(.system(size: 12))
-                        .foregroundStyle(BK.crimson)
-                        .frame(maxWidth: .infinity)
-                }
-                OnboardingPrimaryButton(title: viewModel.picks.isEmpty ? "Skip for now" : "Continue") {
-                    viewModel.continueFromBooks()
-                }
-            }
-            .padding(.horizontal, 26)
-            .padding(.top, 8)
-            .padding(.bottom, 20)
-        }
-    }
-
-    private var tray: some View {
-        HStack(spacing: 8) {
-            ForEach(0 ..< onboardingMaxPicks, id: \.self) { i in
-                if i < viewModel.picks.count {
-                    let book = viewModel.picks[i]
-                    Button { viewModel.togglePick(book) } label: {
-                        PickCover(url: book.coverURL, title: book.title)
-                            .frame(width: 48, height: 72)
-                            .overlay(Rectangle().stroke(BK.ink, lineWidth: 2))
-                            .shadow(color: BK.plank.opacity(0.35), radius: 6, y: 5)
-                    }
-                    .buttonStyle(ScaleButtonStyle())
-                    .accessibilityLabel("Remove \(book.title)")
-                } else {
-                    Rectangle()
-                        .fill(BK.card)
-                        .frame(width: 48, height: 72)
-                        .overlay(Rectangle().stroke(BK.ink.opacity(0.22), style: StrokeStyle(lineWidth: 1.5, dash: [4, 3])))
-                }
-            }
-            Spacer(minLength: 0)
-        }
-        .animation(.spring(response: 0.32, dampingFraction: 0.75), value: viewModel.picks)
-    }
-
-    private var searchField: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "magnifyingglass")
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(BK.muted)
-            TextField("Search a title or author", text: $viewModel.searchQuery)
-                .font(.system(size: 15))
-                .foregroundStyle(BK.ink)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-                .focused($searchFocused)
-                .onChange(of: viewModel.searchQuery) { _, q in viewModel.searchChanged(q) }
-            if viewModel.isSearching {
-                ProgressView().tint(BK.muted).scaleEffect(0.8)
-            } else if !viewModel.searchQuery.isEmpty {
-                Button { viewModel.searchQuery = "" } label: {
-                    Image(systemName: "xmark.circle.fill").foregroundStyle(BK.muted)
-                }
-            }
-        }
-        .padding(.horizontal, 14)
-        .frame(height: 48)
-        .background(BK.card)
-        .overlay(Rectangle().stroke(searchFocused ? BK.ink : BK.ink.opacity(0.25), lineWidth: 2))
-    }
-
-    @ViewBuilder
-    private var grid: some View {
-        let items = viewModel.pickGrid
-        if viewModel.isLoadingSuggestions && items.isEmpty {
-            LazyVGrid(columns: columns, spacing: 8) {
-                ForEach(0 ..< 8, id: \.self) { _ in
-                    Rectangle().fill(BK.paper2).aspectRatio(2 / 3, contentMode: .fit)
-                        .overlay(Rectangle().stroke(BK.ink.opacity(0.12), lineWidth: 1.5))
-                }
-            }
-        } else if items.isEmpty {
-            Text(viewModel.searchQuery.count >= 2 ? "Nothing found — try another title." : "Search for a book you love.")
-                .font(.system(size: 13))
-                .foregroundStyle(BK.muted)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 28)
-        } else {
-            LazyVGrid(columns: columns, spacing: 8) {
-                ForEach(items) { book in
-                    let picked = viewModel.isPicked(book)
-                    Button { viewModel.togglePick(book) } label: {
-                        PickCover(url: book.coverURL, title: book.title)
-                            .aspectRatio(2 / 3, contentMode: .fit)
-                            .overlay(picked ? BK.ink.opacity(0.35) : Color.clear)
-                            .overlay(alignment: .center) {
-                                if picked {
-                                    Image(systemName: "checkmark")
-                                        .font(.system(size: 18, weight: .bold))
-                                        .foregroundStyle(BK.cream)
-                                }
+            // Scrolls once it outgrows the screen, following the newest (or
+            // about-to-be-added) chip at the end.
+            ScrollViewReader { proxy in
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(picked) { genre in
+                            HStack(spacing: 5) {
+                                Image(systemName: "checkmark").font(.system(size: 11, weight: .bold))
+                                Text(genre.label).font(.system(size: 13, weight: .semibold))
                             }
-                            .overlay(Rectangle().stroke(picked ? BK.ink : BK.ink.opacity(0.18), lineWidth: picked ? 2.5 : 1.5))
-                            .scaleEffect(picked ? 0.96 : 1)
+                            .foregroundStyle(BK.card)
+                            .padding(.horizontal, 12)
+                            .frame(height: 32)
+                            .background(BK.ink, in: Capsule())
+                            .transition(.scale(scale: 0.5).combined(with: .opacity))
+                        }
+                        if let pending {
+                            HStack(spacing: 5) {
+                                Image(systemName: "plus").font(.system(size: 11, weight: .bold))
+                                Text(pending.label).font(.system(size: 13, weight: .semibold))
+                            }
+                            .foregroundStyle(BK.sage)
+                            .padding(.horizontal, 12)
+                            .frame(height: 32)
+                            .overlay(Capsule().strokeBorder(BK.sage, style: StrokeStyle(lineWidth: 1.5, dash: [4, 3])))
+                            .transition(.opacity)
+                            .id(pending.id)
+                        } else if picked.count < 3 {
+                            Text("\(3 - picked.count) more")
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundStyle(BK.muted)
+                                .padding(.horizontal, 13)
+                                .frame(height: 32)
+                                .overlay(Capsule().strokeBorder(BK.ink.opacity(0.35), style: StrokeStyle(lineWidth: 1.5, dash: [4, 3])))
+                        }
                     }
-                    .buttonStyle(ScaleButtonStyle())
-                    .animation(.spring(response: 0.28, dampingFraction: 0.7), value: picked)
-                    .accessibilityLabel(book.title)
-                    .accessibilityAddTraits(picked ? [.isButton, .isSelected] : .isButton)
+                    .animation(.spring(response: 0.3, dampingFraction: 0.75), value: picked.count)
+                    .animation(.easeOut(duration: 0.15), value: pending?.id)
+                }
+                .onChange(of: pending?.id ?? picked.last?.id) { _, target in
+                    guard let target else { return }
+                    withAnimation(.easeOut(duration: 0.25)) { proxy.scrollTo(target, anchor: .trailing) }
                 }
             }
         }
     }
-}
 
-/// Cover with a titled fallback, so a book with no image is still pickable.
-struct PickCover: View {
-    let url: String?
-    let title: String
+    // MARK: - Cards
 
-    var body: some View {
-        ZStack {
-            BK.paper2
-            if let url, let u = URL(string: url) {
-                AsyncImage(url: u) { phase in
-                    if let image = phase.image {
-                        image.resizable().scaledToFill()
-                    } else {
-                        fallback
-                    }
+    private func card(_ genre: Genre) -> some View {
+        let isTop = genre.id == topGenre?.id
+        let depth = deck.firstIndex(of: genre) ?? 0
+        let number = (Genre.all.firstIndex(of: genre) ?? 0) + 1
+        return ZStack(alignment: .topLeading) {
+            if isTop {
+                BK.ink
+                (lean >= 0 ? BK.sage : BK.crimson).opacity(Double(abs(lean)))
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(String(format: "GENRE %02d / %d", number, Genre.all.count))
+                        .font(.system(size: 11, weight: .medium, design: .monospaced))
+                        .kerning(1.6)
+                        .opacity(0.65)
+                    Spacer()
+                    Text(genre.label)
+                        .font(.system(size: 46, weight: .bold, design: .serif))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.6)
                 }
+                .foregroundStyle(.white)
+                .padding(22)
             } else {
-                fallback
+                depth == 1 ? BK.paper2 : BK.card
             }
         }
-        .clipped()
-    }
-
-    private var fallback: some View {
-        Text(title)
-            .font(.system(size: 9, weight: .semibold))
-            .foregroundStyle(BK.muted)
-            .multilineTextAlignment(.center)
-            .lineLimit(4)
-            .padding(4)
-    }
-}
-
-// MARK: - Step 4: Readers to follow
-
-/// The home feed is empty until you follow someone. Suggestions come with a
-/// server-authored reason, so the same line shows on every platform.
-struct ReadersStepView: View {
-    @ObservedObject var viewModel: OnboardingViewModel
-
-    var body: some View {
-        VStack(spacing: 0) {
-            VStack(alignment: .leading, spacing: 7) {
-                Text("Readers\nto follow.")
-                    .font(.system(size: 28, weight: .bold, design: .serif))
-                    .foregroundStyle(BK.ink)
-                    .lineSpacing(2)
-                Text("Your home fills up with what they read, finish and write.")
-                    .font(.system(size: 13.5))
-                    .foregroundStyle(BK.muted)
-                    .lineSpacing(2)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 26)
-            .padding(.top, 22)
-            .padding(.bottom, 18)
-
-            ScrollView {
-                VStack(spacing: 8) {
-                    if viewModel.isLoadingReaders && viewModel.readers.isEmpty {
-                        ForEach(0 ..< 4, id: \.self) { _ in
-                            Rectangle().fill(BK.paper2).frame(height: 62)
-                                .overlay(Rectangle().stroke(BK.ink.opacity(0.12), lineWidth: 1.5))
-                        }
-                    } else if viewModel.readers.isEmpty {
-                        Text("You're early — no readers to suggest yet. You can find people from search any time.")
-                            .font(.system(size: 13))
-                            .foregroundStyle(BK.muted)
-                            .multilineTextAlignment(.center)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 28)
-                    } else {
-                        ForEach(viewModel.readers) { reader in
-                            readerRow(reader)
-                        }
+        .frame(width: 260, height: 320)
+        .overlay(Rectangle().stroke(BK.ink, lineWidth: 2))
+        .overlay(alignment: .topLeading) {
+            if isTop { stamp(add: true).opacity(Double(max(0, lean))).padding(.top, 48).padding(.leading, 18) }
+        }
+        .overlay(alignment: .topTrailing) {
+            if isTop { stamp(add: false).opacity(Double(max(0, -lean))).padding(.top, 48).padding(.trailing, 18) }
+        }
+        .rotationEffect(.degrees(isTop ? Double(dragOffset.width / 14) : (depth == 1 ? -4 : 5)))
+        .offset(isTop ? dragOffset : .zero)
+        // The stack order (topGenre drawn last) means only the front card
+        // ever receives the drag; `isTop` just guards state writes.
+        .gesture(
+            DragGesture()
+                .onChanged { value in
+                    guard isTop, !flying else { return }
+                    dragOffset = value.translation
+                    let past = abs(value.translation.width) > commitDistance
+                    if past != pastThreshold {
+                        pastThreshold = past
+                        if past { UIImpactFeedbackGenerator(style: .medium).impactOccurred() }
                     }
                 }
-                .padding(.horizontal, 26)
-                .padding(.bottom, 16)
-            }
-            .scrollBounceBehavior(.basedOnSize)
-
-            VStack(spacing: 8) {
-                if let err = viewModel.errorMessage {
-                    Text(err)
-                        .font(.system(size: 12))
-                        .foregroundStyle(BK.crimson)
-                        .frame(maxWidth: .infinity)
+                .onEnded { value in
+                    guard isTop, !flying else { return }
+                    pastThreshold = false
+                    if value.translation.width > commitDistance {
+                        swipe(liked: true)
+                    } else if value.translation.width < -commitDistance {
+                        swipe(liked: false)
+                    } else {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { dragOffset = .zero }
+                    }
                 }
-                OnboardingPrimaryButton(title: viewModel.followed.isEmpty ? "Skip for now" : "Get my recommendations") {
-                    viewModel.continueFromReaders()
-                }
-            }
-            .padding(.horizontal, 26)
-            .padding(.top, 8)
-            .padding(.bottom, 20)
-        }
+        )
     }
 
-    private func readerRow(_ reader: SuggestedReader) -> some View {
-        let done = viewModel.followed.contains(reader.username)
-        return HStack(spacing: 12) {
-            avatar(reader)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(reader.displayName)
-                    .font(.system(size: 14.5, weight: .semibold))
-                    .foregroundStyle(BK.ink)
-                    .lineLimit(1)
-                Text(reader.booksReadCount > 0 ? "\(reader.reason) · \(reader.booksReadCount) read" : reader.reason)
-                    .font(.system(size: 12))
-                    .foregroundStyle(BK.muted)
-                    .lineLimit(1)
-            }
-            Spacer(minLength: 8)
-            Button { viewModel.follow(reader) } label: {
-                HStack(spacing: 5) {
-                    Image(systemName: done ? "checkmark" : "plus")
-                        .font(.system(size: 11, weight: .bold))
-                    Text(done ? "Following" : "Follow")
-                        .font(.system(size: 12, weight: .semibold))
-                }
-                .foregroundStyle(done ? BK.ink : BK.cream)
-                .padding(.horizontal, 12)
-                .frame(height: 32)
-                .background(done ? BK.ochre : BK.ink)
-                .overlay(Rectangle().stroke(BK.ink, lineWidth: 2))
-            }
-            .buttonStyle(ScaleButtonStyle())
-            .disabled(done)
+    private func stamp(add: Bool) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: add ? "checkmark" : "xmark").font(.system(size: 20, weight: .heavy))
+            Text(add ? "ADD" : "SKIP").font(.system(size: 24, weight: .heavy)).kerning(2)
         }
+        .foregroundStyle(.white)
         .padding(.horizontal, 12)
-        .padding(.vertical, 10)
-        .background(BK.card)
-        .overlay(Rectangle().stroke(BK.ink.opacity(0.18), lineWidth: 1.5))
-        .animation(.easeInOut(duration: 0.18), value: done)
+        .padding(.vertical, 4)
+        .overlay(Rectangle().stroke(.white, lineWidth: 3))
+        .rotationEffect(.degrees(add ? -14 : 14))
     }
 
-    private func avatar(_ reader: SuggestedReader) -> some View {
-        ZStack {
-            BK.paper2
-            if let url = reader.avatarURL, let u = URL(string: url) {
-                AsyncImage(url: u) { phase in
-                    if let image = phase.image {
-                        image.resizable().scaledToFill()
-                    } else {
-                        initial(reader)
+    private var hintRow: some View {
+        HStack {
+            Text("← SKIP")
+                .foregroundStyle(leaningSkip ? BK.crimson : BK.muted)
+                .opacity(leaningAdd ? 0.4 : 1)
+            Spacer()
+            Text("ADD →")
+                .foregroundStyle(leaningAdd ? BK.sage : BK.muted)
+                .opacity(leaningSkip ? 0.4 : 1)
+        }
+        .font(.system(size: 11, weight: .semibold, design: .monospaced))
+        .kerning(1.4)
+    }
+
+    // MARK: - Controls
+
+    private func swipeButton(add: Bool) -> some View {
+        let active = add ? leaningAdd : leaningSkip
+        let dimmed = add ? leaningSkip : leaningAdd
+        let fill: Color = active ? (add ? BK.sage : BK.crimson) : (add ? BK.ink : BK.card)
+        return Button { swipe(liked: add) } label: {
+            HStack(spacing: 7) {
+                Image(systemName: add ? "checkmark" : "xmark").font(.system(size: 14, weight: .bold))
+                Text(add ? "Add" : "Skip").font(.system(size: 16, weight: .semibold))
+            }
+            .foregroundStyle(active || add ? Color.white : BK.ink)
+            .frame(width: 108, height: 54)
+            .background(fill)
+            .overlay(Rectangle().stroke(BK.ink, lineWidth: 2))
+            .background(Rectangle().fill(BK.ink).offset(x: 4, y: 4))
+        }
+        .buttonStyle(.plain)
+        .scaleEffect(active ? 1.06 : 1)
+        .opacity(dimmed ? 0.35 : 1)
+        .animation(.spring(response: 0.25, dampingFraction: 0.7), value: active)
+        .disabled(topGenre == nil || flying)
+        .accessibilityLabel("\(add ? "Add" : "Skip") \(topGenre?.label ?? "")")
+    }
+
+    private var mascot: some View {
+        let quip: String? = leaningAdd ? "ooh, yes!" : (leaningSkip ? "nah, next!" : nil)
+        return Image("SwipeMascotIcon")
+            .resizable()
+            .scaledToFit()
+            .frame(width: 70)
+            .scaleEffect(x: leaningSkip ? -1 : 1, y: 1)
+            .rotationEffect(.degrees(Double(lean) * -6))
+            .overlay(alignment: .top) {
+                if let quip {
+                    Text(quip)
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(BK.ink)
+                        .fixedSize()
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(BK.card)
+                        .overlay(Rectangle().stroke(BK.ink, lineWidth: 2))
+                        .rotationEffect(.degrees(lean > 0 ? -3 : 3))
+                        .offset(y: -36)
+                        .transition(.scale(scale: 0.6).combined(with: .opacity))
+                }
+            }
+            .animation(.spring(response: 0.25, dampingFraction: 0.6), value: quip)
+            .accessibilityHidden(true)
+    }
+
+    private func swipe(liked: Bool) {
+        guard let genre = topGenre, !flying else { return }
+        flying = true
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        withAnimation(.easeIn(duration: 0.2)) {
+            dragOffset = CGSize(width: liked ? 520 : -520, height: dragOffset.height + 30)
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                dragOffset = .zero
+                if deck.first?.id == genre.id { deck.removeFirst() }
+                if liked { viewModel.toggleGenre(genre.id) }
+            }
+            if deck.isEmpty {
+                if viewModel.selectedGenres.count < 3 {
+                    // Ran out of cards before hitting 3 — reshuffle the skipped
+                    // ones so the reader isn't stuck.
+                    deck = Genre.all.filter { !viewModel.selectedGenres.contains($0.id) }.shuffled()
+                } else {
+                    // Seen every genre: nothing left to decide, so move on.
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                        viewModel.continueFromGenres()
                     }
                 }
-            } else {
-                initial(reader)
             }
+            flying = false
         }
-        .frame(width: 40, height: 40)
-        .clipShape(Circle())
-        .overlay(Circle().stroke(BK.ink, lineWidth: 1.5))
-    }
-
-    private func initial(_ reader: SuggestedReader) -> some View {
-        Text(String(reader.displayName.prefix(1)).uppercased())
-            .font(.system(size: 15, weight: .bold, design: .serif))
-            .foregroundStyle(BK.ink)
     }
 }

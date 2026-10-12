@@ -94,24 +94,30 @@ struct ShelfGridView: View {
     }
 }
 
-// MARK: - Diary tab (editorial rows)
+// MARK: - Thoughts tab (Twitter-style rows)
 
 struct DiaryListView: View {
     let entries: [DiaryEntry]
     let isLoading: Bool
+    let viewerUsername: String?
     var onAppearItem: (DiaryEntry) async -> Void
     var onOpen: (DiaryEntry) -> Void
+    var onContinue: (DiaryEntry) -> Void
+    var onShare: (DiaryEntry) -> Void
 
     var body: some View {
         if entries.isEmpty && !isLoading {
-            EmptyTabState(icon: "book.closed", message: "No diary entries yet")
+            EmptyTabState(icon: "text.quote", message: "No thoughts yet")
         } else {
             LazyVStack(spacing: 0) {
-                ForEach(Array(entries.enumerated()), id: \.element.id) { idx, entry in
-                    Button { onOpen(entry) } label: {
-                        DiaryEntryRow(entry: entry)
-                    }
-                    .buttonStyle(.plain)
+                ForEach(Array(entries.enumerated()), id: \.element.rowKey) { idx, entry in
+                    ThoughtRow(
+                        entry: entry,
+                        viewerUsername: viewerUsername,
+                        onContinue: { onContinue(entry) },
+                        onShare: { onShare(entry) }
+                    )
+                    .onTapGesture { onOpen(entry) }
                     .overlay(alignment: .top) {
                         if idx > 0 { Rectangle().fill(Color("Border")).frame(height: 1) }
                     }
@@ -119,7 +125,7 @@ struct DiaryListView: View {
                 }
                 if isLoading { PBSpinner().padding(.vertical, 16) }
             }
-            .padding(.horizontal, 20)
+            .padding(.horizontal, 16)
             .padding(.top, 8)
         }
     }
@@ -439,7 +445,7 @@ struct EditorialSignatureView: View {
     private var headline: String {
         let pages = profile.totalPagesRead
         let pagesStr = pages >= 1000 ? String(format: "%.1fk", Double(pages)/1000) : "\(pages)"
-        return "\(profile.booksReadCount) books · \(pagesStr) pages · \(profile.diaryEntriesCount) reviews."
+        return "\(profile.booksReadCount) books · \(pagesStr) pages · \(profile.thoughtsCount) thoughts."
     }
 }
 

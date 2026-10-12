@@ -20,6 +20,7 @@ struct AnalyzingScreen: View {
     let onRetry: () -> Void
     var onBack: () -> Void = {}
     let onClose: () -> Void
+    @State private var showPaywall = false
 
     @State private var gameOpen = false
     @State private var popupDismissed = false
@@ -65,6 +66,16 @@ struct AnalyzingScreen: View {
                 if showPopup {
                     resultPopup.zIndex(3)
                 }
+            }
+
+            if showPaywall {
+                PlusPaywallView(
+                    feature: .scan,
+                    onUnlocked: { showPaywall = false; onRetry() },
+                    onDismiss: { showPaywall = false }
+                )
+                .zIndex(4)
+                .transition(.opacity)
             }
         }
         .onReceive(tick) { _ in
@@ -271,10 +282,14 @@ struct AnalyzingScreen: View {
                 .font(.system(size: 28)).foregroundStyle(SK.ink)
             Text(message).font(PB.serif(18)).foregroundStyle(SK.ink)
                 .multilineTextAlignment(.center).padding(.horizontal, 40)
-            Text("You've used your free scans. More scans coming soon.")
+            Text("Free readers get 3 scans a month. Plus makes it unlimited.")
                 .font(.system(size: 13)).foregroundStyle(SK.sub)
                 .multilineTextAlignment(.center)
-            BruButton(title: "Back", action: onBack).padding(.horizontal, 40).padding(.top, 6)
+            BruButton(title: "Get Plus", action: { showPaywall = true }).padding(.horizontal, 40).padding(.top, 6)
+            Button(action: onBack) {
+                MonoLabel(text: "Back", size: 11, tracking: 1.4, color: SK.sub)
+            }
+            .buttonStyle(.plain)
             Button(action: onClose) {
                 MonoLabel(text: "Close", size: 11, tracking: 1.4, color: SK.sub)
             }

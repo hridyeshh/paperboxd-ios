@@ -7,13 +7,20 @@ struct ProfileView: View {
     @State private var followPath = NavigationPath()
     @State private var shareItem: ShareItem?
     @State private var showShareProfile = false
+    @State private var showChat = false
+    @State private var showFusion = false
+    @State private var fusionAfterSettings = false
+    @State private var fusionToOpen: String?
+    @State private var sendRef: AttachmentRef?
     @State private var showEdit = false
     @State private var showBannerPicker = false
     @State private var showSettings = false
     @State private var showCreateList = false
     @State private var bannerCropTarget: CropTarget?
     @State private var diarySheet: DiaryNavItem?
+    @State private var thoughtShare: DiaryEntry?
     @State private var showWrapped = false
+    @State private var showSmartTBR = false
     @State private var showLevelSheet = false
     @State private var showReportUser = false
     @State private var showBlockConfirm = false
@@ -50,8 +57,13 @@ struct ProfileView: View {
         .navigationDestination(for: ListNav.self) { nav in
             ListDetailView(nav: nav, viewer: vm.viewerUser)
         }
-        .sheet(item: $diarySheet) { nav in
-            DiaryEntryDetailView(entry: nav.entry, viewer: vm.viewerUser)
+        // Likes, reposts, follow-ups and deletes all happen inside the sheet;
+        // reloading on close keeps counts and "Show this thread" honest.
+        .sheet(item: $diarySheet, onDismiss: { Task { await vm.reloadThoughts() } }) { nav in
+            DiaryEntryDetailView(entry: nav.entry, viewer: vm.viewerUser, compose: nav.compose)
+        }
+        .sheet(item: $thoughtShare) { entry in
+            ThoughtShareSheet(entry: entry).presentationDetents([.large])
         }
         .sheet(isPresented: $showLevelSheet) {
             if let progress = vm.progress {
@@ -95,12 +107,19 @@ struct ProfileView: View {
                 }
             }
         }
-        .sheet(isPresented: $showSettings) {
+        // One sheet at a time: the Fusion window opens once Settings has gone,
+        // and a Fusion story once the window has.
+        .sheet(isPresented: $showSettings, onDismiss: {
+            if fusionAfterSettings { fusionAfterSettings = false; showFusion = true }
+        }) {
             if let profile = vm.profile {
-                SettingsView(profile: profile) {
+                SettingsView(profile: profile, onSignOut: {
                     showSettings = false
                     appState.signOut()
-                }
+                }, onCreateFusion: {
+                    fusionAfterSettings = true
+                    showSettings = false
+                })
             }
         }
         .sheet(isPresented: $showCreateList) {
@@ -116,6 +135,23 @@ struct ProfileView: View {
         }
         .fullScreenCover(isPresented: $showWrapped) {
             WrappedView()
+        }
+        .fullScreenCover(isPresented: $showChat) {
+            MessagesStack(root: .chat(username: vm.profileUsername), viewer: vm.viewerUser)
+        }
+        .sheet(item: $sendRef) { SendSheetView(attachment: $0) }
+        .sheet(isPresented: $showFusion, onDismiss: {
+            if let id = fusionToOpen { fusionToOpen = nil; appState.fusionRoute = .fusion(id: id, introFrom: nil) }
+        }) {
+            FusionHubSheet(myInitial: String(vm.profileUsername.prefix(1)).uppercased()) { id in
+                fusionToOpen = id
+                showFusion = false
+            }
+            .presentationDetents([.large])
+            .presentationBackground(FZ.bg)
+        }
+        .fullScreenCover(isPresented: $showSmartTBR) {
+            SmartTBRView(user: vm.viewerUser)
         }
         .fullScreenCover(item: $bannerCropTarget) { target in
             ImageCropper(image: target.image, ratio: 2.3) { cropped in
@@ -234,6 +270,7 @@ struct ProfileView: View {
                         isFollowLoading: vm.isFollowLoading,
                         streak: vm.streak,
                         progress: vm.progress,
+                        readingNow: vm.lastLoggedBook ?? vm.currentlyReadingFallback,
                         bannerCovers: bannerCoverURLs,
                         onFollow: { Task { await vm.toggleFollow() } },
                         onEdit: { showEdit = true },
@@ -244,12 +281,15 @@ struct ProfileView: View {
                         onEditBanner: vm.isOwnProfile ? { showBannerPicker = true } : nil,
                         onReport: { showReportUser = true },
                         onBlock: { showBlockConfirm = true },
+                        onMessage: { showChat = true },
+                        onSendProfile: { sendRef = AttachmentRef(kind: AttachKind.profile, refID: profile.id) },
                         onAvatarTap: { showLevelSheet = true }
                     )
 
-                    // Private account: the gated endpoints already return nothing,
-                    // so this only has to explain why the profile looks empty.
-                    if profile.canView == false && !vm.isOwnProfile {
+                    // Private account, Instagram-style: header and Follow stay, and
+                    // everything they have read gives way to the lock card.
+                    let isLocked = profile.canView == false && !vm.isOwnProfile
+                    if isLocked {
                         VStack(spacing: 8) {
                             Image(systemName: "lock")
                                 .font(.system(size: 20, weight: .regular))
@@ -257,8 +297,8 @@ struct ProfileView: View {
                                 .font(.headline)
                             Text(
                                 (profile.hasRequested ?? false)
-                                    ? "\(profile.displayName) has to approve your request before you can see their shelves, diary and lists."
-                                    : "Follow \(profile.displayName) to see their shelves, diary and lists."
+                                    ? "\(profile.displayName) has to approve your request before you can see their shelves, thoughts and lists."
+                                    : "Follow \(profile.displayName) to see their shelves, thoughts and lists."
                             )
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
@@ -269,6 +309,7 @@ struct ProfileView: View {
                         .padding(.top, 48)
                     }
 
+                    if !isLocked {
                     if let activity = vm.activity {
                         ReadingHeatmapView(
                             activity: activity,
@@ -302,9 +343,6 @@ struct ProfileView: View {
                         WrappedEntryCard(monthName: currentMonthName) { showWrapped = true }
                             .padding(.horizontal, 20)
                             .padding(.top, 28)
-                        FusionsSection()
-                            .padding(.horizontal, 20)
-                            .padding(.top, 14)
                     }
 
                     if !vm.favoriteBooks.isEmpty {
@@ -327,6 +365,7 @@ struct ProfileView: View {
                     EditorialSignatureView(profile: profile)
                         .padding(.top, 28)
                         .padding(.bottom, 24)
+                    }
                 }
             }
         }
@@ -351,7 +390,7 @@ struct ProfileView: View {
         guard let p = vm.profile else { return nil }
         switch tab {
         case .bookshelf: return vm.shelfTotal ?? p.booksReadCount
-        case .diary:     return p.diaryEntriesCount
+        case .diary:     return p.thoughtsCount
         case .lists:     return p.listsCount
         case .tbr:       return vm.tbrItems.isEmpty ? nil : vm.tbrItems.count
         }
@@ -372,8 +411,11 @@ struct ProfileView: View {
             DiaryListView(
                 entries: vm.diaryEntries,
                 isLoading: vm.isLoadingDiary,
+                viewerUsername: vm.viewerUser.username,
                 onAppearItem: { await vm.fetchDiaryIfNeeded(item: $0) },
-                onOpen: { diarySheet = DiaryNavItem(entry: $0) }
+                onOpen: { diarySheet = DiaryNavItem(entry: $0) },
+                onContinue: { diarySheet = DiaryNavItem(entry: $0, compose: true) },
+                onShare: { thoughtShare = $0 }
             )
         case .lists:
             ListsTabView(
@@ -384,13 +426,34 @@ struct ProfileView: View {
                 onCreate: { showCreateList = true }
             )
         case .tbr:
-            TBRGridView(
-                items: vm.tbrItems,
-                isLoading: vm.isLoadingTBR,
-                emptyMessage: "Nothing on the TBR list yet",
-                limit: 9,
-                showMore: .tbr
-            )
+            VStack(spacing: 0) {
+                // Smart TBR — own profile only; the reader's shelf, ordered.
+                if vm.isOwnProfile && !vm.tbrItems.isEmpty {
+                    Button { showSmartTBR = true } label: {
+                        HStack {
+                            Text("WHAT SHOULD I READ NEXT?")
+                                .font(PB.mono(11, .medium)).tracking(1.5)
+                            Spacer()
+                            Text("PLUS").font(PB.mono(9, .semibold)).tracking(1.5)
+                                .padding(.horizontal, 6).padding(.vertical, 2)
+                                .overlay(Rectangle().strokeBorder(Color("TextPrimary"), lineWidth: 1))
+                        }
+                        .foregroundStyle(Color("TextPrimary"))
+                        .padding(.horizontal, 14).padding(.vertical, 11)
+                        .overlay(Rectangle().strokeBorder(Color("TextPrimary"), lineWidth: 1.5))
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 16)
+                }
+                TBRGridView(
+                    items: vm.tbrItems,
+                    isLoading: vm.isLoadingTBR,
+                    emptyMessage: "Nothing on the TBR list yet",
+                    limit: 9,
+                    showMore: .tbr
+                )
+            }
         }
     }
 

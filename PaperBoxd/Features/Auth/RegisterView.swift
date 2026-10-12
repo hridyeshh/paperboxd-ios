@@ -1,25 +1,160 @@
-import AuthenticationServices
 import SwiftUI
 
+/// Step 1 of the paper-themed signup run. Email + a single password field —
+/// confirmation and the terms checkbox are dropped from the UI; register()
+/// still wants a confirmPassword, so we mirror it in on submit.
 struct RegisterView: View {
     @ObservedObject var viewModel: AuthViewModel
     @State private var showPassword = false
-    @State private var showConfirm  = false
-    @State private var acceptedTerms = false
     @State private var legalSheet: LegalDocKind?
+    @State private var appear = false
+    @State private var errorTrigger = 0
     @FocusState private var focused: Field?
 
-    enum Field { case email, password, confirm }
+    enum Field { case email, password }
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                PBStepHeader(step: 1, onBack: { viewModel.switchTo(.welcome) })
+                    .padding(.bottom, 22)
+                header
+                emailField.reveal(appear, delay: 0.1)
+                passwordField.reveal(appear, delay: 0.14)
+                errorRow
+                createButton.reveal(appear, delay: 0.18)
+                orDivider.padding(.vertical, 16).reveal(appear, delay: 0.21)
+                googleButton.reveal(appear, delay: 0.21)
+                continueWithEmailButton.reveal(appear, delay: 0.24)
+                legalFooter.reveal(appear, delay: 0.27)
+                signInLink.reveal(appear, delay: 0.27)
+            }
+            .padding(.horizontal, 28)
+            .padding(.top, 20)
+            .padding(.bottom, 40)
+        }
+        .background(BK.paper)
+        .scrollBounceBehavior(.basedOnSize)
+        .scrollDismissesKeyboard(.interactively)
+        .shake(trigger: errorTrigger)
+        .onAppear {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { appear = true }
+        }
+        .onChange(of: viewModel.errorMessage) { _, newValue in
+            guard newValue != nil else { return }
+            errorTrigger += 1
+        }
+        .environment(\.openURL, OpenURLAction { url in
+            switch url.absoluteString {
+            case "paperboxd://terms":   legalSheet = .terms;   return .handled
+            case "paperboxd://privacy": legalSheet = .privacy; return .handled
+            default:                    return .systemAction
+            }
+        })
+        .sheet(item: $legalSheet) { kind in
+            LegalSheetView(kind: kind)
+        }
+    }
+
+    // MARK: - Header
+
+    private var header: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Start your\nreading life.")
+                .font(.system(size: 28, weight: .bold, design: .serif))
+                .lineSpacing(2)
+                .foregroundStyle(BK.ink)
+                .reveal(appear, delay: 0)
+            Text("Track books, follow friends, get smarter recs the more you read.")
+                .font(.system(size: 13.5))
+                .foregroundStyle(BK.muted)
+                .reveal(appear, delay: 0.05)
+        }
+        .padding(.bottom, 26)
+    }
+
+    // MARK: - Fields
+
+    private var emailField: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            onboardingFieldLabel("Email")
+            TextField("you@example.com", text: $viewModel.email)
+                .font(.system(size: 14))
+                .foregroundStyle(BK.ink)
+                .keyboardType(.emailAddress)
+                .textContentType(.username)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled(true)
+                .focused($focused, equals: .email)
+                .submitLabel(.next)
+                .onSubmit { focused = .password }
+                .padding(.horizontal, 14)
+                .frame(height: 48)
+                .background(BK.field)
+                .overlay(Rectangle().stroke(BK.ink.opacity(0.30), lineWidth: 2))
+        }
+        .padding(.bottom, 16)
+    }
+
+    private var passwordField: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            onboardingFieldLabel("Password")
+            ZStack(alignment: .trailing) {
+                Group {
+                    if showPassword {
+                        TextField("Min 8 characters", text: $viewModel.password)
+                    } else {
+                        SecureField("Min 8 characters", text: $viewModel.password)
+                    }
+                }
+                .font(.system(size: 14))
+                .foregroundStyle(BK.ink)
+                .focused($focused, equals: .password)
+                .submitLabel(.go)
+                .onSubmit { if canSubmit { submit() } }
+                .padding(.horizontal, 14)
+                .padding(.trailing, 34)
+                .frame(height: 48)
+                .background(BK.field)
+                .overlay(Rectangle().stroke(BK.ink.opacity(0.30), lineWidth: 2))
+
+                Button { showPassword.toggle() } label: {
+                    Image(systemName: showPassword ? "eye.slash" : "eye")
+                        .foregroundStyle(BK.muted)
+                        .padding(.trailing, 14)
+                }
+            }
+        }
+        .padding(.bottom, 16)
+    }
+
+    @ViewBuilder
+    private var errorRow: some View {
+        if let msg = viewModel.errorMessage {
+            Text(msg)
+                .font(.footnote)
+                .foregroundStyle(BK.crimson)
+                .padding(.top, 4)
+                .padding(.bottom, 10)
+        }
+    }
+
+    private var createButton: some View {
+        OnboardingPrimaryButton(title: "Create account", isLoading: viewModel.isLoading, isEnabled: canSubmit) {
+            submit()
+        }
+        .padding(.top, 4)
+    }
 
     private var orDivider: some View {
         HStack(spacing: 10) {
-            Rectangle().fill(BK.ink.opacity(0.18)).frame(height: 1)
+            Rectangle().fill(BK.ink.opacity(0.15)).frame(height: 1)
             Text("or")
                 .font(.system(size: 11, design: .monospaced))
                 .textCase(.uppercase)
                 .kerning(2.2)
-                .foregroundStyle(BK.muted.opacity(0.7))
-            Rectangle().fill(BK.ink.opacity(0.18)).frame(height: 1)
+                .foregroundStyle(BK.muted)
+            Rectangle().fill(BK.ink.opacity(0.15)).frame(height: 1)
         }
     }
 
@@ -37,245 +172,41 @@ struct RegisterView: View {
                     .foregroundStyle(BK.ink)
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 13)
-            .background(BK.card)
-            .overlay(Rectangle().stroke(BK.ink, lineWidth: 2))
+            .frame(height: 52)
         }
-        .buttonStyle(ScaleButtonStyle())
-        .disabled(viewModel.isLoading || !acceptedTerms)
-        .opacity(acceptedTerms ? 1 : 0.45)
+        .buttonStyle(BrutalButtonStyle(fill: BK.card, borderWidth: 2))
+        .disabled(viewModel.isLoading)
+        .padding(.bottom, 10)
     }
 
-
-    var body: some View {
-        VStack(spacing: 0) {
-            topBar
-            BookShelfHero(
-                spines: ShelfSpine.register,
-                height: 196,
-                rowHeight: 158,
-                leadingPad: 26,
-                duration: 96,
-                titleSize: 10,
-                maxTitleRun: 92,
-                spinePadding: 8
-            )
-            glassCard
-                .padding(.horizontal, 20)
-                .padding(.bottom, 24)
-        }
-        .environment(\.openURL, OpenURLAction { url in
-            switch url.absoluteString {
-            case "paperboxd://terms":   legalSheet = .terms;   return .handled
-            case "paperboxd://privacy": legalSheet = .privacy; return .handled
-            default:                    return .systemAction
-            }
-        })
-        .sheet(item: $legalSheet) { kind in
-            LegalSheetView(kind: kind)
-        }
-    }
-
-    // MARK: - Top bar
-
-    private var topBar: some View {
-        HStack {
-            Text("PaperBoxd")
-                .font(.custom("SnellRoundhand-Black", size: 30))
-                .foregroundStyle(BK.ink)
-            Spacer()
-            Text("register")
-                .font(.system(size: 9.5, weight: .medium, design: .monospaced))
-                .textCase(.uppercase)
-                .kerning(1.6)
-                .foregroundStyle(BK.ink)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 5)
-                .background(BK.ochre)
-                .overlay(Rectangle().stroke(BK.ink, lineWidth: 2))
-        }
-        .padding(.horizontal, 26)
-        .padding(.top, 20)
-        .padding(.bottom, 12)
-    }
-
-    // MARK: - Glass card
-
-    private var glassCard: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
-                cardHeader
-                emailField
-                passwordFields
-                errorRow
-                termsCheckbox
-                createButton
-                orDivider.padding(.vertical, 14)
-                googleButton
-                signInLink
-            }
-            .padding(24)
-        }
-        .scrollBounceBehavior(.basedOnSize)
-        .scrollDismissesKeyboard(.interactively)
-        .clipShape(Rectangle())
-        .background(BrutalCard(echo: BK.forest))
-    }
-
-    // MARK: - Card sections
-
-    private var cardHeader: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Start your\nreading life.")
-                .font(.system(size: 30, weight: .bold))
-                .tracking(-0.8)
-                .lineSpacing(1)
-                .foregroundStyle(BK.ink)
-            Text("Track every book worth remembering.")
-                .font(.system(size: 14, design: .serif).italic())
-                .foregroundStyle(BK.sepia)
-                .lineSpacing(2)
-        }
-        .padding(.bottom, 24)
-    }
-
-    private var emailField: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            fieldLabel("Email")
-            PaperTextField(
-                title: "you@paperboxd.com",
-                text: $viewModel.email,
-                keyboard: .emailAddress,
-                contentType: .username
-            )
-            .focused($focused, equals: .email)
-            .submitLabel(.next)
-            .onSubmit { focused = .password }
-        }
-    }
-
-    private var passwordFields: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            fieldLabel("Password").padding(.top, 12)
-            ZStack(alignment: .trailing) {
-                PaperSecureField(
-                    title: "Min 8 characters",
-                    text: $viewModel.password,
-                    showText: showPassword
-                )
-                .focused($focused, equals: .password)
-                .submitLabel(.next)
-                .onSubmit { focused = .confirm }
-                Button { showPassword.toggle() } label: {
-                    Image(systemName: showPassword ? "eye.slash" : "eye")
-                        .foregroundStyle(BK.muted)
-                        .padding(.trailing, 14)
-                }
-            }
-
-            if !viewModel.password.isEmpty {
-                strengthBar.padding(.top, 8)
-            }
-
-            fieldLabel("Confirm password").padding(.top, 12)
-            ZStack(alignment: .trailing) {
-                PaperSecureField(
-                    title: "Repeat password",
-                    text: $viewModel.confirmPassword,
-                    showText: showConfirm
-                )
-                .focused($focused, equals: .confirm)
-                .submitLabel(.go)
-                .onSubmit {
-                    if canSubmit { Task { await viewModel.register() } }
-                }
-                Button { showConfirm.toggle() } label: {
-                    Image(systemName: showConfirm ? "eye.slash" : "eye")
-                        .foregroundStyle(BK.muted)
-                        .padding(.trailing, 14)
-                }
-            }
-        }
-    }
-
-    private var strengthBar: some View {
-        let strength = PasswordStrength.from(viewModel.password)
-        return HStack(spacing: 6) {
-            ForEach(0..<3, id: \.self) { idx in
-                Rectangle()
-                    .fill(idx <= strength.rawValue ? strength.color : BK.ink.opacity(0.18))
-                    .frame(height: 3)
-            }
-            Text(strength.label)
-                .font(.caption2)
-                .foregroundStyle(BK.muted)
-        }
-    }
-
-    @ViewBuilder
-    private var errorRow: some View {
-        if let msg = viewModel.errorMessage {
-            Text(msg)
-                .font(.footnote)
-                .foregroundStyle(BK.accent)
-                .padding(.top, 10)
-        }
-    }
-
-    private var termsCheckbox: some View {
-        HStack(alignment: .top, spacing: 10) {
-            Button {
-                acceptedTerms.toggle()
-            } label: {
-                ZStack {
-                    Rectangle()
-                        .fill(acceptedTerms ? BK.crimson : BK.card)
-                        .frame(width: 20, height: 20)
-                        .overlay(Rectangle().stroke(BK.ink, lineWidth: 2))
-                    if acceptedTerms {
-                        Image(systemName: "checkmark")
-                            .font(.system(size: 12, weight: .bold))
-                            .foregroundStyle(BK.cream)
-                    }
-                }
-            }
-            .buttonStyle(.plain)
-
-            Text("I agree to the [Terms of Service](paperboxd://terms) and [Privacy Policy](paperboxd://privacy).")
-                .font(.system(size: 12.5))
-                .foregroundStyle(BK.muted)
-                .tint(BK.crimson)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .padding(.top, 16)
-    }
-
-    private var createButton: some View {
+    /// Same submit path as "Create account" — a second, lower-emphasis entry
+    /// point for readers who land here wanting to type an email and go.
+    private var continueWithEmailButton: some View {
         Button {
-            Task { await viewModel.register() }
+            if canSubmit { submit() } else { focused = .email }
         } label: {
-            ZStack {
-                if viewModel.isLoading {
-                    ProgressView().tint(BK.cream)
-                } else {
-                    HStack(spacing: 8) {
-                        Text("Create Account")
-                        Image(systemName: "arrow.right")
-                            .font(.system(size: 13, weight: .bold))
-                    }
+            HStack(spacing: 10) {
+                Image(systemName: "envelope")
+                    .font(.system(size: 14, weight: .semibold))
+                Text("Continue with email")
                     .font(.system(size: 14.5, weight: .semibold))
-                }
             }
-            .foregroundStyle(BK.cream)
+            .foregroundStyle(BK.ink)
             .frame(maxWidth: .infinity)
             .frame(height: 52)
-            .opacity(canSubmit ? 1 : 0.45)
         }
-        .buttonStyle(BrutalButtonStyle(fill: BK.crimson, borderWidth: 2))
-        .disabled(!canSubmit || viewModel.isLoading)
-        .padding(.top, 18)
-        .animation(.easeInOut(duration: 0.18), value: viewModel.isLoading)
-        .animation(.easeInOut(duration: 0.18), value: canSubmit)
+        .buttonStyle(BrutalButtonStyle(fill: BK.card, borderWidth: 2))
+        .disabled(viewModel.isLoading)
+    }
+
+    private var legalFooter: some View {
+        Text("By continuing you agree to our [terms](paperboxd://terms) and [privacy policy](paperboxd://privacy).")
+            .font(.system(size: 11.5))
+            .foregroundStyle(BK.muted)
+            .tint(BK.ink)
+            .multilineTextAlignment(.center)
+            .frame(maxWidth: .infinity)
+            .padding(.top, 18)
     }
 
     private var signInLink: some View {
@@ -287,27 +218,18 @@ struct RegisterView: View {
             }
             .foregroundStyle(BK.ink)
             .fontWeight(.semibold)
-            .underline(color: BK.muted.opacity(0.7))
         }
         .font(.system(size: 13))
         .frame(maxWidth: .infinity)
-        .padding(.top, 18)
+        .padding(.top, 12)
     }
 
     private var canSubmit: Bool {
-        !viewModel.email.isEmpty
-            && !viewModel.password.isEmpty
-            && viewModel.password == viewModel.confirmPassword
-            && PasswordStrength.from(viewModel.password) != .weak
-            && acceptedTerms
+        looksLikeEmail(viewModel.email) && viewModel.password.count >= 8
     }
 
-    private func fieldLabel(_ text: String) -> some View {
-        Text(text)
-            .font(.system(size: 11, weight: .medium, design: .monospaced))
-            .textCase(.uppercase)
-            .kerning(1.2)
-            .foregroundStyle(BK.muted)
-            .padding(.bottom, 6)
+    private func submit() {
+        viewModel.confirmPassword = viewModel.password
+        Task { await viewModel.register() }
     }
 }

@@ -10,6 +10,7 @@ struct BookDetailView: View {
     @State private var showShare = false
     @State private var showWrite = false
     @State private var showLibrarySheet = false
+    @State private var showReader = false
     @State private var activePanel: InlinePanel?
     @State private var likePulse = 0
     @State private var reportReviewTarget: BookReview?
@@ -104,9 +105,17 @@ struct BookDetailView: View {
                     .presentationDragIndicator(.hidden)
             }
         }
+        .sheet(isPresented: $viewModel.showFinishSheet) {
+            FinishSheet(viewModel: viewModel, user: user, onWriteNote: { showWrite = true })
+        }
         .fullScreenCover(isPresented: $showWrite) {
             if let book = viewModel.book {
                 WriteView(username: user.username ?? "", preselectedBook: book)
+            }
+        }
+        .fullScreenCover(isPresented: $showReader) {
+            if let book = viewModel.book, let raw = book.readLinks?.gutenbergHtmlUrl, let url = URL(string: raw) {
+                GutenbergReaderView(title: book.title, url: url)
             }
         }
         .sheet(isPresented: $showLibrarySheet) {
@@ -167,6 +176,7 @@ struct BookDetailView: View {
                     actionRow
                     inlinePanel
                     descriptionSection(book)
+                    readNowSection(book)
                     similarSection
                     friendsSaySection
                     reviewsSection
@@ -307,7 +317,12 @@ struct BookDetailView: View {
                 statCell(readingTime(book), "Time to read")
             }
             Rectangle().fill(line).frame(width: 2)
-            statCell(book.pageCount.map { "\($0)" } ?? "—", "Pages")
+            // The conversation beats the page count once there is one.
+            if viewModel.thoughtsCount > 0 {
+                statCell("\(viewModel.thoughtsCount)", "Thoughts")
+            } else {
+                statCell(book.pageCount.map { "\($0)" } ?? "—", "Pages")
+            }
         }
         .frame(height: 62)
         .overlay(alignment: .top) { Rectangle().fill(line).frame(height: 2) }
@@ -497,10 +512,17 @@ struct BookDetailView: View {
     }
 
     @ViewBuilder
+    private func readNowSection(_ book: Book) -> some View {
+        if let links = book.readLinks {
+            ReadNowSection(links: links, header: AnyView(brutalSectionHeader("02", "Read now")), onReadFree: { showReader = true })
+        }
+    }
+
+    @ViewBuilder
     private var similarSection: some View {
         if !viewModel.similarBooks.isEmpty {
             VStack(alignment: .leading, spacing: 12) {
-                brutalSectionHeader("02", "Readers also enjoyed")
+                brutalSectionHeader("03", "Readers also enjoyed")
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(alignment: .top, spacing: 12) {
                         ForEach(viewModel.similarBooks) { item in
@@ -526,7 +548,7 @@ struct BookDetailView: View {
     @ViewBuilder
     private var friendsSaySection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            brutalSectionHeader("03", "What friends say")
+            brutalSectionHeader("04", "What friends say")
             if viewModel.friendReviews.isEmpty {
                 Text("No reviews from people you follow yet.")
                     .font(PB.serifItalic(13))
@@ -589,7 +611,7 @@ struct BookDetailView: View {
     private var reviewsSection: some View {
         if !viewModel.reviews.isEmpty {
             VStack(alignment: .leading, spacing: 4) {
-                brutalSectionHeader("04", "All reviews")
+                brutalSectionHeader("05", "All reviews")
                 ForEach(Array(viewModel.reviews.enumerated()), id: \.element.id) { idx, review in
                     BookReviewRow(review: review, onReport: { reportReviewTarget = review })
                         .overlay(alignment: .top) {

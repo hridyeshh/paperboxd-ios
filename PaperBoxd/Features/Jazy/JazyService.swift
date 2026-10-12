@@ -74,7 +74,8 @@ enum JazyService {
         return resp.items
     }
 
-    /// POST /api/v1/jazy — the concierge.
+    /// POST /api/v1/jazy — the concierge. Plus-only: 402 SUBSCRIPTION_REQUIRED
+    /// without an active subscription.
     ///
     /// `sessionId` carries the conversation so "shorter" after "like Murakami"
     /// is read as a refinement. `answer` is the reply to a previous question.
@@ -101,7 +102,7 @@ enum JazyService {
             path: "/api/v1/jazy",
             method: .post,
             body: Body(query: query, limit: limit, sessionId: sessionId, answer: answer, anonId: AnonID.current),
-            requiresAuth: false
+            requiresAuth: true
         )
     }
 }

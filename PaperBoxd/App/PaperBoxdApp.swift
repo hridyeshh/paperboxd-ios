@@ -6,8 +6,13 @@ struct PaperBoxdApp: App {
     @Environment(\.scenePhase) private var scenePhase
 
     init() {
-        // Free-scan quota defaults to 7 before the first scan writes a real count.
-        UserDefaults.standard.register(defaults: ["pb_scans_remaining": 7])
+        // Free-scan quota: 3 a month before the backend writes a real count.
+        UserDefaults.standard.register(defaults: ["pb_scans_remaining": 3, "pb_scans_unlimited": false])
+
+        // Every AsyncImage cover goes through URLSession.shared, whose default
+        // cache (~512KB in memory) held a handful of covers — scrolling back up
+        // a grid re-downloaded them. APIClient has its own uncached session.
+        URLCache.shared = URLCache(memoryCapacity: 64 * 1024 * 1024, diskCapacity: 256 * 1024 * 1024)
 
         // Force dark appearance project-wide. Belt-and-braces in case Info.plist
         // is missed in a build variant.
@@ -48,6 +53,10 @@ struct PaperBoxdApp: App {
         case .main(let user):
             MainTabView(user: user)
                 .transition(.opacity)
+                .sheet(isPresented: $appState.showTempoPrompt) {
+                    TempoPromptView(onDismiss: { appState.showTempoPrompt = false })
+                        .presentationDetents([.medium])
+                }
         }
     }
 }

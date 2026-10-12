@@ -11,6 +11,10 @@ final class BookDetailViewModel: ObservableObject {
     @Published var toastMessage: String?
 
     @Published var readerStats: BookSocialResponse.Readers?
+    @Published var socialFriends: [BookSocialResponse.Friend] = []
+    @Published var thoughtsCount = 0
+    /// Set after a finish; BookDetailView presents FinishSheet.
+    @Published var showFinishSheet = false
     @Published var friendsOnBook: [FriendOnBook] = []
     @Published var friendsReadingCount: Int = 0
     @Published var friendReviews: [FriendBookReview] = []
@@ -64,7 +68,10 @@ final class BookDetailViewModel: ObservableObject {
         friendReviews = (await friendReviewsTask)?.reviews ?? []
         reviews = (await reviewsTask)?.reviews ?? []
         progress = await progressTask
-        readerStats = (await socialTask)?.readers
+        let social = await socialTask
+        readerStats = social?.readers
+        socialFriends = social?.friends ?? []
+        thoughtsCount = social?.thoughtsCount ?? 0
         isLoading = false
     }
 
@@ -160,10 +167,9 @@ final class BookDetailViewModel: ObservableObject {
         await fetchAll()
     }
 
-    /// Logging pages is what extends the reading streak (the server counts any
-    /// UTC day with >=1 page logged), so a successful log refetches it and
-    /// celebrates a growth. `celebrateStreak: false` for the mark-as-read path —
-    /// that moment already gets the shelved takeover, and only one can play.
+    /// A successful forward log refetches the streak and celebrates the day's
+    /// first log. `celebrateStreak: false` for the mark-as-read path, which runs
+    /// its own streak check after the shelved takeover.
     func updateProgress(currentPage: Int, totalPages: Int, celebrateStreak: Bool = true) async {
         guard let uname = user.username else { return }
         // Only forward progress earns a reading day / streak celebration. Logging
@@ -199,8 +205,9 @@ final class BookDetailViewModel: ObservableObject {
         }
     }
 
-    /// Refetches the server-computed streak and celebrates if it grew past the
-    /// last value seen. Mirrors WriteViewModel's post-log check.
+    /// Refetches the server streak and celebrates the first log of the UTC day
+    /// (see CelebrationCenter.checkStreak). The server counts the day before it
+    /// responds to the log, so this read already includes it.
     private func celebrateStreakIfExtended(username: String) async {
         let resp: StreakResponse? = try? await APIClient.shared.request(
             path: Endpoints.userStreak(username: username),
@@ -431,7 +438,7 @@ final class BookDetailViewModel: ObservableObject {
                     requiresAuth: true
                 )
                 if target == .read, let total = book?.pageCount, total > 0 {
-                    // Suppressed: the shelved takeover plays for this moment.
+                    // Suppressed here; the streak check runs once after the shelved poster.
                     await updateProgress(currentPage: total, totalPages: total, celebrateStreak: false)
                 }
                 CelebrationCenter.shared.show(.shelved(
@@ -440,6 +447,9 @@ final class BookDetailViewModel: ObservableObject {
                     author: book?.authorLine ?? "",
                     coverURL: book?.coverURL
                 ))
+                // Shelving is a log too: the streak takeover queues after the poster.
+                await celebrateStreakIfExtended(username: uname)
+                if target == .read { showFinishSheet = true }
             } else {
                 let _: Empty = try await APIClient.shared.request(
                     path: Endpoints.removeFromBookshelf(username: uname, bookId: bookId),
@@ -479,6 +489,7 @@ final class BookDetailViewModel: ObservableObject {
                     body: ["book_id": bookId, "status": "to-read"],
                     requiresAuth: true
                 )
+                await celebrateStreakIfExtended(username: uname)
             }
         } catch let e as APIError {
             bookState.isTBR = prev

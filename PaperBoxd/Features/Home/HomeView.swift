@@ -68,6 +68,7 @@ struct HomeView: View {
                 BookDetailView(bookId: bookId, user: user)
             }
             .navigationDestination(for: AuthorNav.self) { AuthorDetailView(nav: $0) }
+            .navigationDestination(for: ListNav.self) { ListDetailView(nav: $0, viewer: user) }
             .sheet(isPresented: $showNotifications) {
                 NotificationsView(
                     activities: viewModel.friendsActivities,
@@ -165,18 +166,57 @@ struct HomeView: View {
                     .buttonStyle(.plain)
                 }
 
+                // Home answers "what happened while you were away?": your
+                // reading (hero), your people, right now, for you. Every other
+                // rail lives under Explore.
                 if !viewModel.friendsActivities.isEmpty {
-                    activityRail(eyebrow: "Your friends", title: "Between covers.",
+                    activityRail(eyebrow: "Your people", title: "Between covers.",
                                  activities: viewModel.friendsActivities)
+                }
+
+                if !viewModel.nowCards.isEmpty {
+                    rightNowSection
                 } else if viewModel.showsCommunityRail {
                     activityRail(eyebrow: "Around Paperboxd", title: "What readers are into.",
                                  activities: viewModel.communityActivities)
                 }
 
-                // Server-assembled modules first: each carries its own title
-                // and a reason on every book. The legacy rails below are
-                // deduped against them.
-                ForEach(viewModel.feedModules) { module in
+                if let first = viewModel.feedModules.first {
+                    carouselSection(
+                        eyebrow: "For you",
+                        title: first.title,
+                        items: Array(first.books.prefix(4))
+                    )
+                } else if !viewModel.pickedForYou.isEmpty {
+                    carouselSection(
+                        eyebrow: "For you",
+                        title: "Picked from what you read.",
+                        items: Array(viewModel.pickedForYou.prefix(4))
+                    )
+                }
+
+                VStack(alignment: .leading, spacing: 0) {
+                    Text("EXPLORE")
+                        .font(PB.mono(11))
+                        .tracking(2.4)
+                        .foregroundStyle(hlMuted)
+                    VStack(alignment: .leading, spacing: 28) {
+                        exploreRails
+                    }
+                    .padding(.top, 16)
+                }
+                .padding(.horizontal, 20)
+            }
+            .padding(.bottom, 16)
+        }
+    }
+
+    // Everything below the four Home sections. Carousels pad themselves, so
+    // undo the Explore section's inset.
+    @ViewBuilder
+    private var exploreRails: some View {
+        Group {
+                ForEach(viewModel.feedModules.dropFirst()) { module in
                     carouselSection(
                         eyebrow: Self.eyebrow(for: module.kind),
                         title: module.title,
@@ -184,7 +224,7 @@ struct HomeView: View {
                     )
                 }
 
-                if !viewModel.pickedForYou.isEmpty {
+                if !viewModel.feedModules.isEmpty && !viewModel.pickedForYou.isEmpty {
                     carouselSection(
                         eyebrow: "For you",
                         title: "Picked from what you read.",
@@ -223,10 +263,52 @@ struct HomeView: View {
                         items: viewModel.freshShelves
                     )
                 }
-
-            }
-            .padding(.bottom, 16)
         }
+        .padding(.horizontal, -20)
+    }
+
+    // MARK: - Right Now
+
+    private var rightNowSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            SectionHeader(eyebrow: "Right now on Paperboxd", title: "What's happening.",
+                          titleColor: hlInk, eyebrowColor: hlMuted)
+            ForEach(viewModel.nowCards) { card in
+                if let book = card.book {
+                    NavigationLink(value: book.id) { nowCardFace(card) }
+                        .buttonStyle(.plain)
+                } else if let listID = card.listID, let username = card.username {
+                    NavigationLink(value: ListNav(listId: listID, username: username)) { nowCardFace(card) }
+                        .buttonStyle(.plain)
+                } else {
+                    nowCardFace(card)
+                }
+            }
+        }
+        .padding(.horizontal, 20)
+    }
+
+    private func nowCardFace(_ card: NowCard) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            if let cover = card.book?.coverURL {
+                BookCoverView(url: cover, width: 44, cornerRadius: 3)
+            }
+            VStack(alignment: .leading, spacing: 6) {
+                Text(card.headline)
+                    .font(.subheadline)
+                    .foregroundStyle(hlInk)
+                    .multilineTextAlignment(.leading)
+                if let excerpt = card.excerpt {
+                    Text("“\(excerpt)”")
+                        .font(PB.serifItalic(14))
+                        .foregroundStyle(hlMuted)
+                        .lineLimit(3)
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(14)
+        .background(hlCard, in: RoundedRectangle(cornerRadius: 16))
     }
 
     // MARK: - Friends rail

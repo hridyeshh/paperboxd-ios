@@ -141,6 +141,45 @@ extension View {
     }
 }
 
+// MARK: 4.5 — Shared step header (welcome → signup → username → genres)
+
+/// "‹ STEP n / total" + a dash progress track. Shared by the paper-themed
+/// signup screen (Auth) and the onboarding screens so the run reads as one
+/// continuous three-step flow, not two separate flows glued together.
+struct PBStepHeader: View {
+    let step: Int
+    var total: Int = 3
+    var onBack: (() -> Void)?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 6) {
+                if let onBack {
+                    Button(action: onBack) {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundStyle(BK.ink)
+                    }
+                    .padding(.trailing, 2)
+                }
+                Text("STEP \(step) / \(total)")
+                    .font(.system(size: 11, weight: .medium, design: .monospaced))
+                    .kerning(1.4)
+                    .foregroundStyle(BK.muted)
+            }
+            HStack(spacing: 4) {
+                ForEach(1 ... total, id: \.self) { i in
+                    Rectangle()
+                        .fill(i <= step ? BK.ink : BK.card)
+                        .frame(height: 3)
+                        .overlay(Rectangle().stroke(BK.ink.opacity(i <= step ? 0 : 0.3), lineWidth: 1))
+                }
+            }
+            .frame(height: 3)
+        }
+    }
+}
+
 // MARK: 5 — Hazard hatch
 
 /// 45° stripe fill. Marks destructive controls without spending a colour on

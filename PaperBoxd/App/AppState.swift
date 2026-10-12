@@ -15,6 +15,10 @@ enum AppScreen: Equatable {
 final class AppState: ObservableObject {
     @Published var currentScreen: AppScreen = .splash
 
+    /// One-shot "Set a Tempo" prompt shown over Home right after onboarding
+    /// finishes. Local-only preference — no backend field for it yet.
+    @Published var showTempoPrompt = false
+
     /// Backing user reference — exposed so views that need full identity can
     /// read it without unwrapping the enum each time.
     @Published private(set) var currentUser: User?
@@ -169,7 +173,13 @@ final class AppState: ObservableObject {
     /// splash clip (4.87s source, 3.9s at its 1.25x playback rate) and the
     /// outro fade that follows it, so bootstrap never cuts the mark animation
     /// off mid-morph or mid-fade.
-    private func holdSplash(since start: Date, minimum: TimeInterval = 4.6) async {
+    ///
+    /// The full clip plays once per install. After that the floor only stops a
+    /// flicker: making every cold start wait 4.6s was most of the "slow to open".
+    private func holdSplash(since start: Date) async {
+        let key = "pb_splash_played"
+        let minimum: TimeInterval = UserDefaults.standard.bool(forKey: key) ? 1.2 : 4.6
+        UserDefaults.standard.set(true, forKey: key)
         let elapsed = Date().timeIntervalSince(start)
         if elapsed < minimum {
             let remaining = UInt64((minimum - elapsed) * 1_000_000_000)
@@ -247,6 +257,7 @@ final class AppState: ObservableObject {
         )
         currentUser = updated
         KeychainManager.shared.saveUser(updated)
+        showTempoPrompt = true
         transition(to: .main(updated))
     }
 

@@ -7,14 +7,14 @@ struct LeaderboardEntry: Decodable, Identifiable, Equatable {
     let username: String
     let booksRead: Int
     let pagesRead: Int
-    let diaryEntries: Int
+    let thoughts: Int
     let genresExplored: Int
     let totalXP: Int
     let level: Int
     let currentStreak: Int
     let booksRank: Int?
     let pagesRank: Int?
-    let diaryRank: Int?
+    let thoughtsRank: Int?
     let genresRank: Int?
     let xpRank: Int?
     let streakRank: Int?
@@ -28,14 +28,14 @@ struct LeaderboardEntry: Decodable, Identifiable, Equatable {
         case username
         case booksRead = "books_read"
         case pagesRead = "pages_read"
-        case diaryEntries = "diary_entries"
+        case thoughts
         case genresExplored = "genres_explored"
         case totalXP = "total_xp"
         case level
         case currentStreak = "current_streak"
         case booksRank = "books_rank"
         case pagesRank = "pages_rank"
-        case diaryRank = "diary_rank"
+        case thoughtsRank = "thoughts_rank"
         case genresRank = "genres_rank"
         case xpRank = "xp_rank"
         case streakRank = "streak_rank"

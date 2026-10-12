@@ -134,12 +134,12 @@ final class ProfileViewModel: ObservableObject {
             break // refreshShelf() already handled this
         case .diary:
             if let resp: DiaryEntriesResponse = try? await APIClient.shared.request(
-                path: Endpoints.userDiary(username: profileUsername) + "?page=1&page_size=20",
+                path: Endpoints.userThoughts(username: profileUsername) + "?page=1&page_size=20",
                 method: .get, requiresAuth: true
             ) {
-                diaryEntries = resp.entries
+                diaryEntries = resp.thoughts
                 diaryPage = 2
-                diaryHasMore = resp.entries.count == 20
+                diaryHasMore = resp.thoughts.count == 20
             }
         case .lists:
             if let resp: UserListsResponse = try? await APIClient.shared.request(
@@ -336,14 +336,25 @@ final class ProfileViewModel: ObservableObject {
         defer { isLoadingDiary = false }
         do {
             let resp: DiaryEntriesResponse = try await APIClient.shared.request(
-                path: Endpoints.userDiary(username: profileUsername) + "?page=\(diaryPage)&page_size=20",
+                path: Endpoints.userThoughts(username: profileUsername) + "?page=\(diaryPage)&page_size=20",
                 method: .get,
                 requiresAuth: true
             )
-            diaryEntries += resp.entries
+            diaryEntries += resp.thoughts
             diaryPage += 1
-            diaryHasMore = resp.entries.count == 20
+            diaryHasMore = resp.thoughts.count == 20
         } catch {}
+    }
+
+    /// Refetches the first page after a thread sheet closes.
+    func reloadThoughts() async {
+        guard !isLoadingDiary else { return }
+        diaryPage = 1
+        diaryHasMore = true
+        let before = diaryEntries
+        diaryEntries = []
+        await fetchDiary()
+        if diaryEntries.isEmpty && diaryHasMore { diaryEntries = before } // request failed; keep what we had
     }
 
     func fetchDiaryIfNeeded(item: DiaryEntry) async {
@@ -451,7 +462,7 @@ final class ProfileViewModel: ObservableObject {
                     isPublic: p.isPublic,
                     booksReadCount: p.booksReadCount, totalPagesRead: p.totalPagesRead,
                     favoritesCount: p.favoritesCount, listsCount: p.listsCount,
-                    diaryEntriesCount: p.diaryEntriesCount,
+                    thoughtsCount: p.thoughtsCount,
                     followersCount: resp.followersCount,
                     followingCount: p.followingCount,
                     favoriteGenres: p.favoriteGenres, createdAt: p.createdAt,

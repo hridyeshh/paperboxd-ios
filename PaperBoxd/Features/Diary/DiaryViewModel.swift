@@ -32,13 +32,13 @@ final class DiaryViewModel: ObservableObject {
         entries = []
         do {
             let resp: DiaryEntriesResponse = try await APIClient.shared.request(
-                path: Endpoints.userDiary(username: username) + "?page=1&page_size=20",
+                path: Endpoints.userThoughts(username: username) + "?page=1&page_size=20",
                 method: .get,
                 requiresAuth: true
             )
-            entries = resp.entries
+            entries = resp.thoughts
             page = 2
-            hasMore = resp.entries.count == 20
+            hasMore = resp.thoughts.count == 20
         } catch let e as APIError {
             errorMessage = e.errorDescription
         } catch {
@@ -55,13 +55,13 @@ final class DiaryViewModel: ObservableObject {
         guard let username = user.username else { return }
         do {
             let resp: DiaryEntriesResponse = try await APIClient.shared.request(
-                path: Endpoints.userDiary(username: username) + "?page=\(page)&page_size=20",
+                path: Endpoints.userThoughts(username: username) + "?page=\(page)&page_size=20",
                 method: .get,
                 requiresAuth: true
             )
-            entries += resp.entries
+            entries += resp.thoughts
             page += 1
-            hasMore = resp.entries.count == 20
+            hasMore = resp.thoughts.count == 20
         } catch {}
     }
 

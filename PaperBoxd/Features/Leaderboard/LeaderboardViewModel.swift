@@ -2,7 +2,7 @@ import Combine
 import Foundation
 
 enum LeaderboardTab: String, CaseIterable, Identifiable {
-    case global, books, pages, streak, diary, friends
+    case global, books, pages, streak, thoughts, friends
 
     var id: String { rawValue }
 
@@ -12,7 +12,7 @@ enum LeaderboardTab: String, CaseIterable, Identifiable {
         case .books:   return "Books"
         case .pages:   return "Pages"
         case .streak:  return "Streak"
-        case .diary:   return "Diary"
+        case .thoughts: return "Thoughts"
         case .friends: return "Friends"
         }
     }
@@ -25,7 +25,7 @@ enum LeaderboardTab: String, CaseIterable, Identifiable {
         case .books:  return "books"
         case .pages:  return "pages"
         case .streak: return "streak"
-        case .diary:  return "diary"
+        case .thoughts: return "thoughts"
         }
     }
 
@@ -35,7 +35,7 @@ enum LeaderboardTab: String, CaseIterable, Identifiable {
         case .books:   return "books"
         case .pages:   return "pages"
         case .streak:  return "day streak"
-        case .diary:   return "entries"
+        case .thoughts: return "thoughts"
         case .friends: return "XP"
         }
     }
@@ -46,7 +46,7 @@ enum LeaderboardTab: String, CaseIterable, Identifiable {
         case .books:  return e.booksRead
         case .pages:  return e.pagesRead
         case .streak: return e.currentStreak
-        case .diary:  return e.diaryEntries
+        case .thoughts: return e.thoughts
         }
     }
 
@@ -56,7 +56,7 @@ enum LeaderboardTab: String, CaseIterable, Identifiable {
         case .books:  return e.booksRank
         case .pages:  return e.pagesRank
         case .streak: return e.streakRank
-        case .diary:  return e.diaryRank
+        case .thoughts: return e.thoughtsRank
         }
     }
 }

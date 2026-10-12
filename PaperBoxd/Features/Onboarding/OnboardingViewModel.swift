@@ -2,17 +2,14 @@ import Combine
 import Foundation
 import SwiftUI
 
-/// Drives the multi-step onboarding flow:
-/// username → genres → books you love → readers to follow → aha-loading → aha-reveal.
-/// Mirrors the web onboarding-flow.tsx step machine. The view binds to `step`
-/// and the per-step fields; navigation between steps is animated by the view.
+/// Drives the multi-step onboarding flow: username → genres (swipe) →
+/// aha-loading → aha-reveal. Three visible steps, to match the signup step
+/// counter (signup is step 1, this flow is steps 2–3).
 @MainActor
 final class OnboardingViewModel: ObservableObject {
     enum Step: Equatable {
         case username
         case genres
-        case books
-        case readers
         case ahaLoading
         case ahaReveal
     }
@@ -41,21 +38,7 @@ final class OnboardingViewModel: ObservableObject {
     @Published var isUploadingAvatar = false
 
     // Genres step
-    @Published var selectedGenres: Set<String> = []
-
-    // Books-you-love step. Picks become favourites (Top 4) *and* `read` shelf
-    // rows — `read` is what the recommendation engine ranks on.
-    @Published var pickSuggestions: [RecBook] = []
-    @Published var isLoadingSuggestions = false
-    @Published var picks: [RecBook] = []
-    @Published var searchQuery: String = ""
-    @Published var searchResults: [RecBook] = []
-    @Published var isSearching = false
-
-    // Readers-to-follow step
-    @Published var readers: [SuggestedReader] = []
-    @Published var isLoadingReaders = false
-    @Published var followed: Set<String> = []
+    @Published var selectedGenres: [String] = [] // pick order: the shelf tray grows at its end
 
     // Aha step
     @Published var ahaBooks: [RecBook] = []
@@ -72,7 +55,6 @@ final class OnboardingViewModel: ObservableObject {
     var onFinished: () -> Void = {}
 
     private var debounceTask: Task<Void, Never>?
-    private var searchTask: Task<Void, Never>?
     private let user: User
     private let startedAt = Date()
 
@@ -83,7 +65,6 @@ final class OnboardingViewModel: ObservableObject {
 
     deinit {
         debounceTask?.cancel()
-        searchTask?.cancel()
     }
 
     /// Resolved username for per-user API paths. The claimed one wins; the
@@ -225,28 +206,29 @@ final class OnboardingViewModel: ObservableObject {
         finish(aha: "skipped_all")
     }
 
-    // MARK: - Step 2 → 3: genres → books you love
+    // MARK: - Step 2 → 3: genres → aha
 
-    /// Genres are saved here, not at the end: the picker suggestions and every
-    /// later recommendation call are genre-aware, and a reader who bails after
-    /// this step is still onboarded instead of being bounced back in.
+    /// Genres are saved here, not at the end, and the flow goes straight to
+    /// the recommendation reveal — no "books you love" / "readers" detour.
     func continueFromGenres() {
-        guard selectedGenres.count >= 3 else { return }
-        advance(to: .books)
-        Task { await loadPickSuggestions() }
+        // Step check: Continue and the end-of-deck hand-off can both fire.
+        guard step == .genres, selectedGenres.count >= 3 else { return }
+        advance(to: .ahaLoading)
+        Task { await loadAha() }
     }
 
     func toggleGenre(_ id: String) {
-        if selectedGenres.contains(id) {
-            selectedGenres.remove(id)
+        if let i = selectedGenres.firstIndex(of: id) {
+            selectedGenres.remove(at: i)
         } else {
-            selectedGenres.insert(id)
+            selectedGenres.append(id)
         }
     }
 
-    private func loadPickSuggestions() async {
-        isLoadingSuggestions = true
-        defer { isLoadingSuggestions = false }
+    private func loadAha() async {
+        // Long enough for all three loading stages (1s apiece) to play out.
+        let minLoad = Task { try? await Task.sleep(nanoseconds: 3_000_000_000) }
+
         let genres = Array(selectedGenres)
         do {
             let _: Empty = try await APIClient.shared.request(
@@ -258,154 +240,7 @@ final class OnboardingViewModel: ObservableObject {
         } catch {
             // Non-fatal: genres may already be saved or the call flaked. Keep going.
         }
-        let resp: RecommendationsResponse? = try? await APIClient.shared.request(
-            path: Endpoints.recommendationsHome,
-            method: .get,
-            requiresAuth: true
-        )
-        pickSuggestions = Array(
-            (resp?.recommendations ?? [])
-                .filter { ($0.coverURL?.isValidCover ?? false) && !$0.title.isEmpty }
-                .prefix(12)
-        )
-    }
 
-    // MARK: - Books you love
-
-    func searchChanged(_ raw: String) {
-        searchTask?.cancel()
-        let q = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard q.count >= 2 else {
-            searchResults = []
-            isSearching = false
-            return
-        }
-        isSearching = true
-        searchTask = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: 300_000_000)
-            if Task.isCancelled { return }
-            let encoded = q.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? q
-            let resp: BookListResponse? = try? await APIClient.shared.request(
-                path: Endpoints.searchBooks + "?q=\(encoded)&page_size=8",
-                method: .get,
-                requiresAuth: false
-            )
-            if Task.isCancelled { return }
-            await MainActor.run {
-                self?.searchResults = (resp?.items ?? []).map(RecBook.init(searchResult:))
-                self?.isSearching = false
-            }
-        }
-    }
-
-    /// What the grid shows: search hits while typing, suggestions otherwise.
-    var pickGrid: [RecBook] {
-        searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).count >= 2 ? searchResults : pickSuggestions
-    }
-
-    func isPicked(_ book: RecBook) -> Bool { picks.contains { $0.id == book.id } }
-
-    func togglePick(_ book: RecBook) {
-        if let idx = picks.firstIndex(where: { $0.id == book.id }) {
-            picks.remove(at: idx)
-            return
-        }
-        guard picks.count < onboardingMaxPicks else {
-            errorMessage = "That's your top \(onboardingMaxPicks) — remove one to swap."
-            return
-        }
-        errorMessage = nil
-        Analytics.track("book_selected_during_onboarding", bookID: nil, metadata: [
-            "title": book.title,
-            "source": searchResults.contains { $0.id == book.id } ? "search" : "suggested",
-        ])
-        picks.append(book)
-        searchQuery = ""
-        searchResults = []
-    }
-
-    // MARK: - Step 3 → 4: books → readers
-
-    /// Persists picks (favourite + read shelf entry, in parallel — one failure
-    /// must not block the rest) while the readers list loads.
-    func continueFromBooks() {
-        advance(to: .readers)
-        isLoadingReaders = true
-        Task {
-            async let saved: Void = savePicks()
-            async let loaded: Void = loadReaders()
-            _ = await (saved, loaded)
-            isLoadingReaders = false
-        }
-    }
-
-    private func savePicks() async {
-        guard let uname = resolvedUsername, !picks.isEmpty else { return }
-        // display_order = pick order, so the Top 4 reads in the order they chose.
-        await withTaskGroup(of: Void.self) { group in
-            for (i, book) in picks.enumerated() {
-                group.addTask {
-                    _ = try? await APIClient.shared.request(
-                        path: Endpoints.addToBookshelf(username: uname),
-                        method: .post,
-                        body: ["book_id": book.id, "status": "read"],
-                        requiresAuth: true
-                    ) as Empty
-                    _ = try? await APIClient.shared.request(
-                        path: Endpoints.userFavorites(username: uname),
-                        method: .post,
-                        body: AddFavoriteBody(bookID: book.id, displayOrder: i + 1),
-                        requiresAuth: true
-                    ) as Empty
-                }
-            }
-        }
-    }
-
-    private func loadReaders() async {
-        let resp: SuggestedReadersResponse? = try? await APIClient.shared.request(
-            path: Endpoints.suggestedUsers + "?limit=6",
-            method: .get,
-            requiresAuth: true
-        )
-        readers = resp?.users ?? []
-    }
-
-    // MARK: - Readers to follow
-
-    func follow(_ reader: SuggestedReader) {
-        guard !followed.contains(reader.username) else { return }
-        followed.insert(reader.username) // optimistic
-        Task {
-            do {
-                let _: Empty = try await APIClient.shared.request(
-                    path: Endpoints.follow(username: reader.username),
-                    method: .post,
-                    requiresAuth: true
-                )
-                Analytics.track("person_followed_during_onboarding", metadata: [
-                    "username": reader.username,
-                    "reason": reader.reason,
-                ])
-            } catch {
-                followed.remove(reader.username)
-                errorMessage = "Couldn't follow \(reader.displayName)."
-            }
-        }
-    }
-
-    // MARK: - Step 4 → Aha
-
-    func continueFromReaders() {
-        advance(to: .ahaLoading)
-        Task { await loadAha() }
-    }
-
-    private func loadAha() async {
-        // Keep the loading state visible long enough to feel intentional.
-        let minLoad = Task { try? await Task.sleep(nanoseconds: 1_600_000_000) }
-
-        let pickedIDs = Set(picks.map(\.id))
         var books: [RecBook] = []
         do {
             let resp: RecommendationsResponse = try await APIClient.shared.request(
@@ -414,7 +249,7 @@ final class OnboardingViewModel: ObservableObject {
                 requiresAuth: true
             )
             books = resp.recommendations.filter {
-                ($0.coverURL?.isValidCover ?? false) && !$0.title.isEmpty && !pickedIDs.contains($0.id)
+                ($0.coverURL?.isValidCover ?? false) && !$0.title.isEmpty
             }
         } catch {
             books = []
@@ -470,8 +305,6 @@ final class OnboardingViewModel: ObservableObject {
     /// same metadata the web flow records.
     private func finish(aha: String) {
         Analytics.track("onboarding_completed", metadata: [
-            "books_selected": String(picks.count),
-            "people_followed": String(followed.count),
             "genres": String(selectedGenres.count),
             "seconds": String(Int(Date().timeIntervalSince(startedAt))),
             "aha": aha,
@@ -491,18 +324,6 @@ final class OnboardingViewModel: ObservableObject {
     private func isLocallyValid(_ s: String) -> Bool {
         guard (3...50).contains(s.count) else { return false }
         return s.range(of: "^[a-z0-9_-]+$", options: .regularExpression) != nil
-    }
-}
-
-/// POST /users/{username}/favorites. display_order 1–4; the backend
-/// auto-assigns a free slot when it is omitted.
-private struct AddFavoriteBody: Encodable {
-    let bookID: String
-    let displayOrder: Int
-
-    enum CodingKeys: String, CodingKey {
-        case bookID = "book_id"
-        case displayOrder = "display_order"
     }
 }
 

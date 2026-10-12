@@ -55,6 +55,14 @@ enum Endpoints {
     static func acceptFusionInvite(_ token: String) -> String { "/api/v1/fusions/invites/\(token)/accept" }
     static func fusion(_ id: String) -> String { "/api/v1/fusions/\(id)" }
 
+    // Messages (DMs). No push yet: a chat polls ?after=<last id>.
+    static let messages      = "/api/v1/messages"
+    static let conversations = "/api/v1/conversations"
+    static let inboxBadge    = "/api/v1/conversations/badge"
+    static func message(_ id: Int64) -> String { "/api/v1/messages/\(id)" }
+    static func conversation(_ id: String) -> String { "/api/v1/conversations/\(id)" }
+    static func conversationWith(_ username: String) -> String { "/api/v1/conversations/with/\(username)" }
+
     static func removeFromBookshelf(username: String, bookId: String) -> String {
         "/api/v1/users/\(username)/bookshelf/\(bookId)"
     }
@@ -119,7 +127,7 @@ enum Endpoints {
     static func userStreak(username: String) -> String { "/api/v1/users/\(username)/streak" }
     static func userLists(username: String) -> String { "/api/v1/users/\(username)/lists" }
     static func listDetail(username: String, listId: String) -> String { "/api/v1/users/\(username)/lists/\(listId)" }
-    static func userDiary(username: String) -> String { "/api/v1/users/\(username)/diary" }
+    static func userThoughts(username: String) -> String { "/api/v1/users/\(username)/thoughts" }
     static func userReading(username: String) -> String { "/api/v1/users/\(username)/reading" }
     static func readingToday(username: String) -> String { "/api/v1/users/\(username)/reading/today" }
     static func lastLoggedBook(username: String) -> String { "/api/v1/users/\(username)/reading/last" }
@@ -150,12 +158,19 @@ enum Endpoints {
     // Events
     static let events = "/api/v1/events"
 
-    // Diary mutations
-    static func diaryEntry(username: String, entryId: String) -> String {
-        "/api/v1/users/\(username)/diary/\(entryId)"
+    // Thoughts. `username` is the thought's author — the thread GET sits
+    // behind the author's profile-privacy gate.
+    static func thought(username: String, thoughtId: String) -> String {
+        "/api/v1/users/\(username)/thoughts/\(thoughtId)"
     }
-    static func diaryEntryLike(username: String, entryId: String) -> String {
-        "/api/v1/users/\(username)/diary/\(entryId)/like"
+    static func thoughtLike(username: String, thoughtId: String) -> String {
+        thought(username: username, thoughtId: thoughtId) + "/like"
+    }
+    static func thoughtRepost(username: String, thoughtId: String) -> String {
+        thought(username: username, thoughtId: thoughtId) + "/repost"
+    }
+    static func thoughtThread(username: String, thoughtId: String) -> String {
+        thought(username: username, thoughtId: thoughtId) + "/thread"
     }
 
     // Password reset. The Go backend's /api/v1/auth/forgot-password only mints a

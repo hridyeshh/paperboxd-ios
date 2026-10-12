@@ -6,7 +6,7 @@ import SwiftUI
 
 #Preview("Splash") {
     SplashView()
-        .environmentObject(AppState())
+        .environmentObject(AppStaty ye())
 }
 
 #Preview("Auth — Login") {
@@ -71,35 +71,48 @@ import SwiftUI
 }
 
 #Preview("Share card — Story") {
-    ShareComposition(
+    BookShareCardView(
         title: "Norwegian Wood",
         author: "Haruki Murakami",
         year: "1987",
-        coverImage: nil,
         handle: "@hridyesh",
         rating: 4,
         note: "Loved the rain scene. A whole evening lost — happily.",
         statusLabel: "Just finished",
-        theme: .dark,
         format: .story
     )
-    .scaleEffect(0.36)
+    .scaleEffect(0.42)
 }
 
-#Preview("Share card — Square") {
-    ShareComposition(
+#Preview("Share card — Quote · Terra") {
+    BookShareCardView(
+        title: "Beloved",
+        author: "Toni Morrison",
+        year: "1987",
+        handle: "@hridyesh",
+        rating: 5,
+        note: "Read it twice. Will read it again. Then again.",
+        statusLabel: "Favourite of 2026",
+        ground: .terra,
+        layout: .quote,
+        format: .story
+    )
+    .scaleEffect(0.42)
+}
+
+#Preview("Share card — Square · Paper") {
+    BookShareCardView(
         title: "Piranesi",
         author: "Susanna Clarke",
         year: "2020",
-        coverImage: nil,
         handle: "@hridyesh",
         rating: 5,
         note: nil,
         statusLabel: "Just finished",
-        theme: .light,
+        ground: .paper,
         format: .square
     )
-    .scaleEffect(0.46)
+    .scaleEffect(0.5)
 }
 
 #Preview("Main tabs") {

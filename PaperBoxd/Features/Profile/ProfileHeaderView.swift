@@ -8,6 +8,8 @@ struct ProfileHeaderView: View {
     let streak: Int?
     /// Drives the avatar's XP ring. Nil → plain avatar, no ring, no tap.
     var progress: ReaderProgress? = nil
+    /// "Reading now" status line under the bio, like "listening to…".
+    var readingNow: LastLoggedBook? = nil
     let bannerCovers: [String]
     let onFollow: () -> Void
     let onEdit: () -> Void
@@ -18,6 +20,8 @@ struct ProfileHeaderView: View {
     var onEditBanner: (() -> Void)? = nil
     var onReport: () -> Void = {}
     var onBlock: () -> Void = {}
+    var onMessage: () -> Void = {}
+    var onSendProfile: () -> Void = {}
     var onAvatarTap: () -> Void = {}
 
     var body: some View {
@@ -44,6 +48,20 @@ struct ProfileHeaderView: View {
                         .foregroundStyle(Color("TextPrimary").opacity(0.78))
                         .lineSpacing(2)
                         .padding(.top, 16)
+                }
+
+                if let now = readingNow {
+                    HStack(spacing: 8) {
+                        Text("READING NOW").font(PB.mono(10)).tracking(1.8)
+                            .foregroundStyle(Color("TextPrimary").opacity(0.55))
+                        Text(now.title).font(.footnote.weight(.semibold)).lineLimit(1)
+                            .foregroundStyle(Color("TextPrimary"))
+                        if now.totalPages > 0 {
+                            Text("\(min(100, now.currentPage * 100 / now.totalPages))%")
+                                .font(PB.mono(11)).foregroundStyle(Color("TextPrimary").opacity(0.55))
+                        }
+                    }
+                    .padding(.top, 10)
                 }
 
                 statStrip.padding(.top, 20)
@@ -87,7 +105,7 @@ struct ProfileHeaderView: View {
             statCell(value: booksCount ?? profile.booksReadCount, label: "Books", action: nil)
             statCell(value: streak ?? 0, label: "Streak", action: nil)
             statCell(value: profile.followersCount, label: "Friends", action: onFollowers)
-            statCell(value: profile.diaryEntriesCount, label: "Reviews", action: nil)
+            statCell(value: profile.thoughtsCount, label: "Thoughts", action: nil)
         }
         .padding(.vertical, 18)
         .overlay(alignment: .top) { Rectangle().fill(Color("Border")).frame(height: 1) }
@@ -132,7 +150,9 @@ struct ProfileHeaderView: View {
                     loading: isFollowLoading,
                     action: onFollow
                 )
+                PillButton(title: "Message", style: .ghost, action: onMessage)
                 Menu {
+                    Button("Send profile", systemImage: "paperplane") { onSendProfile() }
                     Button("Report user", systemImage: "flag") { onReport() }
                     Button("Block user", systemImage: "hand.raised", role: .destructive) { onBlock() }
                 } label: {

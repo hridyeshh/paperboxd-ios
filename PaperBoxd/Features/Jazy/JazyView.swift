@@ -23,7 +23,8 @@ struct JazyView: View {
     let user: User
 
     @Environment(\.dismiss) private var dismiss
-    @AppStorage("pb_scans_remaining") private var scansRemaining: Int = 7
+    @AppStorage("pb_scans_remaining") private var scansRemaining: Int = 3
+    @AppStorage("pb_scans_unlimited") private var scansUnlimited = false
 
     @State private var query = ""
     @FocusState private var focused: Bool
@@ -44,6 +45,10 @@ struct JazyView: View {
     /// always lets the scan through.
     @State private var shelfSize: Int?
     @State private var showTasteGate = false
+    /// Ask Jazy is Plus-only. `isActive == false` opens the paywall before
+    /// the ask; unknown (nil) lets it through and the backend's 402 opens it.
+    @ObservedObject private var plus = PlusStore.shared
+    @State private var showPaywall = false
 
     private var hasText: Bool { !query.trimmingCharacters(in: .whitespaces).isEmpty }
 
@@ -73,6 +78,17 @@ struct JazyView: View {
                 JazyTasteGateSheet(shelfSize: shelfSize ?? 0) {
                     withAnimation(.easeInOut(duration: 0.2)) { showTasteGate = false }
                 }
+                .transition(.opacity)
+            }
+            if showPaywall {
+                PlusPaywallView(
+                    feature: .jazy,
+                    onUnlocked: {
+                        withAnimation(.easeInOut(duration: 0.2)) { showPaywall = false }
+                        submit()
+                    },
+                    onDismiss: { withAnimation(.easeInOut(duration: 0.2)) { showPaywall = false } }
+                )
                 .transition(.opacity)
             }
         }
@@ -166,7 +182,8 @@ struct JazyView: View {
                 Spacer(minLength: 0)
 
                 HStack {
-                    MonoLabel(text: "\(scansRemaining) free scans left", size: 9.5, tracking: 1.8, color: SK.sub)
+                    MonoLabel(text: scansUnlimited ? "Unlimited scans · Plus" : "\(scansRemaining) free scans left",
+                              size: 9.5, tracking: 1.8, color: SK.sub)
                     Spacer()
                     MonoLabel(text: "01 / label", size: 9.5, tracking: 1.8, color: SK.faint)
                 }
@@ -310,6 +327,10 @@ struct JazyView: View {
         let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !q.isEmpty, !isSearching else { return }
         focused = false
+        if plus.isActive == false {
+            withAnimation(.easeInOut(duration: 0.2)) { showPaywall = true }
+            return
+        }
         errorMessage = nil
         pendingQuestion = nil
         withAnimation(.easeInOut(duration: 0.3)) { isSearching = true }
@@ -344,6 +365,10 @@ struct JazyView: View {
                 await holdPullingPage(since: startedAt)
                 await MainActor.run {
                     withAnimation(.easeInOut(duration: 0.3)) { isSearching = false }
+                    if case .subscriptionRequired = error as? APIError {
+                        withAnimation(.easeInOut(duration: 0.2)) { showPaywall = true }
+                        return
+                    }
                     errorMessage = (error as? APIError)?.errorDescription ?? "Shelf jammed — try again"
                 }
             }

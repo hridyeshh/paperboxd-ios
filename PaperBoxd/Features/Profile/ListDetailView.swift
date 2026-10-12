@@ -40,6 +40,7 @@ struct ListDetailView: View {
     @State private var detail: ListDetailResponse?
     @State private var isLoading = true
     @State private var errorMessage: String?
+    @State private var showSend = false
 
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 8), count: 3)
 
@@ -74,6 +75,17 @@ struct ListDetailView: View {
         .background(Color("Background").ignoresSafeArea())
         .navigationTitle(detail?.title ?? "List")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            if detail != nil {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { showSend = true } label: { Image(systemName: "paperplane") }
+                        .accessibilityLabel("Send on Paperboxd")
+                }
+            }
+        }
+        .sheet(isPresented: $showSend) {
+            SendSheetView(attachment: AttachmentRef(kind: AttachKind.list, refID: nav.listId))
+        }
         .task { await load() }
     }
 

@@ -1,3 +1,4 @@
+import Combine
 import SwiftUI
 
 /// Entry point for the post-registration onboarding flow. Replaces the old
@@ -6,6 +7,7 @@ import SwiftUI
 struct OnboardingContainerView: View {
     let user: User
     @EnvironmentObject private var appState: AppState
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @StateObject private var viewModel: OnboardingViewModel
     @State private var contentIn = false
 
@@ -14,13 +16,9 @@ struct OnboardingContainerView: View {
         _viewModel = StateObject(wrappedValue: OnboardingViewModel(user: user))
     }
 
-    private var isDark: Bool { viewModel.step == .ahaLoading }
-
     var body: some View {
         ZStack {
-            (isDark ? Color(white: 0.06) : BK.paper)
-                .ignoresSafeArea()
-                .animation(.easeInOut(duration: 0.4), value: isDark)
+            BK.paper.ignoresSafeArea()
 
             VStack(spacing: 0) {
                 if viewModel.step != .ahaLoading {
@@ -35,6 +33,9 @@ struct OnboardingContainerView: View {
             .opacity(contentIn ? 1 : 0)
             .offset(y: contentIn ? 0 : 28)
         }
+        // `$step` publishes before the new value lands, so the screen still
+        // shows the old page here: freeze it and burn it away over the new one.
+        .onReceive(viewModel.$step.dropFirst()) { _ in PageDissolve.cover() }
         .onAppear {
             viewModel.onUsernameSet = { [weak appState] uname in
                 appState?.setOnboardingUsername(uname)
@@ -56,29 +57,20 @@ struct OnboardingContainerView: View {
             UsernameStepView(viewModel: viewModel)
                 .transition(stepTransition)
         case .genres:
-            GenresStepView(viewModel: viewModel)
-                .transition(stepTransition)
-        case .books:
-            BooksStepView(viewModel: viewModel)
-                .transition(stepTransition)
-        case .readers:
-            ReadersStepView(viewModel: viewModel)
+            SwipeGenresStepView(viewModel: viewModel)
                 .transition(stepTransition)
         case .ahaLoading:
-            AhaLoadingView()
-                .transition(.opacity)
+            AhaLoadingView(genres: Genre.all.filter { viewModel.selectedGenres.contains($0.id) }.map(\.label))
+                .transition(stepTransition)
         case .ahaReveal:
             AhaRevealView(viewModel: viewModel)
                 .transition(stepTransition)
         }
     }
 
-    private var stepTransition: AnyTransition {
-        .asymmetric(
-            insertion: .move(edge: .trailing).combined(with: .opacity),
-            removal: .move(edge: .leading).combined(with: .opacity)
-        )
-    }
+    /// The swap underneath the dissolve is instant so the burnt hole only ever
+    /// shows the new page. Reduce Motion skips the dissolve, so fade instead.
+    private var stepTransition: AnyTransition { reduceMotion ? .opacity : .identity }
 }
 
 // MARK: - Stage header
@@ -86,67 +78,19 @@ struct OnboardingContainerView: View {
 struct OnboardingStageHeader: View {
     let step: OnboardingViewModel.Step
 
-    private let stages = ["Sign up", "Set up", "Aha"]
-
-    private var activeStage: Int {
-        switch step {
-        case .username, .genres, .books, .readers: return 1
-        case .ahaLoading, .ahaReveal:    return 2
-        }
-    }
-
+    /// Signup is step 1 of the shared 3-step run; onboarding picks up at 2.
     private var subStep: Int? {
         switch step {
-        case .username: return 1
-        case .genres:   return 2
-        case .books:    return 3
-        case .readers:  return 4
+        case .username: return 2
+        case .genres:   return 3
         default:        return nil
         }
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 8) {
-                ForEach(Array(stages.enumerated()), id: \.offset) { idx, label in
-                    pill(label: label, index: idx)
-                    if idx < stages.count - 1 {
-                        Rectangle()
-                            .fill(idx < activeStage ? BK.ink : BK.ink.opacity(0.2))
-                            .frame(width: 12, height: 2)
-                    }
-                }
-                Spacer(minLength: 0)
-            }
-            if let subStep {
-                Text("Step \(subStep) of 4")
-                    .font(.system(size: 11, weight: .medium, design: .monospaced))
-                    .textCase(.uppercase)
-                    .kerning(1.4)
-                    .foregroundStyle(BK.muted)
-            }
+        if let subStep {
+            PBStepHeader(step: subStep)
         }
-    }
-
-    @ViewBuilder
-    private func pill(label: String, index: Int) -> some View {
-        let isDone = index < activeStage
-        let isCurrent = index == activeStage
-        HStack(spacing: 4) {
-            if isDone {
-                Image(systemName: "checkmark")
-                    .font(.system(size: 9, weight: .bold))
-            }
-            Text(label)
-        }
-        .font(.system(size: 11, weight: .semibold))
-        .foregroundStyle(isCurrent ? BK.cream : isDone ? BK.ink : Color(hex: "A6A092"))
-        .padding(.horizontal, 9)
-        .padding(.vertical, 4)
-        .background(isCurrent ? BK.ink : isDone ? BK.ochre : BK.card)
-        .overlay(
-            Rectangle().stroke(isDone || isCurrent ? BK.ink : BK.ink.opacity(0.25), lineWidth: 2)
-        )
     }
 }
 
@@ -178,7 +122,7 @@ struct OnboardingPrimaryButton: View {
             .frame(height: 52)
             .opacity(isEnabled ? 1 : 0.45)
         }
-        .buttonStyle(BrutalButtonStyle(fill: BK.crimson, borderWidth: 2))
+        .buttonStyle(BrutalButtonStyle(fill: BK.ink, borderWidth: 2))
         .disabled(!isEnabled || isLoading)
         .animation(.easeInOut(duration: 0.18), value: isEnabled)
         .animation(.easeInOut(duration: 0.18), value: isLoading)

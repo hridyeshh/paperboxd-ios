@@ -11,6 +11,7 @@ enum APIError: LocalizedError, Equatable {
     case notFound(message: String)
     case validation(message: String)
     case rateLimited(message: String)
+    case subscriptionRequired(message: String) // 402 SUBSCRIPTION_REQUIRED — open the Plus paywall
     case server(message: String)
     case unknown(code: String, message: String)
 
@@ -32,6 +33,8 @@ enum APIError: LocalizedError, Equatable {
             return .validation(message: msg)
         case "RATE_LIMITED":
             return .rateLimited(message: msg)
+        case "SUBSCRIPTION_REQUIRED":
+            return .subscriptionRequired(message: msg)
         case "INTERNAL_ERROR":
             return .server(message: msg)
         default:
@@ -41,6 +44,7 @@ enum APIError: LocalizedError, Equatable {
             if status == 403 { return .forbidden(message: msg) }
             if status == 404 { return .notFound(message: msg) }
             if status == 429 { return .rateLimited(message: msg) }
+            if status == 402 { return .subscriptionRequired(message: msg) }
             if (500...599).contains(status) { return .server(message: msg) }
             if (400...499).contains(status) { return .validation(message: msg) }
             return .unknown(code: code ?? "UNKNOWN", message: msg)
@@ -79,7 +83,7 @@ enum APIError: LocalizedError, Equatable {
         case .transport(let m), .decoding(let m): return m
         case .invalidResponse: return "Server returned an invalid response."
         case .unauthorized(let m), .forbidden(let m), .notFound(let m),
-             .validation(let m), .rateLimited(let m), .server(let m):
+             .validation(let m), .rateLimited(let m), .subscriptionRequired(let m), .server(let m):
             return m
         case .unknown(_, let m): return m
         }

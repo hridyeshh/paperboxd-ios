@@ -9,6 +9,8 @@ struct Book: Codable, Identifiable, Hashable {
     let paperboxdStats: PaperboxdStats?
     let googleBooksId: String?
     let apiSource: String?
+    /// Single-book detail only; nil on search and list items.
+    let readLinks: BookReadLinks?
 
     enum CodingKeys: String, CodingKey {
         case id, slug
@@ -16,6 +18,7 @@ struct Book: Codable, Identifiable, Hashable {
         case paperboxdStats = "paperboxdStats"
         case googleBooksId = "googleBooksId"
         case apiSource = "apiSource"
+        case readLinks = "read_links"
     }
 
     // MARK: - Convenience

@@ -72,7 +72,7 @@ final class WriteViewModel: ObservableObject {
         )
         do {
             let entry: DiaryEntry = try await APIClient.shared.request(
-                path: Endpoints.userDiary(username: username),
+                path: Endpoints.userThoughts(username: username),
                 method: .post,
                 body: body,
                 requiresAuth: true

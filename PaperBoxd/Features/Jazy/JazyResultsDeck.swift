@@ -62,6 +62,8 @@ struct JazyResultsDeck: View {
                     }
                     .navigationDestination(for: AuthorNav.self) { AuthorDetailView(nav: $0) }
             }
+            // Covers sit above MainTabView's overlay; celebrations need their own.
+            .overlay { CelebrationOverlayView() }
         }
     }
 

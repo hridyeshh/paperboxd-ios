@@ -17,6 +17,7 @@ final class HomeViewModel: ObservableObject {
     @Published var risingBooks: [CommunityShelfBook] = []
     @Published var mostTBRBooks: [CommunityShelfBook] = []
     @Published var communityActivities: [FriendActivity] = []
+    @Published var nowCards: [NowCard] = []
     @Published var isLoading = true
     @Published var errorMessage: String?
     @Published var hasNewActivities = false
@@ -105,6 +106,7 @@ final class HomeViewModel: ObservableObject {
             risingBooks = community.rising.filter { $0.book.coverURL != nil }
             mostTBRBooks = community.mostTBR.filter { $0.book.coverURL != nil }
             communityActivities = community.activity.filter { $0.userID != user.id && $0.bookTitle != nil }
+            nowCards = community.now
         }
         followRequests = await followRequestsTask
         recomputeUnread()

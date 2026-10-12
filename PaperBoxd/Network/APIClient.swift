@@ -68,6 +68,8 @@ actor APIClient {
         fileName: String,
         mimeType: String,
         fieldName: String = "file",
+        fields: [String: String] = [:],
+        timeout: TimeInterval? = nil,
         requiresAuth: Bool = true
     ) async throws -> Response {
         guard let url = URL(string: path, relativeTo: baseURL) else {
@@ -76,6 +78,9 @@ actor APIClient {
 
         let boundary = "Boundary-\(UUID().uuidString)"
         var body = Data()
+        for (name, value) in fields {
+            body.append("--\(boundary)\r\nContent-Disposition: form-data; name=\"\(name)\"\r\n\r\n\(value)\r\n".data(using: .utf8)!)
+        }
         body.append("--\(boundary)\r\n".data(using: .utf8)!)
         body.append("Content-Disposition: form-data; name=\"\(fieldName)\"; filename=\"\(fileName)\"\r\n".data(using: .utf8)!)
         body.append("Content-Type: \(mimeType)\r\n\r\n".data(using: .utf8)!)
@@ -87,6 +92,7 @@ actor APIClient {
         // Override the actor's default JSON Content-Type for this request only.
         req.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
         req.httpBody = body
+        if let timeout { req.timeoutInterval = timeout }
 
         if requiresAuth, let token = KeychainManager.shared.getToken(), !token.isEmpty {
             req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")

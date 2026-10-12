@@ -1,9 +1,8 @@
 import Combine
 import SwiftUI
 
-// Your side of Fusion: the profile section (waiting link + Fusions) and the
-// Create sheet (landing → link). Port of fusion2/flow.jsx FLanding, FInvite
-// and FList.
+// Your side of Fusion: the hub opened from the profile menu (landing → link,
+// then your Fusions). Port of fusion2/flow.jsx FLanding, FInvite and FList.
 
 @MainActor
 final class FusionsModel: ObservableObject {
@@ -61,110 +60,66 @@ final class FusionsModel: ObservableObject {
     }
 }
 
-// MARK: - Profile section
+// MARK: - Fusion hub (profile menu → Create a Fusion)
 
-/// Sits on your own profile. Quiet until there is something in it.
-struct FusionsSection: View {
+/// The link window from the profile menu, with the Fusions you already have
+/// listed underneath. `onOpen` gets a Fusion id; the presenter dismisses this
+/// sheet before showing the story, since both can't be up at once.
+struct FusionHubSheet: View {
+    let myInitial: String
+    let onOpen: (String) -> Void
     @StateObject private var model = FusionsModel()
-    @EnvironmentObject private var appState: AppState
-    @State private var showCreate = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .firstTextBaseline) {
-                FZLabel(text: "Fusion", size: 9.5, color: FZ.accent)
-                Spacer()
-                if !model.list.fusions.isEmpty {
-                    FZLabel(text: "\(model.list.fusions.count) \(model.list.fusions.count == 1 ? "reader" : "readers")", size: 9)
-                }
-            }
-
-            if model.list.fusions.isEmpty && model.list.invite == nil {
-                Button { showCreate = true } label: {
-                    HStack(alignment: .center, spacing: 14) {
-                        VStack(alignment: .leading, spacing: 6) {
-                            FZHeading(text: "Two tastes. One discovery.", size: 19)
-                            FZBody(text: "Send one reader a link and see how your shelves line up.", size: 13)
-                        }
-                        Spacer(minLength: 8)
-                        Text("→").font(FZ.heading(24)).foregroundStyle(FZ.accent)
-                    }
-                    .padding(.top, 10)
-                }
-                .buttonStyle(.plain)
+        VStack(spacing: 0) {
+            if model.loaded {
+                FusionCreateSheet(model: model)
             } else {
-                if let invite = model.list.invite {
-                    waiting(invite).padding(.top, 12)
-                }
-                ForEach(model.list.fusions) { f in
-                    Rectangle().fill(FZ.line).frame(height: 1).padding(.top, 12)
-                    Button {
-                        appState.fusionRoute = .fusion(id: f.id, introFrom: nil)
-                    } label: {
-                        HStack(spacing: 12) {
-                            HStack(spacing: 0) {
-                                FZMonogram(initial: String((appState.currentUser?.username ?? "Y").prefix(1)).uppercased(), size: 30, accent: true)
-                                FZMonogram(initial: f.them.initial, size: 30)
-                            }
-                            VStack(alignment: .leading, spacing: 5) {
-                                FZHeading(text: f.them.name.isEmpty ? f.them.username : f.them.name, size: 17)
-                                FZLabel(text: "@\(f.them.username)", size: 9)
-                            }
-                            Spacer(minLength: 8)
-                            FZNum(text: f.score.map { "\($0)%" } ?? "New", size: 22, color: FZ.accent)
-                        }
-                        .padding(.top, 12)
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                }
-                if model.list.invite == nil {
-                    FZPill(title: "Create a Fusion", compact: true) { showCreate = true }
-                        .padding(.top, 16)
-                }
+                Spacer()
+            }
+            if !model.list.fusions.isEmpty {
+                yourFusions
             }
         }
-        .padding(18)
-        .background(FZ.bg)
-        .overlay(Rectangle().stroke(FZ.ink, lineWidth: 1))
-        .overlay(alignment: .bottom) {
-            if let t = model.toast { FZToast(message: t, bottom: 0).offset(y: 22) }
-        }
+        .background(FZ.bg.ignoresSafeArea())
         .task { await model.load() }
-        .onChange(of: appState.fusionRoute) { _, route in
-            // Back from a Fusion: scores may have been built for the first time.
-            if route == nil { Task { await model.load() } }
-        }
-        .sheet(isPresented: $showCreate, onDismiss: { Task { await model.load() } }) {
-            FusionCreateSheet(model: model)
-                .presentationDetents([.large])
-                .presentationBackground(FZ.bg)
-        }
     }
 
-    private func waiting(_ invite: FusionInvite) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 10) {
-                Rectangle().fill(FZ.accent).frame(width: 7, height: 7)
-                FZLabel(text: "Link waiting", size: 9, color: FZ.ink)
+    private var yourFusions: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .firstTextBaseline) {
+                FZLabel(text: "Your Fusions", size: 9.5, color: FZ.accent)
                 Spacer()
-                FZLabel(text: "\(invite.daysLeft) \(invite.daysLeft == 1 ? "day" : "days") left", size: 9)
+                FZLabel(text: "\(model.list.fusions.count) \(model.list.fusions.count == 1 ? "reader" : "readers")", size: 9)
             }
-            FZNum(text: invite.url.replacingOccurrences(of: "https://", with: ""), size: 12.5, bold: false)
-                .lineLimit(1)
-            HStack(spacing: 8) {
-                if let url = URL(string: invite.url) {
-                    ShareLink(item: url) {
-                        Text("SHARE").font(FZ.medium(9.5)).tracking(0.95).foregroundStyle(FZ.bg)
-                            .padding(.horizontal, 12).padding(.vertical, 9).background(FZ.ink)
+            ScrollView {
+                VStack(spacing: 0) {
+                    ForEach(model.list.fusions) { f in
+                        Button { onOpen(f.id) } label: {
+                            HStack(spacing: 12) {
+                                HStack(spacing: 0) {
+                                    FZMonogram(initial: myInitial, size: 30, accent: true)
+                                    FZMonogram(initial: f.them.initial, size: 30)
+                                }
+                                VStack(alignment: .leading, spacing: 5) {
+                                    FZHeading(text: f.them.name.isEmpty ? f.them.username : f.them.name, size: 17)
+                                    FZLabel(text: "@\(f.them.username)", size: 9)
+                                }
+                                Spacer(minLength: 8)
+                                FZNum(text: f.score.map { "\($0)%" } ?? "New", size: 22, color: FZ.accent)
+                            }
+                            .padding(.top, 12)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
                     }
                 }
-                FZPill(title: "Copy", compact: true, fullWidth: false) { model.copy(invite) }
-                FZPill(title: "Cancel", compact: true, fullWidth: false) { Task { await model.cancel(invite) } }
             }
+            .frame(maxHeight: 220)
         }
-        .padding(14)
-        .overlay(Rectangle().stroke(FZ.ink, lineWidth: 1))
+        .padding(.horizontal, 24)
+        .padding(.vertical, 14)
+        .overlay(alignment: .top) { Rectangle().fill(FZ.ink).frame(height: 1) }
     }
 }
 

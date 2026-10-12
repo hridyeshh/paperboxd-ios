@@ -1,7 +1,8 @@
 import SwiftUI
 
-/// Share options for a book — renders the web-style story/square card and routes
-/// it to Instagram Stories, the system share sheet, the photo library, or the clipboard.
+/// Share options for a book — renders the story/square card with its ground,
+/// layout and rating/note options, and routes it to Instagram Stories, the
+/// system share sheet, the photo library, or the clipboard.
 struct BookShareSheet: View {
     let book: Book
     let user: User?
@@ -9,22 +10,104 @@ struct BookShareSheet: View {
     var userRating: Int? = nil
     var note: String? = nil
 
+    @State private var coverImage: UIImage?
+    @State private var ground: BookShareCardView.Ground = .ink
+    @State private var layout: BookShareCardView.Layout = .cover
+    @State private var showRating = true
+    @State private var showNote = true
+
+    private var hasRating: Bool { (userRating ?? 0) > 0 }
+    private var hasNote: Bool { !(note ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+
+    var body: some View {
+        ShareCardSheet(
+            link: URL(string: "https://paperboxd.in/b/\(book.slug ?? book.id)"),
+            prepare: { coverImage = await ShareService.loadImage(book.coverURL) },
+            renderKey: "\(ground)-\(layout)-\(showRating)-\(showNote)",
+            send: AttachmentRef(kind: AttachKind.book, refID: book.id),
+            render: { format in
+                let canvas = BookShareCardView.canvas(format)
+                return ShareService.render(
+                    BookShareCardView(
+                        title: book.title,
+                        author: book.authorLine,
+                        year: book.publishedYear,
+                        coverImage: coverImage,
+                        handle: user?.username.map { "@\($0)" },
+                        rating: userRating,
+                        note: note,
+                        statusLabel: status?.label ?? "",
+                        ground: ground,
+                        layout: layout,
+                        showRating: showRating,
+                        showNote: showNote,
+                        format: format
+                    ),
+                    baseSize: canvas,
+                    scale: 1080 / canvas.width
+                )
+            },
+            controls: { format in
+                VStack(spacing: 10) {
+                    HStack(spacing: 12) {
+                        ShareChip(label: "INK", on: ground == .ink, swatch: PBW.inkDeep) { ground = .ink }
+                        ShareChip(label: "PAPER", on: ground == .paper, swatch: PBW.cream) { ground = .paper }
+                        ShareChip(label: "TERRA", on: ground == .terra, swatch: PBW.terraDeep) { ground = .terra }
+                    }
+                    if format == .story {
+                        HStack(spacing: 12) {
+                            ShareChip(label: "COVER", on: layout == .cover) { layout = .cover }
+                            if hasNote {
+                                ShareChip(label: "QUOTE", on: layout == .quote) { layout = .quote }
+                            }
+                            ShareChip(label: "MINIMAL", on: layout == .minimal) { layout = .minimal }
+                        }
+                    }
+                    // Minimal never sets the note and quote is the note, so the
+                    // toggle only shows where it does something.
+                    let noteToggle = hasNote && (format == .square || layout == .cover)
+                    if hasRating || noteToggle {
+                        HStack(spacing: 12) {
+                            if hasRating {
+                                ShareChip(label: "RATING", on: showRating) { showRating.toggle() }
+                            }
+                            if noteToggle {
+                                ShareChip(label: "NOTE", on: showNote) { showNote.toggle() }
+                            }
+                        }
+                    }
+                }
+                .padding(.horizontal, 24)
+                .padding(.top, 10)
+            }
+        )
+    }
+}
+
+/// Share chrome shared by every card: preview, story/square toggle, and the
+/// Instagram Stories / More / Save / Copy options.
+struct ShareCardSheet<Controls: View>: View {
+    /// Copied by COPY and attached to MORE.
+    let link: URL?
+    /// Runs once before the first render — e.g. fetching a cover image.
+    var prepare: @MainActor () async -> Void = {}
+    /// Changes whenever the card's own options change, so the preview re-renders.
+    var renderKey: String = ""
+    /// When set, "Send on Paperboxd" leads the options and DMs this object.
+    var send: AttachmentRef? = nil
+    /// Draws the card for a format. Called again when the format or `renderKey` changes.
+    let render: @MainActor (BookShareCardView.Format) -> UIImage?
+    /// Card-specific option rows under the format toggle.
+    @ViewBuilder let controls: (BookShareCardView.Format) -> Controls
+
     @Environment(\.dismiss) private var dismiss
 
-    @State private var coverImage: UIImage?
     @State private var format: BookShareCardView.Format = .story
     @State private var rendered: UIImage?
     @State private var isPreparing = true
     @State private var showSystemShare = false
+    @State private var showSend = false
     @State private var toast: String?
-
-    private var bookURL: URL? {
-        URL(string: "https://paperboxd.in/b/\(book.slug ?? book.id)")
-    }
-
-    private var handle: String? {
-        user?.username.map { "@\($0)" }
-    }
 
     var body: some View {
         ZStack {
@@ -33,9 +116,15 @@ struct BookShareSheet: View {
             VStack(spacing: 0) {
                 grabber
                 header
-                preview
-                controlsRow
-                optionsRow
+                ScrollView {
+                    VStack(spacing: 0) {
+                        preview
+                        controlsRow
+                        controls(format)
+                        optionsRow
+                    }
+                }
+                .scrollBounceBehavior(.basedOnSize)
             }
 
             if let toast {
@@ -45,9 +134,19 @@ struct BookShareSheet: View {
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
-        .task { await loadCover() }
+        .task {
+            await prepare()
+            rerender()
+            isPreparing = false
+        }
+        .onChange(of: renderKey) { _, _ in
+            if !isPreparing { rerender() }
+        }
         .sheet(isPresented: $showSystemShare) {
             SystemShareSheet(items: systemShareItems)
+        }
+        .sheet(isPresented: $showSend) {
+            if let send { SendSheetView(attachment: send, onSent: { showToast("Sent") }) }
         }
     }
 
@@ -119,30 +218,27 @@ struct BookShareSheet: View {
         .padding(.top, 4)
     }
 
-    /// Two separate rectangular buttons (not a fused segmented block), each with
-    /// its own ink border so the selected fill never swallows the outline.
     private func formatTab(_ label: String, _ f: BookShareCardView.Format) -> some View {
-        Button {
+        ShareChip(label: label, on: format == f) {
             guard format != f else { return }
             format = f
             rerender()
-        } label: {
-            Text(label)
-                .font(.system(size: 12, weight: .bold, design: .monospaced))
-                .tracking(1.5)
-                .foregroundStyle(format == f ? Color("Background") : Color("TextPrimary"))
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 11)
-                .background(format == f ? Color("TextPrimary") : Color("Surface"))
-                .overlay(Rectangle().strokeBorder(Color("TextPrimary"), lineWidth: 1.5))
         }
-        .buttonStyle(.plain)
     }
 
     // MARK: - Options
 
     private var optionsRow: some View {
         HStack(alignment: .top, spacing: 12) {
+            if send != nil {
+                option("SEND", tint: AnyShapeStyle(Color("Surface"))) {
+                    showSend = true
+                } icon: {
+                    Image(systemName: "paperplane")
+                        .font(.system(size: 20, weight: .medium))
+                        .foregroundStyle(Color("TextPrimary"))
+                }
+            }
             if ShareService.canShareToInstagramStories {
                 option("STORY", tint: instagramGradient) {
                     shareToInstagram()
@@ -205,7 +301,7 @@ struct BookShareSheet: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .disabled(rendered == nil && label != "COPY")
+        .disabled(rendered == nil && label != "COPY" && label != "SEND")
     }
 
     private var instagramGradient: AnyShapeStyle {
@@ -224,7 +320,7 @@ struct BookShareSheet: View {
     private var systemShareItems: [Any] {
         var items: [Any] = []
         if let rendered { items.append(rendered) }
-        if let bookURL { items.append(bookURL) }
+        if let link { items.append(link) }
         return items
     }
 
@@ -242,8 +338,8 @@ struct BookShareSheet: View {
     }
 
     private func copyLink() {
-        guard let bookURL else { return }
-        UIPasteboard.general.string = bookURL.absoluteString
+        guard let link else { return }
+        UIPasteboard.general.string = link.absoluteString
         showToast("Link copied")
     }
 
@@ -264,32 +360,51 @@ struct BookShareSheet: View {
 
     // MARK: - Rendering
 
-    private func loadCover() async {
-        if let urlStr = book.coverURL?.replacingOccurrences(of: "http://", with: "https://"),
-           let url = URL(string: urlStr),
-           let (data, _) = try? await URLSession.shared.data(from: url),
-           let img = UIImage(data: data) {
-            coverImage = img
-        }
-        rerender()
-        isPreparing = false
-    }
-
     @MainActor
     private func rerender() {
-        let composition = ShareComposition(
-            title: book.title,
-            author: book.authorLine,
-            year: book.publishedYear,
-            coverImage: coverImage,
-            handle: handle,
-            rating: userRating,
-            note: note,
-            statusLabel: status?.label ?? "",
-            theme: .light,
-            format: format
-        )
-        rendered = ShareService.render(composition, baseSize: format.baseSize, scale: format.renderScale)
+        rendered = render(format)
+    }
+}
+
+extension ShareCardSheet where Controls == EmptyView {
+    init(
+        link: URL?,
+        prepare: @escaping @MainActor () async -> Void = {},
+        render: @escaping @MainActor (BookShareCardView.Format) -> UIImage?
+    ) {
+        self.init(link: link, prepare: prepare, render: render, controls: { _ in EmptyView() })
+    }
+}
+
+/// Two-state option button in the sheet's brutalist chrome — separate rectangles
+/// (not a fused segmented block), each with its own ink border so the selected
+/// fill never swallows the outline.
+struct ShareChip: View {
+    let label: String
+    let on: Bool
+    var swatch: Color? = nil
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 7) {
+                if let swatch {
+                    Rectangle().fill(swatch)
+                        .frame(width: 10, height: 10)
+                        .overlay(Rectangle().strokeBorder(on ? Color("Background") : Color("TextPrimary"), lineWidth: 1))
+                }
+                Text(label)
+                    .font(.system(size: 12, weight: .bold, design: .monospaced))
+                    .tracking(1.5)
+                    .lineLimit(1)
+            }
+            .foregroundStyle(on ? Color("Background") : Color("TextPrimary"))
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 11)
+            .background(on ? Color("TextPrimary") : Color("Surface"))
+            .overlay(Rectangle().strokeBorder(Color("TextPrimary"), lineWidth: 1.5))
+        }
+        .buttonStyle(.plain)
     }
 }
 

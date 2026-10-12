@@ -2,239 +2,340 @@ import SwiftUI
 
 struct DiaryNavItem: Hashable, Identifiable {
     let entry: DiaryEntry
-    var id: String { entry.id }
-    static func == (lhs: DiaryNavItem, rhs: DiaryNavItem) -> Bool { lhs.entry.id == rhs.entry.id }
-    func hash(into hasher: inout Hasher) { hasher.combine(entry.id) }
+    /// Open with the "Add to thread" box focused.
+    var compose = false
+    var id: String { entry.rowKey }
+    static func == (lhs: DiaryNavItem, rhs: DiaryNavItem) -> Bool { lhs.id == rhs.id && lhs.compose == rhs.compose }
+    func hash(into hasher: inout Hasher) { hasher.combine(id); hasher.combine(compose) }
 }
 
+/// A thought and its thread: every post in writing order joined by a line,
+/// with a composer under the last one for the author.
 struct DiaryEntryDetailView: View {
     let entry: DiaryEntry
     let viewer: User
+    var compose = false
 
-    @State private var isLiked: Bool
-    @State private var likesCount: Int64
-    @State private var isLiking = false
-    @State private var showDeleteAlert = false
-    @State private var isDeleting = false
+    @State private var thread: [DiaryEntry]
+    @State private var isLoading = true
+    @State private var draft = ""
+    @State private var isPosting = false
+    @State private var postError: String?
+    @State private var shareTarget: ShareTarget?
+    @State private var deleteTarget: DiaryEntry?
     @State private var deleteError: String?
-    @State private var showReportEntry = false
+    @State private var reportTarget: DiaryEntry?
+    /// Set after posting a follow-up — not on load, which must open at the first thought.
+    @State private var scrollToComposer = false
+    @FocusState private var composerFocused: Bool
     @Environment(\.dismiss) private var dismiss
 
-    var isOwnEntry: Bool {
-        viewer.username?.lowercased() == entry.username.lowercased()
+    private struct ShareTarget: Identifiable {
+        let entry: DiaryEntry
+        let label: String?
+        var id: String { entry.id }
     }
 
-    init(entry: DiaryEntry, viewer: User) {
+    init(entry: DiaryEntry, viewer: User, compose: Bool = false) {
         self.entry = entry
         self.viewer = viewer
-        _isLiked = State(initialValue: entry.isLiked)
-        _likesCount = State(initialValue: entry.likesCount)
+        self.compose = compose
+        _thread = State(initialValue: [entry])
     }
+
+    private var root: DiaryEntry { thread[0] }
+    private var isOwnThread: Bool { viewer.username?.lowercased() == root.username.lowercased() }
+    private var isThread: Bool { thread.count > 1 }
 
     var body: some View {
         NavigationStack {
-            ZStack {
-                Color("Background").ignoresSafeArea()
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 0) {
-                        if let book = entry.book { bookHeader(book) }
-                        entryBody
-                        Spacer(minLength: 100)
+            dialogs(chrome(threadScroll))
+        }
+        .presentationDetents([.large])
+        .presentationDragIndicator(.visible)
+        // The app is light-only; sheets don't inherit the root's scheme.
+        .preferredColorScheme(.light)
+    }
+
+    private var threadScroll: some View {
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(Array(thread.enumerated()), id: \.element.id) { idx, item in
+                        threadItem(item, at: idx)
+                    }
+                    if isLoading && thread.count == 1 {
+                        PBSpinner().frame(maxWidth: .infinity).padding(.vertical, 12)
+                    }
+                    if isOwnThread {
+                        composer.id("composer")
                     }
                 }
-                VStack { Spacer(); bottomBar }
+                .padding(.horizontal, 16)
+                .padding(.top, 8)
+                .padding(.bottom, 40)
             }
-            .navigationBarHidden(true)
-            .overlay(alignment: .topTrailing) { closeButton }
+            .scrollDismissesKeyboard(.interactively)
+            .onChange(of: scrollToComposer) { _, go in
+                guard go else { return }
+                withAnimation { proxy.scrollTo("composer", anchor: .bottom) }
+                scrollToComposer = false
+            }
+        }
+    }
+
+    private func threadItem(_ item: DiaryEntry, at idx: Int) -> ThreadItem {
+        let label: String? = isThread ? "\(idx + 1)/\(thread.count)" : nil
+        return ThreadItem(
+            entry: item,
+            isFirst: idx == 0,
+            joinsNext: idx < thread.count - 1 || isOwnThread,
+            viewer: viewer,
+            onShare: { shareTarget = ShareTarget(entry: item, label: label) },
+            onDelete: { deleteTarget = item },
+            onReport: { reportTarget = item }
+        )
+    }
+
+    private func chrome<V: View>(_ content: V) -> some View {
+        content
+            .background(Color("Background").ignoresSafeArea())
+            .navigationTitle(isThread ? "Thread" : "Thought")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { dismiss() } label: {
+                        Image(systemName: "xmark").font(.system(size: 13, weight: .bold))
+                    }
+                    .accessibilityLabel("Close")
+                    .tint(Color("TextPrimary"))
+                }
+            }
             .navigationDestination(for: String.self) { bookId in
                 BookDetailView(bookId: bookId, user: viewer)
             }
             .navigationDestination(for: AuthorNav.self) { AuthorDetailView(nav: $0) }
-            .alert("Delete entry?", isPresented: $showDeleteAlert) {
-                Button("Delete", role: .destructive) { Task { await deleteEntry() } }
-                Button("Cancel", role: .cancel) { }
-            } message: {
-                Text("This cannot be undone.")
+            .task { await loadThread() }
+            .sheet(item: $shareTarget) { target in
+                ThoughtShareSheet(entry: target.entry, threadLabel: target.label)
+                    .presentationDetents([.large])
             }
-            .alert("Couldn't delete entry", isPresented: Binding(
-                get: { deleteError != nil },
-                set: { if !$0 { deleteError = nil } }
-            )) {
-                Button("OK", role: .cancel) { }
+    }
+
+    private var deletesWholeThread: Bool { deleteTarget?.id == root.id && isThread }
+
+    private func dialogs<V: View>(_ content: V) -> some View {
+        content
+            .alert(
+                deletesWholeThread ? "Delete this thread?" : "Delete this thought?",
+                isPresented: Binding(get: { deleteTarget != nil }, set: { if !$0 { deleteTarget = nil } })
+            ) {
+                Button("Delete", role: .destructive) {
+                    if let t = deleteTarget { Task { await delete(t) } }
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text(deletesWholeThread
+                     ? "The first thought takes the whole thread with it. This can't be undone."
+                     : "This can't be undone.")
+            }
+            .alert("Couldn't delete", isPresented: Binding(get: { deleteError != nil }, set: { if !$0 { deleteError = nil } })) {
+                Button("OK", role: .cancel) {}
             } message: {
                 Text(deleteError ?? "")
             }
-            .confirmationDialog("Report entry", isPresented: $showReportEntry, titleVisibility: .visible) {
+            .alert("Couldn't add to thread", isPresented: Binding(get: { postError != nil }, set: { if !$0 { postError = nil } })) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(postError ?? "")
+            }
+            .confirmationDialog(
+                "Report thought",
+                isPresented: Binding(get: { reportTarget != nil }, set: { if !$0 { reportTarget = nil } }),
+                titleVisibility: .visible
+            ) {
                 ForEach(ModerationService.reportReasons, id: \.self) { reason in
                     Button(reason) {
-                        Task {
-                            try? await ModerationService.report(
-                                contentType: "diary_entry",
-                                contentID: entry.id,
-                                reason: reason
-                            )
-                        }
+                        guard let id = reportTarget?.id else { return }
+                        Task { try? await ModerationService.report(contentType: "thought", contentID: id, reason: reason) }
                     }
                 }
                 Button("Cancel", role: .cancel) {}
             }
-        }
-        .presentationDetents([.medium, .large])
-        .presentationDragIndicator(.visible)
     }
 
-    private var closeButton: some View {
-        Button { dismiss() } label: {
-            Image(systemName: "xmark")
-                .font(.system(size: 13, weight: .bold))
-                .foregroundStyle(Color("TextPrimary"))
-                .frame(width: 34, height: 34)
-                .background(Color("Surface"), in: RoundedRectangle(cornerRadius: 8))
-                .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color("Border"), lineWidth: 1))
-        }
-        .buttonStyle(.plain)
-        .padding(.trailing, 16).padding(.top, 10)
-    }
+    // MARK: - Composer
 
-    private func bookHeader(_ book: Book) -> some View {
-        NavigationLink(value: book.id) {
-            HStack(spacing: 12) {
-                BookCoverView(url: book.coverURL, width: 52, cornerRadius: 5)
-                    .shadow(color: .black.opacity(0.2), radius: 6, y: 3)
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(book.title).font(PB.serif(16)).foregroundStyle(Color("TextPrimary")).lineLimit(2)
-                    if !book.authorLine.isEmpty {
-                        Text(book.authorLine).font(.system(size: 12)).foregroundStyle(Color("TextSecondary")).lineLimit(1)
-                    }
-                }
-                Spacer()
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(Color("TextSecondary").opacity(0.5))
-            }
-            .padding(14)
-            .background(Color("Surface"), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Color("Border"), lineWidth: 1))
-            .padding(.horizontal, 18).padding(.top, 52).padding(.bottom, 16)
-        }
-        .buttonStyle(.plain)
-    }
-
-    private var entryBody: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            if entry.book == nil { Spacer().frame(height: 44) }
-
-            HStack(spacing: 10) {
-                AvatarView(url: entry.avatarURL, size: 32)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(entry.name.isEmpty ? entry.username : entry.name)
-                        .font(.system(size: 13, weight: .semibold)).foregroundStyle(Color("TextPrimary"))
-                    Text(formattedDate(entry.createdAt))
-                        .font(PB.mono(9.5)).tracking(0.8).foregroundStyle(Color("TextSecondary"))
-                }
-                Spacer()
-                if let r = entry.rating, r > 0 {
-                    HStack(spacing: 2) {
-                        ForEach(1...5, id: \.self) { i in
-                            Image(systemName: i <= r ? "star.fill" : "star")
-                                .font(.system(size: 11))
-                                .foregroundStyle(i <= r ? Color("Accent") : Color("TextSecondary").opacity(0.3))
+    private var composer: some View {
+        HStack(alignment: .top, spacing: 11) {
+            AvatarView(url: root.avatarURL, size: 40)
+            VStack(alignment: .leading, spacing: 8) {
+                TextField("Add to this thread…", text: $draft, axis: .vertical)
+                    .font(.system(size: 15.5, design: .serif))
+                    .lineLimit(1...8)
+                    .focused($composerFocused)
+                    .padding(.top, 10)
+                HStack {
+                    Text(root.isPrivate ? "Private, like the rest of the thread" : "Joins the thread under the same book")
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(Color("TextSecondary"))
+                    Spacer()
+                    Button {
+                        Task { await post() }
+                    } label: {
+                        Group {
+                            if isPosting { ProgressView().tint(.white) } else { Text("Post") }
                         }
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(Color("Background"))
+                        .frame(minWidth: 56, minHeight: 32)
+                        .padding(.horizontal, 6)
+                        .background(Capsule().fill(Color("TextPrimary")))
                     }
+                    .buttonStyle(.plain)
+                    .disabled(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isPosting)
+                    .opacity(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.4 : 1)
                 }
-            }
-
-            Text(plainText(entry.content))
-                .font(.system(size: 16, design: .serif))
-                .foregroundStyle(Color("TextPrimary").opacity(0.9))
-                .lineSpacing(5)
-        }
-        .padding(.horizontal, 18).padding(.bottom, 24)
-    }
-
-    private var bottomBar: some View {
-        HStack(spacing: 20) {
-            Button {
-                guard !isLiking else { return }
-                Task { await toggleLike() }
-            } label: {
-                HStack(spacing: 5) {
-                    Image(systemName: isLiked ? "heart.fill" : "heart")
-                        .font(.system(size: 18))
-                        .foregroundStyle(isLiked ? PB.terracotta : Color("TextSecondary"))
-                        .contentTransition(.symbolEffect(.replace))
-                        .symbolEffect(.bounce, value: isLiked)
-                    if likesCount > 0 {
-                        Text("\(likesCount)").font(PB.mono(12))
-                            .foregroundStyle(Color("TextSecondary"))
-                            .contentTransition(.numericText())
-                    }
-                }
-            }
-            .buttonStyle(.plain)
-            Spacer()
-            if isOwnEntry {
-                Button(role: .destructive) { showDeleteAlert = true } label: {
-                    if isDeleting {
-                        ProgressView().scaleEffect(0.7)
-                    } else {
-                        Image(systemName: "trash").font(.system(size: 17)).foregroundStyle(Color("TextSecondary"))
-                    }
-                }
-                .buttonStyle(.plain)
-            } else {
-                Button { showReportEntry = true } label: {
-                    Image(systemName: "flag").font(.system(size: 15)).foregroundStyle(Color("TextSecondary"))
-                }
-                .buttonStyle(.plain)
+                .padding(.top, 6)
+                .overlay(alignment: .top) { Rectangle().fill(Color("Border")).frame(height: 1) }
             }
         }
-        .padding(.horizontal, 20).padding(.vertical, 12)
-        .background(Color("Background").opacity(0.97))
-        .overlay(alignment: .top) { Rectangle().fill(Color("Border")).frame(height: 1) }
+        .padding(.top, 4)
+        .onAppear { if compose { composerFocused = true } }
     }
 
-    private func toggleLike() async {
-        let prev = isLiked
-        withAnimation(.snappy(duration: 0.25)) { isLiked = !prev; likesCount += prev ? -1 : 1 }
-        isLiking = true; defer { isLiking = false }
-        do {
-            let _: Empty = try await APIClient.shared.request(
-                path: Endpoints.diaryEntryLike(username: entry.username, entryId: entry.id),
-                method: prev ? .delete : .post, requiresAuth: true
-            )
-        } catch { withAnimation(.snappy(duration: 0.25)) { isLiked = prev; likesCount += prev ? 1 : -1 } }
+    // MARK: - Actions
+
+    private func loadThread() async {
+        defer { isLoading = false }
+        if let full = try? await ThoughtService.thread(for: entry), !full.isEmpty {
+            thread = full
+        }
     }
 
-    private func deleteEntry() async {
-        isDeleting = true
+    private func post() async {
+        let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty, let last = thread.last else { return }
+        isPosting = true
+        defer { isPosting = false }
+        do {
+            let created = try await ThoughtService.continueThread(after: last, content: text)
+            draft = ""
+            withAnimation(.snappy) { thread.append(created) }
+            scrollToComposer = true
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        } catch let e as APIError {
+            postError = e.errorDescription
+        } catch {
+            postError = error.localizedDescription
+        }
+    }
+
+    private func delete(_ target: DiaryEntry) async {
         do {
             let _: Empty = try await APIClient.shared.request(
-                path: Endpoints.diaryEntry(username: entry.username, entryId: entry.id),
+                path: Endpoints.thought(username: target.username, thoughtId: target.id),
                 method: .delete, requiresAuth: true
             )
-            NotificationCenter.default.post(name: .diaryEntryDeleted, object: entry.id)
-            dismiss()
+            NotificationCenter.default.post(name: .diaryEntryDeleted, object: target.id)
+            if target.id == root.id {
+                dismiss()
+            } else {
+                withAnimation(.snappy) { thread.removeAll { $0.id == target.id } }
+            }
         } catch let e as APIError {
-            isDeleting = false
             deleteError = e.errorDescription
         } catch {
-            isDeleting = false
             deleteError = error.localizedDescription
         }
     }
+}
 
-    private func plainText(_ html: String) -> String {
-        html.replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression)
-            .trimmingCharacters(in: .whitespacesAndNewlines)
+// MARK: - Thread item
+
+private struct ThreadItem: View {
+    let entry: DiaryEntry
+    let isFirst: Bool
+    /// Draw the line down to the next post (or the composer).
+    let joinsNext: Bool
+    let viewer: User
+    var onShare: () -> Void
+    var onDelete: () -> Void
+    var onReport: () -> Void
+
+    @StateObject private var toggles: ThoughtToggles
+
+    init(entry: DiaryEntry, isFirst: Bool, joinsNext: Bool, viewer: User,
+         onShare: @escaping () -> Void, onDelete: @escaping () -> Void, onReport: @escaping () -> Void) {
+        self.entry = entry
+        self.isFirst = isFirst
+        self.joinsNext = joinsNext
+        self.viewer = viewer
+        self.onShare = onShare
+        self.onDelete = onDelete
+        self.onReport = onReport
+        _toggles = StateObject(wrappedValue: ThoughtToggles(entry))
     }
 
-    private func formattedDate(_ iso: String) -> String {
-        let df = ISO8601DateFormatter()
-        df.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        let date = df.date(from: iso) ?? { df.formatOptions = [.withInternetDateTime]; return df.date(from: iso) }()
-        guard let d = date else { return "" }
-        let out = DateFormatter(); out.dateFormat = "MMM d, yyyy"
-        return out.string(from: d).uppercased()
+    private var isOwn: Bool { viewer.username?.lowercased() == entry.username.lowercased() }
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 11) {
+            VStack(spacing: 4) {
+                AvatarView(url: entry.avatarURL, size: 40)
+                if joinsNext {
+                    Rectangle()
+                        .fill(Color("Border"))
+                        .frame(width: 2)
+                        .frame(maxHeight: .infinity)
+                }
+            }
+            .frame(width: 40)
+
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(alignment: .firstTextBaseline) {
+                    ThoughtHeader(entry: entry)
+                    Menu {
+                        if isOwn {
+                            Button(role: .destructive, action: onDelete) { Label("Delete", systemImage: "trash") }
+                        } else {
+                            Button(action: onReport) { Label("Report", systemImage: "flag") }
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(Color("TextSecondary"))
+                            .frame(width: 32, height: 24)
+                            .contentShape(Rectangle())
+                    }
+                    .accessibilityLabel("More")
+                }
+
+                if isFirst, entry.book == nil, let t = entry.title, !t.isEmpty {
+                    Text(t)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(Color("TextPrimary"))
+                }
+
+                Text(entry.plainText)
+                    .font(.system(size: 16.5, design: .serif))
+                    .foregroundStyle(Color("TextPrimary"))
+                    .lineSpacing(4)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .textSelection(.enabled)
+
+                if isFirst, let book = entry.book {
+                    NavigationLink(value: book.id) {
+                        ThoughtBookChip(entry: entry)
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.top, 4)
+                }
+
+                ThoughtActionBar(entry: entry, isOwn: isOwn, toggles: toggles, onContinue: nil, onShare: onShare)
+                    .padding(.top, 2)
+            }
+            .padding(.bottom, 14)
+        }
     }
 }

@@ -39,7 +39,7 @@ enum PreviewData {
         totalPagesRead: 12_400,
         favoritesCount: 4,
         listsCount: 5,
-        diaryEntriesCount: 23,
+        thoughtsCount: 23,
         followersCount: 142,
         followingCount: 89,
         favoriteGenres: ["Literary Fiction"],
@@ -63,7 +63,7 @@ enum PreviewData {
         totalPagesRead: 48_000,
         favoritesCount: 4,
         listsCount: 14,
-        diaryEntriesCount: 64,
+        thoughtsCount: 64,
         followersCount: 311,
         followingCount: 180,
         favoriteGenres: ["Fiction"],
@@ -253,7 +253,7 @@ enum PreviewData {
                 "username": name,
                 "books_read": books[i],
                 "pages_read": books[i] * 280,
-                "diary_entries": 20 + i,
+                "thoughts": 20 + i,
                 "genres_explored": 8 + i,
                 "total_xp": xps[i],
                 "level": 4,
@@ -261,7 +261,7 @@ enum PreviewData {
                 "xp_rank": i + 1,
                 "books_rank": i + 1,
                 "pages_rank": i + 1,
-                "diary_rank": i + 1,
+                "thoughts_rank": i + 1,
                 "genres_rank": i + 1,
                 "streak_rank": i + 1,
                 "level_name": levels[i],
@@ -285,7 +285,8 @@ enum PreviewData {
                 totalTBR: 45
             ),
             googleBooksId: nil,
-            apiSource: "paperboxd"
+            apiSource: "paperboxd",
+            readLinks: nil
         )
     }
 

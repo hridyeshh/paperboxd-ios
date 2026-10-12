@@ -16,7 +16,7 @@ struct UserProfile: Codable, Identifiable, Equatable {
     let totalPagesRead: Int
     let favoritesCount: Int
     let listsCount: Int
-    let diaryEntriesCount: Int
+    let thoughtsCount: Int
     let followersCount: Int
     let followingCount: Int
     let favoriteGenres: [String]
@@ -36,7 +36,7 @@ struct UserProfile: Codable, Identifiable, Equatable {
         case totalPagesRead = "total_pages_read"
         case favoritesCount = "favorites_count"
         case listsCount = "lists_count"
-        case diaryEntriesCount = "diary_entries_count"
+        case thoughtsCount = "thoughts_count"
         case followersCount = "followers_count"
         case followingCount = "following_count"
         case favoriteGenres = "favorite_genres"

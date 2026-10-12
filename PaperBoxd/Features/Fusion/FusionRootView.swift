@@ -316,7 +316,7 @@ struct FusionJoinView: View {
                 FZRule(delay: 1.12)
             }
             .padding(.top, 8)
-            PBFade(delay: 1.18) { FZBody(text: "Your diary entries and notes are never included.", size: 12.5) }.padding(.top, 12)
+            PBFade(delay: 1.18) { FZBody(text: "Your thoughts and notes are never included.", size: 12.5) }.padding(.top, 12)
             Spacer()
             PBFade(delay: 1.26) {
                 FZPill(title: isFusing ? "Fusing…" : "Fuse with \(inviter.first)", solid: true, action: onFuse)
